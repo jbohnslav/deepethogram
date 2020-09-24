@@ -1,0 +1,9 @@
+postprocessor:
+  # options: null, min_bout
+  # null: the postprocessor will simply threshold, and then compute the background
+  # min_bout: the postprocessor will threshold, remove sets of 1s or 0s of length less than
+  #           postprocessor.min_bout_length, and then will compute background
+  type: min_bout
+  # if type is min_bout, postprocessor will remove any consecutive set of 1s or 0s of less than this length.
+  # see deepethogram/postprocessing.py for details
+  min_bout_length: 2

@@ -1,0 +1,42 @@
+augs:
+  LR: 0.5
+  UD: 0.0
+  brightness: 0.25
+  contrast: 0.1
+  crop_size: null
+  degrees: 10
+  normalization:
+    N: 0
+    mean:
+    - 0.5
+    - 0.5
+    - 0.5
+    std:
+    - 0.5
+    - 0.5
+    - 0.5
+  pad: null
+  random_resize: false
+  resize:
+  - 224
+  - 224
+compute:
+  batch_size: 32
+  distributed: false
+  gpu_id: 0
+  num_workers: 8
+project:
+  class_names: null
+  config_file: null
+  data_path: DATA
+  labeler: null
+  model_path: models
+  name: null
+  path: null
+sequence:
+  filter_length: 15
+split:
+  file: null
+  reload: true
+train:
+  loss_weight_exp: 1.0

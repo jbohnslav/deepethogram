@@ -1,0 +1,12 @@
+run:
+  type: zscore
+  model: null
+# path to the video file to z-score
+videofile: null
+# every STRIDE frames will be read and statistics computed
+stride: 10
+defaults:
+  - config
+hydra:
+  run:
+    dir: ${project.path}/${project.model_path}/inference_logs/${now:%y%m%d_%H%M%S}_${run.model}_${run.type}_${notes}

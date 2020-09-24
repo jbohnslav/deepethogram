@@ -1,0 +1,46 @@
+split:
+  # if true, attempt to reload a previously made data split. If false, will randomly assign to splits new
+  reload: true
+  # if file is specified, reload the data splits from this file. Useful for comparing performance with the same data
+  file: null
+  # Data will be assigned to splits with the below probabilities. By default, don't use a test set, but only validation
+  train_val_test:
+  - 0.8
+  - 0.2
+  - 0.0
+# parameters for computation, both training and testing
+compute:
+  # currently unsupported: if true, use half-precision training and inference. Potentially faster
+  fp16: false
+  # number of CPU workers. Should be roughly the number of cores in your CPU
+  num_workers: 8
+  # batch size for training and inference. If you're getting out of VRAM errors, lower this. If you're less than say 8,
+  # reduce model complexity or buy a better GPU instead
+  batch_size: 32
+  # not implemented: for distributed training
+  distributed: false
+  # which GPU to use on a multi-GPU computer. use nvidia-smi to see which numbers correspond to which GPUs
+  gpu_id: 0
+  # not implemented: for nvidia dali dataloading
+  dali: false
+# for reloading model weights
+reload:
+  # not used: overwrite specified config with the loaded one
+  overwrite_cfg: false
+  # path to weightfile. You can either use this or the model-specific .weights field, depending
+  weights: null
+  # if True, will attempt to automatically load the most recent trained model
+  latest: false
+# one of deg_f, deg_m, deg_s. see paper
+preset: null
+# use this field to set notes in both the saved configuration file and the run directory. e.g.
+# `train.dropout_p=0.5 notes=trying_lower_dropout`
+notes: null
+# do not change: for Hydra
+#defaults:
+#  project: project_config
+# hyra configuration: specifies how to create the run directory
+hydra:
+  run: 
+    dir: ${project.path}/${project.model_path}/${now:%y%m%d_%H%M%S}_${run.model}_${run.type}_${notes}
+  output_subdir: ''

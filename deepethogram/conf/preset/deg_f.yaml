@@ -1,0 +1,10 @@
+# this specifies parameters for the Fast version of the deepethogram models.
+# this file will be loaded if the flag `preset=deg_f` is used at the command line.
+# see paper for details
+feature_extractor:
+  arch: resnet18
+  n_flow: 10
+  n_rgb: 1
+flow_generator:
+  arch: TinyMotionNet
+  n: 10

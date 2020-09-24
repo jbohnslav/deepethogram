@@ -1,0 +1,10 @@
+# this specifies parameters for the Medium version of the deepethogram models.
+# this file will be loaded if the flag `preset=deg_m` is used at the command line.
+# see paper for details
+feature_extractor:
+  arch: resnet50
+  n_flow: 10
+  n_rgb: 1
+flow_generator:
+  arch: MotionNet
+  n: 10

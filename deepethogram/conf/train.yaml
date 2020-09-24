@@ -1,0 +1,54 @@
+train:
+  # learning rate of your optimizer. default: 1e-4. Potentially set lower if you're retraining from a decent
+  # checkpoint
+  lr: 0.0001
+  # learning rate scheduler. See deepethogram/schedulers.py. options:
+  # plateau: when the validation metric plateaus, reduce the learning rate
+  # cosine: using cosine annealing with warm restarts
+  # multistep: decrease learning rate at fixed milestones (below)
+  scheduler: plateau
+  # number of epochs to train before automatically stopping. Use to decrease training time
+  num_epochs: 1000
+  # number of gradient descent steps during each "epoch". for large datasets, it will take too long to go through
+  # the entire dataset before validation (when model saving occurs). Reduce to speed up training, or increase to train
+  # further before visualization, checkpointing, learning rate decrements, etc.
+  steps_per_epoch:
+    train: 1000
+    val: 1000
+    test: 20
+  # used in the plateau scheduler. if the learning rate drops below this value, stop training altogether
+  min_lr: 0.0000005 # 5e-7
+  # see deepethogram/stoppers.py
+  # options:
+  # early: will stop after your validation loss saturates for train.patience epochs. Clashes with learning rate
+  #        scheduler
+  # learning_rate: when the learning rate drops below train.min_lr, stop
+  # null: train will go for num_epochs, and then stop
+  stopping_type: learning_rate
+  # for early_stopping, reduce learning rate by train.reduction_factor at the below epochs
+  milestones:
+    - 50
+    - 100
+    - 150
+    - 200
+    - 250
+    - 300
+  # whether or not to weight your loss function by the number of examples. Should essentially always keep to true
+  weight_loss: true
+  # patience used both in stopping and the learning rate scheduler
+  patience: 5
+  # if using early stopping, you can set this value and early stopping will not kick in until the below epoch is reached
+  early_stopping_begins: 0
+  # whether or not to visualize data. always keep true
+  viz: true
+  # the amount to reduce the learning rate by when the scheduler demands
+  reduction_factor: 0.1
+  # In the paper, see Methods / loss functions. This value is beta.
+  # if 0, don't weight loss by number of examples.
+  # if 1, weight loss in direct proportion to the rate of negative examples. For example, if only 1% of your data
+  # for a given class is positive (==1), weight errors on these positive examples 100 X more highly.
+  # in practice I find this is too strong an up-weighting. Instead, I will weight by
+  # the proportion of pos examples ** loss_weight_exp
+  # if only 1% of data ==1, and loss_weight_exp=0.5, the weight value will be 10
+  loss_weight_exp: 1.0
+# used for computing the train, validation, and test splits

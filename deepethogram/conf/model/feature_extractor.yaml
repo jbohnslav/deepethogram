@@ -1,0 +1,31 @@
+feature_extractor:
+  # the CNN architecture used to extract features. Currently supported options: resnet18, resnet50, resnet3d_34.
+  arch: resnet18
+  # how to fuse the outputs of the spatial model and flow model. Default: averaging them together. Other option:
+  # concatenate. This concatenates the two vectors, followed by a fully connected layer with outputs of shape (K),
+  # aka number of behaviors.
+  fusion: average
+  # deprecated: used to over-sample rare classes
+  sampler: null
+  # deprecated: how much to over-sample
+  sampling_ratio: null
+  # The activation function on the final layer. options include sigmoid, softmax. Use softmax for mutually-exclusive
+  # behaviors. Note: models have not been trained with this in mind.
+  final_activation: sigmoid
+  # the amount of dropout on the 512-d feature vector before the last fully connected layer. 0.9 is already very high.
+  # if your model is under-fitting (highly unlikely), reduce this value.
+  dropout_p: 0.9
+  # how many optic flow frames to use as inputs to the flow CNN
+  n_flows: 10
+  # how many RGB frames to use as inputs to the spatial CNN
+  n_rgb: 1
+  # if true, trains feature extractors in a curriculum. first trains the spatial CNN, then the flow CNN, and finally
+  # the two jointly end-to-end. If false, will be end-to-end from the start: faster, but with potentially lower
+  # performance.
+  curriculum: true
+  # deprecated
+  inputs: both
+  # the amount of weight decay (L2 normalization) to use on the feature extractors.
+  weight_decay: 0 # use 1e-4 if training from scratch
+  # path to a checkpoint.pt file which will reload this model. Should have weights for both spatial and flow streams
+  weights: null

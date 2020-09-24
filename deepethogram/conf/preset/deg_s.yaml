@@ -1,0 +1,13 @@
+# this specifies parameters for the Slow version of the deepethogram models.
+# this file will be loaded if the flag `preset=deg_s` is used at the command line.
+# see paper for details
+feature_extractor:
+  arch: resnet3d_34
+  n_flow: 10
+  n_rgb: 11
+flow_generator:
+  arch: TinyMotionNet3D
+  n: 10
+  flow_sparsity: true
+  sparsity_weight : 0.05
+  smooth_weight_multiplier: 0.25

@@ -1,0 +1,10 @@
+inference:
+  # list of DeepEthogram directories with video files and labels. See docs/file_structure.md
+  # bracketed separated by commas. e.g. inference.directory_list=[path/to/vid1,path/to/vid2]
+  # to extract features from all videos, use 'all'
+  directory_list: null
+  # if true, when an error is encountered, inference will attempt to continue to the next video without stopping
+  ignore_error: true
+  # if the group sequence.latent_name already exists in the HDF5 file, will overwrite it.
+  # if false, that file would be skipped
+  overwrite: false

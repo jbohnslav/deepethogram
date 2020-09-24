@@ -1,0 +1,26 @@
+run:
+  type: gui
+# how many frames to show on the label viewer. Larger number = more zoomed out
+label_view_width: 31
+# how many frames to jump when using ctrl + the arrow keys
+control_arrow_jump: 31
+# how many frames the up and down arrows move forward and backward, respectively
+vertical_arrow_jump: 3
+# matplotlib colormap for the label and prediction viewer
+# https://matplotlib.org/3.1.1/gallery/color/colormap_reference.html
+# if deepethogram: each row is a different color. background is gray. probabilities are mapped to the saturation of the
+# color
+cmap: deepethogram
+# frames that are unlabeled will look transparent on the GUI, with the below alpha value
+# lower = more transparent
+unlabeled_alpha: 0.1
+# the prediction viewer shows both probablities and predictions (thresholded probabilities). the probabilities
+# will have the below alpha value (predictions are always 1)
+prediction_opacity: 0.2
+# notes to add to gui logs
+notes: null
+defaults:
+  - postprocessor
+hydra:
+  run:
+    dir: gui_logs/${now:%y%m%d_%H%M%S}_${notes}

@@ -1,0 +1,3 @@
+include README.md
+include deepethogram/gui/icons/*.png
+recursive-include deepethogram/conf *

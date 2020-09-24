@@ -1,0 +1,11 @@
+run:
+  type: inference
+  model: sequence
+defaults:
+  - config
+  - model/sequence
+  - model/feature_extractor
+  - inference
+hydra:
+  run:
+    dir: ${project.path}/${project.model_path}/inference_logs/${now:%y%m%d_%H%M%S}_${run.model}_${run.type}_${notes}
