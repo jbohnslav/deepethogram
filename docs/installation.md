@@ -6,8 +6,7 @@
 * Activate your environment: `conda activate deg`
 * Install PyTorch: [Use this link for official instructions.](https://pytorch.org/) 
 * Install PySide2: `conda install -c conda-forge pyside2`
-* `pip install deepethogram`. Note: this currently doesn't work because we are in pre-release. Please git clone this 
-repository and run `python setup.py install`
+* `pip install deepethogram`. 
 
 ## Installing from source
 * `git clone https://github.com/jbohnslav/deepethogram.git`
@@ -15,7 +14,7 @@ repository and run `python setup.py install`
 * `conda env create -f environment.yml`
     * Be prepared to wait a long time!! On mechanical hard drives, this may take 5-10 minutes (or more). Interrupting here will cause installation to fail. 
 * `conda activate deg`
-* `python setup.py develop`
+* `python setup.py install`
 
 ### Installing Anaconda
 For instructions on installing anaconda, 

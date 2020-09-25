@@ -54,7 +54,8 @@ and inference.
 
 ## Download models
 Rather than start from scratch, we will start with model weights pretrained on the Kinetics700 dataset. Go to 
-TODO: INSERT GOOGLE DRIVE LINK HERE. Unzip the files in your `project/models` directory. The path should be 
+To download the pretrained weights, please use [this Google Drive link](https://drive.google.com/file/d/1XmVsAGfOvzosP-dqEsRxevYEZRu0sFTn/view?usp=sharing).
+Unzip the files in your `project/models` directory. The path should be 
 `your_project/models/pretrained/{models 1:6}`. 
 
 ## Start training the flow generator
