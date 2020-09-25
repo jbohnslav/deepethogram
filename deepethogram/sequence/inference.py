@@ -205,6 +205,10 @@ def main(cfg: DictConfig):
         rundir = os.path.dirname(weights)
         loaded_cfg = utils.load_yaml(os.path.join(rundir, 'config.yaml'))
         latent_name = loaded_cfg['sequence']['latent_name']
+        # if this latent name is also None, use the arch of the feature extractor
+        # this should never happen
+        if latent_name is None:
+            latent_name = loaded_cfg['feature_extractor']['arch']
     else:
         latent_name = cfg.sequence.latent_name
 

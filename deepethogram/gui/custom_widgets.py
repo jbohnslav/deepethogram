@@ -935,9 +935,9 @@ class UnclickButtonOnPipeCompletion(QtCore.QThread):
                 # print('still running...')
             else:
                 if not self.has_been_clicked:
-                    print('ischecked: ', self.button.isChecked())
+                    # print('ischecked: ', self.button.isChecked())
                     if self.button.isChecked():
-                        print('listener clicking button')
+                        # print('listener clicking button')
                         self.button.click()
                 break
 

@@ -57,6 +57,9 @@ class MainWindow(QMainWindow):
         self.ui.actionAdd_multiple.triggered.connect(self.add_multiple_videos)
         self.ui.actionOvernight.triggered.connect(self.run_overnight)
         self.ui.predictionsCombo.currentTextChanged.connect(self.change_predictions)
+
+        self.default_archs = None
+
         # scroll down to Standard Shorcuts to find what the keys are called:
         # https://doc.qt.io/qt-5/qkeysequence.html
         next_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence('Right'), self)
@@ -280,7 +283,6 @@ class MainWindow(QMainWindow):
                               debug: bool = False, opacity: np.ndarray = None):
 
         # do all the setup for labels and predictions
-
         self.ui.predictions.initialize(behaviors=self.project_config['project']['class_names'],
                                        n_timepoints=self.n_timepoints, debug=debug, fixed=True,
                                        array=prediction_array, opacity=opacity,
@@ -476,9 +478,8 @@ class MainWindow(QMainWindow):
         records = projects.get_records_from_datadir(self.data_path)
         keys = list(records.keys())
         outputs = projects.has_outputfile(records)
-        sequence_weights = projects.get_weights_from_model_path(self.model_path)['sequence']
-        if len(sequence_weights) > 0:
-            sequence_weights = sequence_weights[-1]
+        sequence_weights = self.get_selected_models()['sequence']
+        if sequence_weights is not None and os.path.isfile(sequence_weights):
             sequence_config = utils.load_yaml(os.path.join(os.path.dirname(sequence_weights), 'config.yaml'))
             latent_name = sequence_config['sequence']['latent_name']
             if latent_name is None:
@@ -812,6 +813,10 @@ class MainWindow(QMainWindow):
         opacity[opacity == 0] = self.cfg.prediction_opacity
         log.debug('opacity array: {}'.format(opacity))
 
+        if np.any(probabilities > 1):
+            log.warning('Probabilities > 1 found, clamping...')
+            probabilities = probabilities.clip(min=0, max=1.0)
+
         # import pdb
         # pdb.set_trace()x
         # print('probabilities min: {}, max: {}'.format(probabilities.min(), probabilities.max()))
@@ -956,17 +961,45 @@ class MainWindow(QMainWindow):
 
         # pprint.pprint(self.trained_model_dict)
 
+    def get_default_archs(self):
+        # TODO: replace this default logic with hydra 1.0
+        if 'preset' in self.project_config.keys():
+            preset = self.project_config['preset']
+        else:
+            preset = 'deg_f'
+        default_archs = projects.load_default('preset/{}'.format(preset))
+        seq_default = projects.load_default('model/sequence')
+        default_archs['sequence'] = {'arch': seq_default['sequence']['arch']}
+
+        if 'feature_extractor' in self.project_config.keys():
+            if 'arch' in self.project_config['feature_extractor'].keys():
+                default_archs['feature_extractor']['arch'] = self.project_config['feature_extractor']['arch']
+        if 'flow_generator' in self.project_config.keys():
+            if 'arch' in self.project_config['flow_generator'].keys():
+                default_archs['flow_generator']['arch'] = self.project_config['flow_generator']['arch']
+        if 'sequence' in self.project_config.keys():
+            if 'arch' in self.project_config['sequence'].keys():
+                default_archs['sequence']['arch'] = self.project_config['sequence']['arch']
+        self.default_archs = default_archs
+        log.debug('default archs: {}'.format(default_archs))
+
     def get_trained_models(self):
         trained_models = projects.get_weights_from_model_path(self.model_path)
-        # print(trained_models)
+        self.get_default_archs()
+        log.debug('trained models found: {}'.format(trained_models))
         trained_dict = {}
-        for model, runs in trained_models.items():
+        for model, archs in trained_models.items():
             trained_dict[model] = {}
-            for run in runs:
+
+            arch = self.default_archs[model]['arch']
+            if arch not in archs.keys():
+                continue
+            for run in trained_models[model][arch]:
                 key = os.path.basename(os.path.dirname(run))
                 trained_dict[model][key] = run
 
         self.trained_model_dict = trained_dict
+
         log.debug('trained model dict: {}'.format(self.trained_model_dict))
         models = self.trained_model_dict['flow_generator']
         if len(models) > 0:
