@@ -5,7 +5,7 @@
 * Create a new anaconda environment: `conda create --name deg python=3.7`
 * Activate your environment: `conda activate deg`
 * Install PyTorch: [Use this link for official instructions.](https://pytorch.org/) 
-* Install PySide2: `conda install -c conda-forge pyside2`
+* Install PySide2: `conda install -c conda-forge pyside2==5.13.2`
 * `pip install deepethogram`. 
 
 ## Installing from source
@@ -46,4 +46,5 @@ to install on your system.
 environment with `conda create --name deg python=3.7` before installation. 
 * `module not found: PySide2`. Some versions of PySide2 install poorly from pip. use `pip uninstall pyside2`, then 
 `conda install -c conda-forge pyside2`
-
+* When opening the GUI, you might get `Segmentation fault (core dumped)`. In this case; please `pip uninstall pyside2`, 
+`conda uninstall pyside2`. `conda install -c conda-forge pyside2==5.13.2`

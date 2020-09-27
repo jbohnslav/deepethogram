@@ -22,7 +22,7 @@ For full installation instructions, see [this readme file](docs/installation.md)
 
 In brief: 
 * [install PyTorch](pytorch.org)
-* Install PySide2: `conda install -c conda-forge pyside2` 
+* Install PySide2: `conda install -c conda-forge pyside2==5.13.2` 
 * `pip install deepethogram`
 
 ## Licensing
