@@ -1,3 +1,4 @@
+import pathlib
 import warnings
 
 from PySide2 import QtCore, QtWidgets
@@ -47,7 +48,7 @@ class CreateProject(QtWidgets.QDialog):
         if len(project_directory) == 0:
             warnings.warn('Please choose a directory')
             return
-        project_directory = project_directory.replace('/', '\\')
+        project_directory = pathlib.Path(project_directory).resolve()
         self.project_directory = project_directory
 
         self.project_name_default = 'Project Name'
