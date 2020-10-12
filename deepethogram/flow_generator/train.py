@@ -76,7 +76,7 @@ def build_model_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
 
 def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
     device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
-    torch.cuda.set_device(device)
+    if device != 'cpu': torch.cuda.set_device(device)
 
     log.info('Training flow generator....')
 
