@@ -61,3 +61,7 @@ The more VRAM you have, the more data you can fit in one batch, which generally 
 I'd recommend 6GB VRAM at absolute minimum. 8GB is better, with 10+ GB preferred.
 Recommended GPUs: `RTX 3090`, `RTX 3080`, `Titan RTX`, `2080 Ti`, `2080 super`, `2080`, `1080 Ti`, `2070 super`, `2070` 
 Some older ones might also be fine, like a `1080` or even `1070 Ti`/ `1070`. 
+
+## Changelog
+* 0.0.1.post1: bug fixes and video conversion scripts added
+* 0.0.1: initial version
