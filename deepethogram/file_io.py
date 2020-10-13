@@ -67,7 +67,14 @@ def read_label_csv(labelfile):
     label = df.values.astype(np.int64)
     if label.ndim == 1:
         label = label[..., np.newaxis]
-    return (label)
+    return label
+
+
+def convert_video(videofile: Union[str, os.PathLike], movie_format: str, *args, **kwargs) -> None:
+    with VideoReader(videofile) as reader:
+        with VideoWriter(videofile, movie_format=movie_format, *args, **kwargs) as writer:
+            for frame in reader:
+                writer.write(frame)
 
 
 class VideoPlayer:
@@ -318,10 +325,10 @@ def write_frame_hdf5(writer_obj, frame, axis=0, quality: int = 80):
     """ Writes frames to an HDF5 file by encoding them as JPEG bytestrings """
     # ret1, left_jpg = cv2.imencode('.jpg', left, (cv2.IMWRITE_JPEG_QUALITY,80))
     # ret2, right_jpg = cv2.imencode('.jpg', right, (cv2.IMWRITE_JPEG_QUALITY,80))
-    ret, jpg = cv2.imencode('.jpg', frame, (cv2.IMWRITE_JPEG_QUALITY, quality))
+    ret, encoded = cv2.imencode('.png', frame)
     writer_obj['frame'].resize(writer_obj['frame'].shape[axis] + 1, axis=axis)
     # f['left'].resize(f['left'].shape[axis]+1, axis=axis)
-    writer_obj['frame'][-1] = jpg.squeeze()
+    writer_obj['frame'][-1] = encoded.squeeze()
 
 
 def initialize_opencv(filename, framesize, codec, fps: float = 30.0):
@@ -449,8 +456,8 @@ class VideoWriter:
 
     OpenCV: can use encode using MJPG, XVID / DIVX, uncompressed bitmaps, or FFV1 (lossless) encoding
     FFMPEG: can use many codecs, but here only libx264, a common encoder with very high compression rates
-    HDF5: Encodes each image as a jpg, and stores as an array of these jpg encoded bytestrings
-        Very similar filesize to MJPG encoding, but dramatically faster RANDOM reads!
+    HDF5: Encodes each image as a jpg, and stores as an array of these png encoded bytestrings
+        Lossless encoding for larger file sizes, but dramatically faster RANDOM reads!
         Good for if you need often to grab a random frame from anywhere within a video, but slightly slower for
         reading sequential frames.
     directory: encodes each image as a .jpg, .png, .tiff, .bmp, etc. Saves with filename starting at 000000000.jpg
@@ -489,7 +496,7 @@ class VideoWriter:
         Returns:
             VideoWriter object
         """
-        assert (movie_format in ['opencv', 'hdf5', 'ffmpeg', 'directory'])
+        assert movie_format in ['opencv', 'hdf5', 'ffmpeg', 'directory']
         self.filename = filename
         if movie_format == 'directory':
             assert (filetype in ['.bmp', '.jpg', '.png', '.jpeg', '.tiff', '.tif'])
