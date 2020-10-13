@@ -564,7 +564,7 @@ class MainWindow(QMainWindow):
     def classifier_inference(self):
         if self.ui.classifierInference.isChecked():
             fe_args = self.generate_featureextractor_inference_args()
-            sequence_args = self.generate_sequence_inference_args(require_features=False)
+            sequence_args = self.generate_sequence_inference_args()
 
             if fe_args is None or sequence_args is None:
                 log.error('Erroneous arguments to fe or seq: {}, {}'.format(fe_args, sequence_args))
@@ -587,7 +587,7 @@ class MainWindow(QMainWindow):
         if self.ui.actionOvernight.isChecked():
             flow_args = self.generate_flow_train_args()
             fe_args = self.generate_featureextractor_inference_args()
-            sequence_args = self.generate_sequence_inference_args(require_features=False)
+            sequence_args = self.generate_sequence_inference_args()
 
             if flow_args is None:
                 log.error('Erroneous flow arguments in run overnight: {}'.format(flow_args))
