@@ -10,11 +10,12 @@ import h5py
 import numpy as np
 import pandas as pd
 from omegaconf import DictConfig
+from tqdm import tqdm
 
 from deepethogram.utils import get_subfiles
 from deepethogram.zscore import zscore_video
 from . import utils
-from .file_io import read_labels
+from .file_io import read_labels, convert_video
 
 log = logging.getLogger(__name__)
 
@@ -574,11 +575,8 @@ def get_record_from_subdir(subdir: Union[str, os.PathLike]) -> dict:
         stats: yaml file containing that video's RGB channel statistics
         key: basename of this directory. e.g. animal0
     """
-    file = os.path.join(subdir, 'record.yaml')
-    if not os.path.isfile(file):
-        record = parse_subdir(subdir)
-    else:
-        record = utils.load_yaml(file)
+    record = parse_subdir(subdir)
+
     parsed_record = {}
     for key in ['flow', 'label', 'output', 'rgb']:
         if key in list(record.keys()):
@@ -620,7 +618,7 @@ def get_records_from_datadir(datadir: Union[str, bytes, os.PathLike]) -> dict:
     subdirs = get_subfiles(datadir, return_type='directory')
     records = {}
     for subdir in subdirs:
-        parsed_record = get_record_from_subdir(os.path.join(datadir, subdir))
+        parsed_record = get_record_from_subdir(os.path.join(datadir, subdir) )
         records[parsed_record['key']] = parsed_record
     write_all_records(datadir)
     return records
@@ -1074,3 +1072,13 @@ def load_default(conf_name: str) -> dict:
 
     defaults = utils.load_yaml(defaults_file)
     return defaults
+
+def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5') -> None:
+    assert (os.path.isfile(config_file))
+    project_config = utils.load_yaml(config_file)
+
+    records = get_records_from_datadir(os.path.join(project_config['project']['path'],
+                                                    project_config['project']['data_path']))
+    for record in tqdm(records, desc='converting videos'):
+        videofile = record['rgb']
+        convert_video(videofile, movie_format)
