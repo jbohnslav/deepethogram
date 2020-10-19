@@ -663,9 +663,9 @@ def speedtest(loader, model, metrics, steps, supervised: bool = True, device=Non
 
         # N,C,H,W = images.shape
         num_images = inputs.shape[0]
-        time_per_image = (time.time() - t0) / num_images
+        time_per_image = (time.time() - t0) / (num_images + 1e-7)
         metrics.time_append(time_per_image)
-        t.set_description('FPS: {:.2f}'.format(1 / time_per_image))
+        t.set_description('FPS: {:.2f}'.format(1 / (time_per_image + 1e-7)))
     metrics.end_epoch_speedtest()
     return metrics
 

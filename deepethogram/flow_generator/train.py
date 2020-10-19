@@ -407,9 +407,9 @@ def speedtest(loader, model, metrics, steps, device=None, dali:bool=False, fp16:
 
         # N,C,H,W = images.shape
         num_images = batch.shape[0]
-        time_per_image = (time.time() - t0) / num_images
+        time_per_image = (time.time() - t0) / (num_images + 1e-7)
         metrics.time_append(time_per_image)
-        t.set_description('FPS: {:.2f}'.format(1 / time_per_image))
+        t.set_description('FPS: {:.2f}'.format(1 / (time_per_image + 1e-7)))
     total_t = time.time() - epoch_t
     batches_per_s = total_t / num_iters
     log.debug('batches per second in speedtest: {}'.format(batches_per_s))
