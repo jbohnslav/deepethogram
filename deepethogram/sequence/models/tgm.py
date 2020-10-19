@@ -287,7 +287,7 @@ class TGMJ(nn.Module):
             # https://www.tensorflow.org/tutorials/structured_data/imbalanced_data
             if pos is not None and neg is not None:
                 with torch.no_grad():
-                    bias = torch.log(torch.from_numpy(pos / neg)).float()
+                    bias = np.nan_to_num(np.log(pos / neg), neginf=0.0)
                     bias = torch.nn.Parameter(bias)
                     # print('Custom bias: {}'.format(bias))
                     self.classify1.bias = bias

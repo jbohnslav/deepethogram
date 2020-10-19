@@ -71,8 +71,8 @@ def get_cnn(model_name: str, in_channels: int = 3, reload_imagenet: bool = True,
     # https://www.tensorflow.org/tutorials/structured_data/imbalanced_data#optional_set_the_correct_initial_bias
     if pos is not None and neg is not None:
         with torch.no_grad():
-            bias = torch.log(torch.from_numpy(pos / neg)).float()
-            bias = torch.nn.Parameter(bias)
+            bias = np.nan_to_num(np.log(pos / neg), neginf=0.0)
+            bias = torch.nn.Parameter(torch.from_numpy(bias).float())
             linear_layer.bias = bias
             log.info('Custom bias: {}'.format(linear_layer.bias))
     model = nn.Sequential(model, linear_layer)
