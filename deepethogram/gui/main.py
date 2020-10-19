@@ -182,6 +182,7 @@ class MainWindow(QMainWindow):
 
     def video_loaded_buttons(self):
         self.ui.finalize_labels.setEnabled(True)
+        self.ui.actionSave_Project.setEnabled(True)
         records = projects.get_records_from_datadir(self.data_path)
         if len(records) > 1:
             self.ui.flow_train.setEnabled(True)
