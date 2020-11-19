@@ -1,22 +1,23 @@
-import torch
+import logging
 import os
+import sys
+from typing import Type
+
+import hydra
+import matplotlib.pyplot as plt
 import numpy as np
+import torch
 import torch.nn as nn
 import torch.optim as optim
+from omegaconf import DictConfig
 
+from deepethogram import utils, projects
 from deepethogram.dataloaders import get_dataloaders_from_cfg
-from deepethogram import viz, utils, projects
-import matplotlib.pyplot as plt
-from .models.sequence import Linear, Conv_Nonlinear, RNN
-from .models.tgm import TGM, TGMJ
 from deepethogram.feature_extractor.train import (get_metrics, train,
                                                   get_stopper, get_criterion)
 from deepethogram.schedulers import initialize_scheduler
-from typing import Union, Type
-import sys
-import hydra
-from omegaconf import DictConfig
-import logging
+from .models.sequence import Linear, Conv_Nonlinear, RNN
+from .models.tgm import TGM, TGMJ
 
 log = logging.getLogger(__name__)
 

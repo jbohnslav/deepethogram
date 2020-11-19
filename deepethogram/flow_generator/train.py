@@ -7,11 +7,11 @@ from typing import Union, Type
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
-from omegaconf import DictConfig
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.optim as optim
+from omegaconf import DictConfig
 
 try:
     from torch.cuda.amp import autocast, GradScaler

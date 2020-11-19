@@ -1,18 +1,20 @@
-from deepethogram import utils, projects
-from deepethogram.dataloaders import SingleSequenceDataset
+import logging
 import os
+import sys
+from typing import Union, Type
+
 import h5py
+import hydra
 import numpy as np
 import torch
-from tqdm import tqdm
-from torch.utils import data
-from torch import nn
-import sys
 from omegaconf import DictConfig
-import hydra
+from torch import nn
+from torch.utils import data
+from tqdm import tqdm
+
+from deepethogram import utils, projects
+from deepethogram.dataloaders import SingleSequenceDataset
 from deepethogram.sequence.train import build_model_from_cfg
-import logging
-from typing import Union, Type
 
 log = logging.getLogger(__name__)
 
