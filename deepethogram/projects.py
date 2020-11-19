@@ -770,6 +770,8 @@ def import_outputfile(project_dir: Union[str, os.PathLike], outputfile: Union[st
 
         thresholds = f[key]['thresholds'][:]
         loaded_class_names = f[key]['class_names'][:]
+        if type(loaded_class_names[0]) == bytes:
+            loaded_class_names = [i.decode('utf-8') for i in loaded_class_names]
     log.debug('probabilities shape: {}'.format(probabilities.shape))
 
     # if you pass class names, make sure that the order matches the order of the argument. Else, just return it
