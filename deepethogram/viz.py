@@ -1212,6 +1212,9 @@ def make_ethogram_movie(outfile: Union[str, bytes, os.PathLike],
                         width: int = 100,
                         fps: float = 30):
     """ Makes a movie out of an ethogram. Can be very slow due to matplotlib's animations """
+    if mapper is None:
+        mapper = Mapper()
+
     fig = plt.figure(figsize=(6, 8))
     # camera = Camera(fig)
 
