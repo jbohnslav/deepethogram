@@ -188,7 +188,7 @@ class VideoReader:
             VideoReader object
         """
         if not os.path.isfile(filename):
-            assert (os.path.isdir(filename))
+            assert os.path.isdir(filename)
             self.filetype = 'directory'
             endings = ['.bmp', '.jpg', '.png', '.jpeg', '.tiff', '.tif']
             files = os.listdir(filename)
@@ -204,7 +204,7 @@ class VideoReader:
             self.nframes = len(self.file_object)
         else:
             _, ext = os.path.splitext(filename)
-            ext = ext[1:]
+            ext = ext[1:].lower()
 
             if ext == 'h5':
                 self.filetype = 'hdf5'
