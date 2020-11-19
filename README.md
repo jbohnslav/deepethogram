@@ -21,7 +21,7 @@ learning research into action detection:
 For full installation instructions, see [this readme file](docs/installation.md). 
 
 In brief: 
-* [install PyTorch](pytorch.org)
+* [Install PyTorch](https://pytorch.org/) 
 * Install PySide2: `conda install -c conda-forge pyside2==5.13.2` 
 * `pip install deepethogram`
 
