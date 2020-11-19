@@ -1,3 +1,5 @@
+
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,7 +14,16 @@ def compute_pad(stride, k, s):
 
 
 class TGMLayer(nn.Module):
-    # edited only slightly from https://github.com/piergiaj/tgm-icml19/
+    """ THIS LAYER HAS BEEN EDITED ONLY SLIGHTLY FROM THE AUTHOR'S ORIGINAL.
+    https://github.com/piergiaj/tgm-icml19/
+
+    @inproceedings{piergiovanni2018super,
+          title={Temporal Gaussian Mixture Layer for Videos},
+          booktitle={International Conference on Machine Learning (ICML)},
+          author={AJ Piergiovanni and Michael S. Ryoo},
+          year={2019}
+    }
+    """
     def __init__(self, D: int = 1024, n_filters: int = 3, filter_length: int = 30, c_in: int = 1, c_out: int = 1,
                  soft: bool = False,
                  viz: bool = False):
