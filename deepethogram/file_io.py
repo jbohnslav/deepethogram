@@ -210,7 +210,7 @@ class VideoReader:
                 self.filetype = 'hdf5'
                 self.file_object = h5py.File(filename, 'r')
                 self.nframes = len(self.file_object['frame'])
-            elif ext == 'avi' or ext == 'mp4':
+            elif ext == 'avi' or ext == 'mp4' or ext == 'mov':
                 self.filetype = 'video'
                 self.file_object = cv2.VideoCapture(filename)
                 self.nframes = int(self.file_object.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -634,9 +634,9 @@ class VideoWriter:
 
     def __exit__(self, type, value, traceback):
         # allows use with decorator
-        self.stop()
+        self.close()
 
-    def stop(self):
+    def close(self):
         """Stops writing, closes all open file objects"""
         if self.has_stopped:
             return
@@ -666,7 +666,7 @@ class VideoWriter:
     def __del__(self):
         """Destructor"""
         try:
-            self.stop()
+            self.close()
         except BaseException as e:
             if self.verbose:
                 print('Error in destructor')
