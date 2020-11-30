@@ -24,6 +24,7 @@ setuptools.setup(
     python_requires='>=3.6',
     install_requires=['h5py',
                       'hydra-core<1.0',
+                      'kornia',
                       'matplotlib',
                       'numpy',
                       'opencv-python',
