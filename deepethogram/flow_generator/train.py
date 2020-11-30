@@ -22,7 +22,8 @@ from tqdm import tqdm, trange
 
 import deepethogram.projects
 from deepethogram import utils, viz
-from deepethogram.dataloaders import get_dataloaders_from_cfg
+from deepethogram.data.augs import get_gpu_transforms
+from deepethogram.data.dataloaders import get_dataloaders_from_cfg
 from deepethogram.flow_generator import models
 from deepethogram.flow_generator.losses import MotionNetLoss
 from deepethogram.flow_generator.utils import Reconstructor
@@ -79,7 +80,8 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
     if device != 'cpu': torch.cuda.set_device(device)
 
     log.info('Training flow generator....')
-
+    arch = cfg.flow_generator.arch
+    gpu_transforms = get_gpu_transforms(cfg.augs, '3d' if '3d' in arch.lower() else '2d')
     dataloaders = get_dataloaders_from_cfg(cfg, model_type='flow_generator', input_images=cfg.flow_generator.n_rgb)
 
     # print(dataloaders)
@@ -121,6 +123,7 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
                            dataloaders,
                            criterion,
                            optimizer,
+                           gpu_transforms,
                            metrics,
                            scheduler,
                            reconstructor,
@@ -141,6 +144,7 @@ def train(model,
           dataloaders: dict,
           criterion,
           optimizer,
+          gpu_transforms: dict,
           metrics,
           scheduler,
           reconstructor,
@@ -156,9 +160,9 @@ def train(model,
           dali:bool=False,
           fp16: bool=False):
     # check our inputs
-    assert (isinstance(model, nn.Module))
-    assert (isinstance(criterion, nn.Module))
-    assert (isinstance(optimizer, torch.optim.Optimizer))
+    assert isinstance(model, nn.Module)
+    assert isinstance(criterion, nn.Module)
+    assert isinstance(optimizer, torch.optim.Optimizer)
 
     scaler = None
     if fp16:
@@ -180,13 +184,15 @@ def train(model,
         metrics.update_lr(min_lr)
 
         # loop over our training set!
-        model, metrics, _ = loop_one_epoch(dataloaders['train'], model, criterion, optimizer, metrics, reconstructor,
+        model, metrics, _ = loop_one_epoch(dataloaders['train'], model, criterion, optimizer, gpu_transforms,
+                                           metrics, reconstructor,
                                            steps_per_epoch, train_mode=True, device=device, dali=dali,
                                            fp16=fp16, scaler=scaler)
 
         # evaluate on validation set
         with torch.no_grad():
-            model, metrics, examples = loop_one_epoch(dataloaders['val'], model, criterion, optimizer, metrics,
+            model, metrics, examples = loop_one_epoch(dataloaders['val'], model, criterion, optimizer, gpu_transforms,
+                                                      metrics,
                                                       reconstructor,
                                                       steps_per_validation_epoch, train_mode=False,
                                                       device=device, max_flow=max_flow, dali=dali,
@@ -197,7 +203,7 @@ def train(model,
             loader = dataloaders[key]
             # evaluate how fast inference takes, without loss calculation, which for some models can have a significant
             # speed impact
-            metrics = speedtest(loader, model, metrics, steps_per_test_epoch, device=device, dali=dali,
+            metrics = speedtest(loader, model, gpu_transforms, metrics, steps_per_test_epoch, device=device, dali=dali,
                                 fp16=fp16)
 
         # use our metrics file to output graphs for this epoch
@@ -223,7 +229,7 @@ def train(model,
     return model
 
 
-def loop_one_epoch(loader, model, criterion, optimizer, metrics, reconstructor, steps_per_epoch,
+def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms:dict, metrics, reconstructor, steps_per_epoch,
                    train_mode=True, device=None, max_flow: float = 2.5, dali: bool=False, fp16: bool=False,
                    scaler=None):
     if train_mode:
@@ -250,6 +256,9 @@ def loop_one_epoch(loader, model, criterion, optimizer, metrics, reconstructor, 
             batch = batch[0]['images']
         else:
             batch = batch.to(device)
+
+        with torch.no_grad():
+            batch = gpu_transforms[mode](batch)
 
         # num_images = int(batch.shape[1] / 3) - 1
         # images = [batch[:, i * 3:i * 3 + 3, ...] for i in range(num_images)]
@@ -377,7 +386,7 @@ def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_par
     return metrics
 
 
-def speedtest(loader, model, metrics, steps, device=None, dali:bool=False, fp16:bool=False):
+def speedtest(loader, model, gpu_transforms: dict, metrics, steps, device=None, dali:bool=False, fp16:bool=False):
     model.eval()
 
     # if steps per epoch is not none, make an iterable of range N (e.g. 1000 minibatches)
@@ -397,6 +406,9 @@ def speedtest(loader, model, metrics, steps, device=None, dali:bool=False, fp16:
             batch = batch[0]['images']
         else:
             batch = batch.to(device)
+
+        with torch.no_grad():
+            batch = gpu_transforms['val'](batch)
 
         with torch.no_grad():
             if fp16:

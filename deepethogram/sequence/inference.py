@@ -13,7 +13,7 @@ from torch.utils import data
 from tqdm import tqdm
 
 from deepethogram import utils, projects
-from deepethogram.dataloaders import SingleSequenceDataset
+from deepethogram.data.datasets import SingleSequenceDataset
 from deepethogram.sequence.train import build_model_from_cfg
 
 log = logging.getLogger(__name__)

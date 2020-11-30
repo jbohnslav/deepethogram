@@ -12,7 +12,8 @@ from torch import nn
 from tqdm import tqdm
 
 from deepethogram import utils, projects
-from deepethogram.dataloaders import SequentialIterator, get_transforms
+from deepethogram.data.augs import get_transforms
+from deepethogram.data.datasets import SequentialIterator
 from deepethogram.feature_extractor.train import build_model_from_cfg as build_feature_extractor
 
 log = logging.getLogger(__name__)

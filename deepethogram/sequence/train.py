@@ -12,7 +12,7 @@ import torch.optim as optim
 from omegaconf import DictConfig
 
 from deepethogram import utils, projects
-from deepethogram.dataloaders import get_dataloaders_from_cfg
+from deepethogram.data.dataloaders import get_dataloaders_from_cfg
 from deepethogram.feature_extractor.train import (get_metrics, train,
                                                   get_stopper, get_criterion)
 from deepethogram.schedulers import initialize_scheduler

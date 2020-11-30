@@ -15,7 +15,7 @@ from omegaconf import DictConfig
 from tqdm import tqdm, trange
 
 from deepethogram import utils, viz
-from deepethogram.dataloaders import get_dataloaders_from_cfg
+from deepethogram.data.dataloaders import get_dataloaders_from_cfg
 from deepethogram.flow_generator.train import build_model_from_cfg as build_flow_generator
 from deepethogram.metrics import Classification
 from deepethogram.projects import get_weightfile_from_cfg
@@ -327,7 +327,7 @@ def get_criterion(final_activation: str, dataloaders: dict, device):
     Args:
         final_activation (str): [softmax, sigmoid]
         dataloaders (dict): dictionary with keys ['train', 'val', 'test', 'loss_weight', 'pos_weight'], e.g. those
-            returned from deepethogram/dataloaders.py # get_dataloaders, get_video_dataloaders, etc.
+            returned from deepethogram.data.dataloaders.py # get_dataloaders, get_video_dataloaders, etc.
         device (str, torch.device): gpu device
 
     Returns:
@@ -394,7 +394,7 @@ def train(model: Type[nn.Module],
 
     Args:
         model (nn.Module): feature extractor (can also be a component, like the spatial stream or flow stream)
-        dataloaders (dict): dictionary with PyTorch dataloader objects (see dataloaders.py)
+        dataloaders (dict): dictionary with PyTorch dataloader objects (see data.dataloaders.py)
         criterion (nn.Module): loss function
         optimizer (torch.optim): optimizer (SGD, SGDM, ADAM, etc)
         metrics (Metrics): metrics object for computing metrics and saving to disk (see metrics.py)
