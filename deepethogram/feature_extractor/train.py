@@ -58,6 +58,7 @@ def main(cfg: DictConfig) -> None:
     except KeyboardInterrupt:
         torch.cuda.empty_cache()
         raise
+    # for pytorch benchmarking
     hydra._internal.hydra.GlobalHydra().clear()
 
 
@@ -104,7 +105,7 @@ def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
     spatial_classifier = get_cnn(cfg.feature_extractor.arch, in_channels=in_channels,
                                  dropout_p=cfg.feature_extractor.dropout_p,
                                  num_classes=num_classes, reload_imagenet=reload_imagenet,
-                                 pos=pos, neg=neg)
+                                 pos=pos, neg=neg, final_bn=cfg.feature_extractor.final_bn)
     # load this specific component from the weight file
     if feature_extractor_weights is not None:
         spatial_classifier = utils.load_feature_extractor_components(spatial_classifier, feature_extractor_weights,
@@ -113,7 +114,7 @@ def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
     flow_classifier = get_cnn(cfg.feature_extractor.arch, in_channels=in_channels,
                               dropout_p=cfg.feature_extractor.dropout_p,
                               num_classes=num_classes, reload_imagenet=reload_imagenet,
-                              pos=pos, neg=neg)
+                              pos=pos, neg=neg, final_bn=cfg.feature_extractor.final_bn)
     # load this specific component from the weight file
     if feature_extractor_weights is not None:
         flow_classifier = utils.load_feature_extractor_components(flow_classifier, feature_extractor_weights,
@@ -442,13 +443,13 @@ def train(model: Type[nn.Module],
         metrics.update_lr(min_lr)
 
         # loop over our training set!
-        metrics, _ = loop_one_epoch(dataloaders['train'], model, criterion, optimizer, gpu_transforms, metrics,
+        metrics = loop_one_epoch(dataloaders['train'], model, criterion, optimizer, gpu_transforms, metrics,
                                     final_activation,
                                     steps_per_epoch['train'], train_mode=True, device=device, dali=dali)
 
         # evaluate on validation set
         with torch.no_grad():
-            metrics, examples = loop_one_epoch(dataloaders['val'], model, criterion, optimizer, gpu_transforms, metrics,
+            metrics = loop_one_epoch(dataloaders['val'], model, criterion, optimizer, gpu_transforms, metrics,
                                                final_activation, steps_per_epoch['val'],
                                                train_mode=False, sequence=sequence, device=device,
                                                dali=dali)
@@ -462,7 +463,7 @@ def train(model: Type[nn.Module],
                                 dali=dali)
 
         # use our metrics file to output graphs for this epoch
-        viz.visualize_logger(metrics.fname, examples if len(examples) > 0 else None)
+        viz.visualize_logger(metrics.fname)
 
         # save a checkpoint
         utils.checkpoint(model, rundir, epoch)
@@ -539,7 +540,6 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms: dict, me
     dataiter = iter(loader)
     mode = 'train' if train_mode else 'val'
     cnt = 0
-    examples = []
     has_logged = False
     for i in t:
         t0 = time.time()
@@ -608,25 +608,20 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms: dict, me
             loss.backward()
             # step in direction of gradients according to optimizer
             optimizer.step()
-        else:
-            if cnt < 10:
-                if sequence:
-                    # make sequence figures
-                    fig = plt.figure(figsize=(14, 14))
-                    viz.visualize_batch_sequence(inputs, predictions, labels, fig=fig)
-                    img = viz.fig_to_img(fig)
-                    examples.append(img)
-                    plt.close(fig)
-                elif hasattr(model, 'flow_generator'):
-                    fig = plt.figure(figsize=(14, 14))
-                    # re-compute optic flows for this batch for visualization
-                    with torch.no_grad():
-                        flows = model.flow_generator(inputs)
-                        inputs = gpu_transforms['denormalize'](inputs)
-                    viz.visualize_hidden(inputs, flows, predictions, labels, fig=fig, normalizer=normalizer)
-                    img = viz.fig_to_img(fig)
-                    examples.append(img)
-                    plt.close(fig)
+        if cnt < 10:
+            if sequence:
+                # make sequence figures
+                fig = plt.figure(figsize=(14, 14))
+                viz.visualize_batch_sequence(inputs, predictions, labels, fig=fig)
+                viz.save_figure(fig, 'batch', True, cnt, mode)
+            elif hasattr(model, 'flow_generator'):
+                fig = plt.figure(figsize=(14, 14))
+                # re-compute optic flows for this batch for visualization
+                with torch.no_grad():
+                    flows = model.flow_generator(inputs)
+                    inputs = gpu_transforms['denormalize'](inputs)
+                viz.visualize_hidden(inputs, flows, predictions, labels, fig=fig, normalizer=normalizer)
+                viz.save_figure(fig, 'batch', True, cnt, mode)
 
         # torch.cuda.synchronize()
         time_per_image = (time.time() - t0) / inputs.shape[0]
@@ -637,7 +632,7 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms: dict, me
         t.set_description('{} loss: {:.4f}'.format(mode, loss.item()))
         cnt += 1
     metrics.end_epoch(mode)
-    return metrics, examples
+    return metrics
 
 
 def speedtest(loader, model,gpu_transforms: dict,

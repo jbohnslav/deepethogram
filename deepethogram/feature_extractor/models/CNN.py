@@ -32,7 +32,7 @@ for model in [alexnet, densenet, inception, vgg, resnet, squeezenet, resnet3d]:
 
 # https://pytorch.org/tutorials/beginner/finetuning_torchvision_models_tutorial.html
 def get_cnn(model_name: str, in_channels: int = 3, reload_imagenet: bool = True, num_classes: int = 1000,
-            freeze: bool = False, pos: np.ndarray = None, neg: np.ndarray = None,
+            freeze: bool = False, pos: np.ndarray = None, neg: np.ndarray = None, final_bn: bool=False,
             **kwargs):
     """ Initializes a pretrained CNN from Torchvision.
 
@@ -66,14 +66,23 @@ def get_cnn(model_name: str, in_channels: int = 3, reload_imagenet: bool = True,
 
     # we have to use the pop function because the final layer in these models has different names
     model, num_features, final_layer = pop(model, model_name, 1)
-    linear_layer = nn.Linear(num_features, num_classes)
+    linear_layer = nn.Linear(num_features, num_classes, bias=not final_bn)
+    modules = [model, linear_layer]
+    if final_bn:
+        bn_layer = nn.BatchNorm1d(num_classes)
+        modules.append(bn_layer)
     # initialize bias to roughly approximate the probability of positive examples in the training set
     # https://www.tensorflow.org/tutorials/structured_data/imbalanced_data#optional_set_the_correct_initial_bias
     if pos is not None and neg is not None:
         with torch.no_grad():
             bias = np.nan_to_num(np.log(pos / neg), neginf=0.0)
             bias = torch.nn.Parameter(torch.from_numpy(bias).float())
-            linear_layer.bias = bias
-            log.info('Custom bias: {}'.format(linear_layer.bias))
-    model = nn.Sequential(model, linear_layer)
+            if final_bn:
+                bn_layer.bias = bias
+            else:
+                linear_layer.bias = bias
+            log.info('Custom bias: {}'.format(bias))
+
+
+    model = nn.Sequential(*modules)
     return model

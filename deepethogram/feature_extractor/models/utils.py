@@ -4,6 +4,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
+
 def pop(model, model_name, n_layers):
     # Goal of the pop function:
     # for each model, remove the N final layers.
@@ -90,7 +91,7 @@ def remove_cnn_classifier_layer(cnn):
     """ Removes the final layer of a torchvision classification model, and figures out dimensionality of final layer """
     # cnn should be a nn.Sequential(custom_model, nn.Linear)
     module_list = list(cnn.children())
-    assert len(module_list) == 2 and isinstance(module_list[1], nn.Linear)
+    assert (len(module_list) == 2 or len(module_list) == 3) and isinstance(module_list[1], nn.Linear)
     in_features = module_list[1].in_features
     module_list[1] = nn.Identity()
     cnn = nn.Sequential(*module_list)
@@ -157,6 +158,7 @@ def remove_cnn_classifier_layer(cnn):
 
 class Fusion(nn.Module):
     """ Module for fusing spatial and flow features and passing through Linear layer """
+
     def __init__(self, style, num_spatial_features, num_flow_features, num_classes, flow_fusion_weight=1.5,
                  activation=nn.Identity()):
         super().__init__()
