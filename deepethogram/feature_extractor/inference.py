@@ -12,7 +12,7 @@ from torch import nn
 from tqdm import tqdm
 
 from deepethogram import utils, projects
-from deepethogram.data.augs import get_transforms
+from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms_inference
 from deepethogram.data.datasets import SequentialIterator
 from deepethogram.feature_extractor.train import build_model_from_cfg as build_feature_extractor
 
@@ -83,7 +83,7 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
             fusion: str,
             num_rgb: int, latent_name: str, class_names: list = ['background'],
             device: str = 'cuda:0',
-            transform=None, ignore_error=True, overwrite=False, conv_2d:bool=False):
+            cpu_transform=None, gpu_transform=None, ignore_error=True, overwrite=False, conv_2d:bool=False):
     """ Use the model to extract spatial and flow feature vectors, and predictions, and save them to disk.
     Assumes you have a pretrained model, and K classes. Will go through each video in rgbs, run inference, extracting
     the 512-d spatial features, 512-d flow features, K-d probabilities to disk for each video frame.
@@ -146,7 +146,7 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
     for i in tqdm(range(len(rgbs))):
         rgb = rgbs[i]
         log.info('Extracting from movie {}...'.format(rgb))
-        gen = SequentialIterator(rgb, num_rgb, transform=transform, device=device, stack_channels=conv_2d)
+        gen = SequentialIterator(rgb, num_rgb, transform=cpu_transform, device=device, stack_channels=conv_2d)
 
 
         log.debug('Making two stream iterator with parameters: ')
@@ -181,6 +181,7 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
                         if type(batch) == tuple:
                             logits = model(*batch)
                         else:
+                            batch = gpu_transform(batch)
                             logits = model(batch)
                         spatial_features = activation['spatial']
                         flow_features = activation['flow']
@@ -278,7 +279,8 @@ def main(cfg: DictConfig):
     input_images = cfg.feature_extractor.n_flows + 1
     mode = '3d' if '3d' in cfg.feature_extractor.arch.lower() else '2d'
     # get the validation transforms. should have resizing, etc
-    transform = get_transforms(cfg.augs, input_images, mode)['val']
+    cpu_transform = get_cpu_transforms(cfg.augs)['val']
+    gpu_transform = get_gpu_transforms(cfg.augs, mode)['val']
 
     rgb = []
     for record in records:
@@ -303,7 +305,8 @@ def main(cfg: DictConfig):
             num_rgb=input_images,
             latent_name=latent_name,
             device=device,
-            transform=transform,
+            cpu_transform=cpu_transform,
+            gpu_transform=gpu_transform,
             ignore_error=cfg.inference.ignore_error,
             overwrite=cfg.inference.overwrite,
             class_names=class_names,

@@ -49,6 +49,8 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
     if device != 'cpu': torch.cuda.set_device(device)
     log.info('Training sequence model...')
 
+    gpu_transforms = get_empty_gpu_transforms()
+
     dataloaders = get_dataloaders_from_cfg(cfg, model_type='sequence')
     utils.save_dict_to_yaml(dataloaders['split'], os.path.join(rundir, 'split.yaml'))
     log.debug('Num training batches {}, num val: {}'.format(len(dataloaders['train']), len(dataloaders['val'])))
@@ -74,6 +76,7 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
                   dataloaders,
                   criterion,
                   optimizer,
+                  gpu_transforms,
                   metrics,
                   scheduler,
                   rundir,
@@ -81,8 +84,15 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
                   device,
                   steps_per_epoch,
                   final_activation=cfg.feature_extractor.final_activation,
-                  sequence=True,
-                  normalizer=None)
+                  sequence=True)
+
+
+def get_empty_gpu_transforms():
+    gpu_transforms = dict(train=nn.Identity(),
+                          val=nn.Identity(),
+                          test=nn.Identity(),
+                          denormalize=nn.Identity())
+    return gpu_transforms
 
 
 

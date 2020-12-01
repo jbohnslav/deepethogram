@@ -15,15 +15,16 @@ from omegaconf import DictConfig
 from tqdm import tqdm, trange
 
 from deepethogram import utils, viz
+from deepethogram.data.augs import get_gpu_transforms
 from deepethogram.data.dataloaders import get_dataloaders_from_cfg
 from deepethogram.flow_generator.train import build_model_from_cfg as build_flow_generator
 from deepethogram.metrics import Classification
 from deepethogram.projects import get_weightfile_from_cfg
 from deepethogram.schedulers import initialize_scheduler
 from deepethogram.stoppers import get_stopper
-from .losses import BCELossCustom
-from .models.CNN import get_cnn
-from .models.hidden_two_stream import HiddenTwoStream, FlowOnlyClassifier
+from deepethogram.feature_extractor.losses import BCELossCustom
+from deepethogram.feature_extractor.models.CNN import get_cnn
+from deepethogram.feature_extractor.models.hidden_two_stream import HiddenTwoStream, FlowOnlyClassifier
 
 # flow_generators = utils.get_models_from_module(flow_models, get_function=False)
 plt.switch_backend('agg')
@@ -57,6 +58,7 @@ def main(cfg: DictConfig) -> None:
     except KeyboardInterrupt:
         torch.cuda.empty_cache()
         raise
+    hydra._internal.hydra.GlobalHydra().clear()
 
 
 def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
@@ -143,7 +145,8 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
     rundir = os.getcwd()  # done by hydra
 
     device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
-    if device != 'cpu': torch.cuda.set_device(device)
+    if device != 'cpu':
+        torch.cuda.set_device(device)
 
     flow_generator = build_flow_generator(cfg)
     flow_weights = get_weightfile_from_cfg(cfg, 'flow_generator')
@@ -154,6 +157,9 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
     flow_generator = utils.load_weights(flow_generator, flow_weights, device=device)
     flow_generator = flow_generator.to(device)
 
+    arch = cfg.feature_extractor.arch
+    gpu_transforms = get_gpu_transforms(cfg.augs, '3d' if '3d' in arch.lower() else '2d')
+
     dataloaders = get_dataloaders_from_cfg(cfg, model_type='feature_extractor',
                                            input_images=cfg.feature_extractor.n_flows + 1)
 
@@ -163,7 +169,6 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
 
     flow_classifier = flow_classifier.to(device)
     num_classes = len(cfg.project.class_names)
-
 
     utils.save_dict_to_yaml(dataloaders['split'], os.path.join(rundir, 'split.yaml'))
 
@@ -187,7 +192,7 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
         log.info('Num training batches {}, num val: {}'.format(len(dataloaders['train']), len(dataloaders['val'])))
         # we'll use this to visualize our data, because it is loaded z-scored. we want it to be in the range [0-1] or
         # [0-255] for visualization, and for that we need to know mean and std
-        normalizer = get_normalizer(cfg, input_images=cfg.feature_extractor.n_rgb)
+        # normalizer = get_normalizer(cfg, input_images=cfg.feature_extractor.n_rgb)
 
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, spatial_classifier.parameters()), lr=cfg.train.lr,
                                weight_decay=cfg.feature_extractor.weight_decay)
@@ -200,10 +205,12 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
         scheduler = initialize_scheduler(optimizer, cfg, mode='min', reduction_factor=cfg.train.reduction_factor)
 
         log.info('key metric: {}'.format(metrics.key_metric))
+        log.info('TRAINING SPATIAL CLASSIFIER ONLY')
         spatial_classifier = train(spatial_classifier,
                                    dataloaders,
                                    criterion,
                                    optimizer,
+                                   gpu_transforms,
                                    metrics,
                                    scheduler,
                                    spatialdir,
@@ -212,10 +219,9 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
                                    steps_per_epoch,
                                    final_activation=cfg.feature_extractor.final_activation,
                                    sequence=False,
-                                   normalizer=normalizer,
                                    dali=dali)
 
-        log.info('Training flow stream....')
+        # log.info('Training flow stream....')
         input_images = cfg.feature_extractor.n_flows + 1
         del dataloaders
         dataloaders = get_dataloaders_from_cfg(cfg, model_type='feature_extractor',
@@ -234,10 +240,12 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
         stopper = get_stopper(cfg)
         # we're using validation loss as our key metric
         scheduler = initialize_scheduler(optimizer, cfg, mode='min', reduction_factor=cfg.train.reduction_factor)
+        log.info('TRAINING FLOW CLASSIFIER ONLY')
         flow_generator_and_classifier = train(flow_generator_and_classifier,
                                               dataloaders,
                                               criterion,
                                               optimizer,
+                                              gpu_transforms,
                                               metrics,
                                               scheduler,
                                               flowdir,
@@ -246,7 +254,6 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
                                               steps_per_epoch,
                                               final_activation=cfg.feature_extractor.final_activation,
                                               sequence=False,
-                                              normalizer=normalizer,
                                               dali=dali)
         flow_classifier = flow_generator_and_classifier.flow_classifier
         # overwrite checkpoint
@@ -258,11 +265,11 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
     # setting the mode to end-to-end would allow to backprop gradients into the flow generator itself
     # the paper does this, but I don't expect that users would have enough data for this to make sense
     model.set_mode('classifier')
-    log.info('Training end to end...')
+    log.info('TRAINING END TO END')
     input_images = cfg.feature_extractor.n_flows + 1
     dataloaders = get_dataloaders_from_cfg(cfg, model_type='feature_extractor',
                                            input_images=input_images)
-    normalizer = get_normalizer(cfg, input_images=input_images)
+    # normalizer = get_normalizer(cfg, input_images=input_images)
 
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.train.lr,
                            weight_decay=cfg.feature_extractor.weight_decay)
@@ -274,6 +281,7 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
                   dataloaders,
                   criterion,
                   optimizer,
+                  gpu_transforms,
                   metrics,
                   scheduler,
                   rundir,
@@ -379,6 +387,7 @@ def train(model: Type[nn.Module],
           dataloaders: dict,
           criterion,
           optimizer,
+          gpu_transforms: dict,
           metrics,
           scheduler,
           rundir: Union[str, bytes, os.PathLike],
@@ -433,22 +442,24 @@ def train(model: Type[nn.Module],
         metrics.update_lr(min_lr)
 
         # loop over our training set!
-        metrics, _ = loop_one_epoch(dataloaders['train'], model, criterion, optimizer, metrics, final_activation,
+        metrics, _ = loop_one_epoch(dataloaders['train'], model, criterion, optimizer, gpu_transforms, metrics,
+                                    final_activation,
                                     steps_per_epoch['train'], train_mode=True, device=device, dali=dali)
 
         # evaluate on validation set
         with torch.no_grad():
-            metrics, examples = loop_one_epoch(dataloaders['val'], model, criterion, optimizer, metrics,
+            metrics, examples = loop_one_epoch(dataloaders['val'], model, criterion, optimizer, gpu_transforms, metrics,
                                                final_activation, steps_per_epoch['val'],
                                                train_mode=False, sequence=sequence, device=device,
-                                               normalizer=normalizer, dali=dali)
+                                               dali=dali)
 
             # some training protocols do not have test sets, so just reuse validation set for testing inference speed
             key = 'test' if 'test' in dataloaders.keys() else 'val'
             loader = dataloaders[key]
             # evaluate how fast inference takes, without loss calculation, which for some models can have a significant
             # speed impact
-            metrics = speedtest(loader, model, metrics, steps_per_epoch['test'], device=device, dali=dali)
+            metrics = speedtest(loader, model, gpu_transforms, metrics, steps_per_epoch['test'], device=device,
+                                dali=dali)
 
         # use our metrics file to output graphs for this epoch
         viz.visualize_logger(metrics.fname, examples if len(examples) > 0 else None)
@@ -472,7 +483,7 @@ def train(model: Type[nn.Module],
     return model
 
 
-def loop_one_epoch(loader, model, criterion, optimizer, metrics, final_activation, steps_per_epoch,
+def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms: dict, metrics, final_activation, steps_per_epoch,
                    train_mode=True, device=None, sequence: bool = False, normalizer=None, supervised: bool = True,
                    dali: bool = False):
     """ Loops through one epoch of the data for training or validation.
@@ -546,6 +557,9 @@ def loop_one_epoch(loader, model, criterion, optimizer, metrics, final_activatio
             inputs, labels = batch[0]['images'], batch[0]['labels']
             labels = labels.squeeze()
 
+        with torch.no_grad():
+            inputs = gpu_transforms[mode](inputs)
+
         # will print out shape and min, mean, max, std along image channels
         # we use the isEnabledFor flag so that this doesnt slow down training in the non-debug case
         if not has_logged and log.isEnabledFor(logging.DEBUG):
@@ -608,6 +622,7 @@ def loop_one_epoch(loader, model, criterion, optimizer, metrics, final_activatio
                     # re-compute optic flows for this batch for visualization
                     with torch.no_grad():
                         flows = model.flow_generator(inputs)
+                        inputs = gpu_transforms['denormalize'](inputs)
                     viz.visualize_hidden(inputs, flows, predictions, labels, fig=fig, normalizer=normalizer)
                     img = viz.fig_to_img(fig)
                     examples.append(img)
@@ -625,11 +640,11 @@ def loop_one_epoch(loader, model, criterion, optimizer, metrics, final_activatio
     return metrics, examples
 
 
-def speedtest(loader, model, metrics, steps, supervised: bool = True, device=None, dali: bool = False):
+def speedtest(loader, model,gpu_transforms: dict,
+              metrics, steps, supervised: bool = True, device=None, dali: bool = False):
     """ Loop through loader and compute model predictions with no loss function calculation. Approximates inference
     speed.
     """
-
 
     model.eval()
 
@@ -659,6 +674,7 @@ def speedtest(loader, model, metrics, steps, supervised: bool = True, device=Non
             break
 
         with torch.no_grad():
+            inputs = gpu_transforms['val'](inputs)
             outputs = model(inputs)
 
         # N,C,H,W = images.shape

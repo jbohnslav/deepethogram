@@ -265,11 +265,22 @@ def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
 
     train_transforms = nn.Sequential(*train_transforms)
     val_transforms = nn.Sequential(*val_transforms)
+    denormalize = nn.Sequential(*denormalize)
+
     gpu_transforms = dict(train=train_transforms,
                 val=val_transforms,
                 test=val_transforms,
                 denormalize=denormalize)
     log.info('GPU transforms: {}'.format(gpu_transforms))
+    return gpu_transforms
+
+
+def get_gpu_transforms_inference(augs: DictConfig, mode: str = '2d', num_images:int=11) -> dict:
+    # sequential iterator already handles casting to float, dividing by 255, and stacking in channel dimension
+    norm = get_normalization_layer(augs.normalization.mean, augs.normalization.std, num_images, mode)
+    xform = transforms.Compose([norm])
+    gpu_transforms = dict(val=xform,
+                          test=xform)
     return gpu_transforms
 
 

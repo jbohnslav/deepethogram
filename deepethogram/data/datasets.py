@@ -79,7 +79,7 @@ class SequentialIterator:
         self.transform = transform
         self.device = device
         if self.device is not None:
-            assert (type(device) == torch.device)
+            assert type(device) == torch.device
         self.stack_channels = stack_channels
         if batch_size > 1:
             raise NotImplemented
@@ -104,9 +104,11 @@ class SequentialIterator:
             random.seed(self.seed)
             frame = self.transform(frame)
         else:
-            frame = frame.astype(np.float32) / 255
+            raise ValueError('must set CPU transforms in SequentialIterator')
         if type(frame) != torch.Tensor:
             frame = torch.from_numpy(frame)
+        if frame.dtype != torch.float32:
+            frame = frame.float() / 255
         if self.device is not None:
             # move to GPU if necessary
             if frame.device != self.device:
@@ -543,7 +545,7 @@ class VideoDataset(data.Dataset):
         start_frame = frame_index - self.frames_per_clip // 2 + blank_start_frames
         blank_end_frames = max(frame_index - framecount + self.frames_per_clip // 2 + 1, 0)
         real_frames = self.frames_per_clip - blank_start_frames - blank_end_frames
-        with VideoReader(self.video_list[movie_index]) as reader:
+        with VideoReader(self.video_list[movie_index], assume_writer_style=True) as reader:
             for i in range(real_frames):
                 images.append(reader[i + start_frame])
 
