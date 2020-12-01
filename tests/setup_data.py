@@ -16,7 +16,7 @@ import pandas as pd
 
 from deepethogram import projects
 from deepethogram.file_io import VideoReader
-from deepethogram.dataloaders import parse_split, train_val_test_split
+from deepethogram.data.utils import parse_split, train_val_test_split
 from deepethogram.file_io import read_labels
 from deepethogram import utils
 
