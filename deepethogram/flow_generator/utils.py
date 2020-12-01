@@ -97,7 +97,7 @@ def flow_to_rgb_polar(flow: np.ndarray, maxval: Union[int, float] = 20) -> np.nd
     # hsv[...,1] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
     hsv[..., 1] = color
     rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
-    return (rgb)
+    return rgb
 
 
 def rgb_to_flow_polar(image: np.ndarray, maxval: Union[int, float] = 20):

@@ -32,6 +32,5 @@ setuptools.setup(
                       'pandas',
                       'scikit-learn',
                       'scipy',
-                      'tifffile',
                       'tqdm']
 )

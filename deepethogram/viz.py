@@ -11,6 +11,7 @@ import numpy as np
 import tifffile as TIFF
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.projections import get_projection_class
 from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
 from sklearn.metrics import auc
 
@@ -145,9 +146,11 @@ def plot_flow(rgb, ax, show_scale=True, height=30, maxval: float = 1.0, interpol
         # flow_colorbar = colorize_flow(np.dstack((xv, yv)), maxval=1)
         aspect = ax.get_data_ratio()
         width = int(height * aspect)
+        # https://stackoverflow.com/questions/53204267
         inset = inset_locator.inset_axes(ax, width=str(width) + '%',
                                          height=str(height) + '%',
                                          loc=1)
+        # axes_class=get_projection_class('polar'))
         inset.imshow(flow_colorbar)
         inset.invert_yaxis()
         if inset_label:
@@ -1000,15 +1003,14 @@ def make_precision_recall_figure(train_metrics, val_metrics, fig=None):
     fig.suptitle('Precision vs recall. Legend: Average Precision')
 
 
-def visualize_logger(logger_file, examples):
+def visualize_logger(logger_file):
     """ makes a bunch of figures from a Metrics hdf5 file """
     ims = []
     plt.style.use('ggplot')
     fig = plt.figure(figsize=(14, 14))
 
     plot_metrics(logger_file, fig)
-    ims.append(fig_to_img(fig))
-    plt.close(fig)
+    save_figure(fig, 'learning_curves', False, 0)
 
     with h5py.File(logger_file, 'r') as f:
         keys = list(f.keys())
@@ -1017,43 +1019,35 @@ def visualize_logger(logger_file, examples):
 
             fig = plt.figure(figsize=(14, 14))
             thresholds_by_epoch_figure(epoch_summaries, fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+            save_figure(fig, 'thresholds_by_epoch', False, 1)
 
             fig = plt.figure(figsize=(14, 14))
             make_thresholds_figure(metrics_by_threshold['train'], fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+            save_figure(fig, 'train_thresholds_this_epoch', False, 2)
+
             fig = plt.figure(figsize=(14, 14))
             make_thresholds_figure(metrics_by_threshold['val'], fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+            save_figure(fig, 'val_thresholds_this_epoch', False, 3)
 
             fig = plt.figure(figsize=(14, 14))
             make_roc_figure(metrics_by_threshold['train'], metrics_by_threshold['val'], fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+            save_figure(fig, 'ROC', False, 4)
 
             fig = plt.figure(figsize=(14, 14))
             make_precision_recall_figure(metrics_by_threshold['train'], metrics_by_threshold['val'], fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+            save_figure(fig, 'precision_recall', False, 5)
 
             fig = plt.figure(figsize=(14, 14))
             # import pdb
             # pdb.set_trace()
             visualize_binary_confusion(epoch_summaries['train']['binary_confusion'],
                                        epoch_summaries['train']['binary_confusion_valid'], fig=fig)
-            fig.suptitle('Train')
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+            save_figure(fig, 'train_binary_confusion', False, 6)
 
             fig = plt.figure(figsize=(14, 14))
             visualize_binary_confusion(epoch_summaries['val']['binary_confusion'],
                                        epoch_summaries['val']['binary_confusion_valid'], fig=fig)
-            fig.suptitle('Val')
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+            save_figure(fig, 'val_binary_confusion', False, 7)
 
     splits = ['train', 'val']
     with h5py.File(logger_file, 'r') as f:
@@ -1064,19 +1058,11 @@ def visualize_logger(logger_file, examples):
             # confusion_fig = plt.figure(figsize=(16,16))
             fig = plt.figure(figsize=(14, 14))
             plot_confusion_from_logger(logger_file, fig, epoch=None)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+            save_figure(fig, 'confusion', False, 8)
 
             fig = plt.figure(figsize=(14, 14))
             plot_confusion_from_logger(logger_file, fig, epoch='last')
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
-    if examples is not None and len(examples) > 0:
-        ims.extend(examples)
-
-    fname = os.path.basename(logger_file)[:-3]
-    tiff_fname = os.path.join(os.path.dirname(logger_file), fname + '.tiff')
-    image_list_to_tiff_stack(ims, tiff_fname)
+            save_figure(fig, 'confusion_last_epoch', False, 9)
 
 
 hues = [212, 4, 121, 36, 55, 276, 237, 299, 186]
@@ -1384,3 +1370,17 @@ def make_ethogram_movie_with_predictions(outfile: Union[str, bytes, os.PathLike]
     # have to use this ugly return syntax so that we can close the figure after saving
     plt.close(fig)
     return out
+
+def make_figure_filename(name, is_example, num, split='train'):
+    basedir = os.path.join(os.getcwd(), 'figures')
+    if is_example:
+        basedir = os.path.join(basedir, 'examples', split)
+    if not os.path.isdir(basedir):
+        os.makedirs(basedir)
+    fname = os.path.join(basedir, '{:02d}_{}.png'.format(num, name))
+    return fname
+
+def save_figure(figure, name, is_example, num, split='train'):
+    fname = make_figure_filename(name, is_example, num, split)
+    figure.savefig(fname)
+    plt.close(figure)

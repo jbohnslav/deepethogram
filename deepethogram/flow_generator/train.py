@@ -184,14 +184,14 @@ def train(model,
         metrics.update_lr(min_lr)
 
         # loop over our training set!
-        model, metrics, _ = loop_one_epoch(dataloaders['train'], model, criterion, optimizer, gpu_transforms,
+        model, metrics = loop_one_epoch(dataloaders['train'], model, criterion, optimizer, gpu_transforms,
                                            metrics, reconstructor,
                                            steps_per_epoch, train_mode=True, device=device, dali=dali,
                                            fp16=fp16, scaler=scaler)
 
         # evaluate on validation set
         with torch.no_grad():
-            model, metrics, examples = loop_one_epoch(dataloaders['val'], model, criterion, optimizer, gpu_transforms,
+            model, metrics = loop_one_epoch(dataloaders['val'], model, criterion, optimizer, gpu_transforms,
                                                       metrics,
                                                       reconstructor,
                                                       steps_per_validation_epoch, train_mode=False,
@@ -207,7 +207,7 @@ def train(model,
                                 fp16=fp16)
 
         # use our metrics file to output graphs for this epoch
-        viz.visualize_logger(metrics.fname, examples)
+        viz.visualize_logger(metrics.fname)
 
         # save a checkpoint
         utils.checkpoint(model, rundir, epoch)
@@ -244,7 +244,6 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms:dict, met
     dataiter = iter(loader)
     mode = 'train' if train_mode else 'val'
     cnt = 0
-    examples = []
     has_logged = False
     for i in t:
         t0 = time.time()
@@ -330,45 +329,37 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms:dict, met
 
         t.set_description('{} loss: {:.4f}'.format(mode, loss.item()))
 
-        if not train_mode:
-            if cnt < 10:
-                batch_ind = np.random.choice(batch.shape[0])
-                sequence_length = int(downsampled_t0[0].shape[0] / batch.shape[0])
-                fig = plt.figure(figsize=(12, 12))
-                # downsampled_t0 = [i.astype(np.float32) for i in downsampled_t0]
-                # estimated_t0 =   [i.astype(np.float32) for i in estimated_t0]
-                # flows_reshaped = [i.astype(np.float32) for i in flows_reshaped]
+        if cnt < 10:
+            batch_ind = np.random.choice(batch.shape[0])
+            sequence_length = int(downsampled_t0[0].shape[0] / batch.shape[0])
+            fig = plt.figure(figsize=(12, 12))
+            # downsampled_t0 = [i.astype(np.float32) for i in downsampled_t0]
+            # estimated_t0 =   [i.astype(np.float32) for i in estimated_t0]
+            # flows_reshaped = [i.astype(np.float32) for i in flows_reshaped]
 
-                viz.visualize_images_and_flows(downsampled_t0, flows_reshaped, sequence_length,
-                                               batch_ind=batch_ind,
-                                               fig=fig, max_flow=max_flow)
-                img = viz.fig_to_img(fig)
-                examples.append(img)
-                plt.close(fig)
+            viz.visualize_images_and_flows(downsampled_t0, flows_reshaped, sequence_length,
+                                           batch_ind=batch_ind,
+                                           fig=fig, max_flow=max_flow)
+            viz.save_figure(fig, 'batch', True, cnt, mode)
 
-                fig = plt.figure(figsize=(12, 12))
-                sequence_ind = np.random.choice(sequence_length - 1)
-                viz.visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequence_length,
-                                              max_flow=max_flow, sequence_ind=sequence_ind,
-                                              batch_ind=batch_ind,
-                                              fig=fig)
-                img = viz.fig_to_img(fig)
-                examples.append(img)
-                plt.close(fig)
 
-                fig = plt.figure(figsize=(12, 12))
+            fig = plt.figure(figsize=(12, 12))
+            sequence_ind = np.random.choice(sequence_length - 1)
+            viz.visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequence_length,
+                                          max_flow=max_flow, sequence_ind=sequence_ind,
+                                          batch_ind=batch_ind,
+                                          fig=fig)
+            viz.save_figure(fig, 'multiresolution', True, cnt, mode)
 
-                viz.visualize_batch_unsupervised(downsampled_t0, estimated_t0, flows_reshaped,
-                                                 batch_ind=batch_ind, sequence_ind=sequence_ind,
-                                                 fig=fig, sequence_length=sequence_length)
-                img = viz.fig_to_img(fig)
-                examples.append(img)
-                plt.close(fig)
-
+            fig = plt.figure(figsize=(12, 12))
+            viz.visualize_batch_unsupervised(downsampled_t0, estimated_t0, flows_reshaped,
+                                             batch_ind=batch_ind, sequence_ind=sequence_ind,
+                                             fig=fig, sequence_length=sequence_length)
+            viz.save_figure(fig, 'reconstruction', True, cnt, mode)
         cnt += 1
 
     metrics.end_epoch(mode)
-    return model, metrics, examples
+    return model, metrics
 
 
 def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_parameters: Union[int, float]):
