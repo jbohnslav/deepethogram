@@ -14,6 +14,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.projections import get_projection_class
 from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
 from sklearn.metrics import auc
+import torch
 
 from deepethogram.flow_generator.utils import flow_to_rgb_polar
 from deepethogram.metrics import load_threshold_data
@@ -290,6 +291,40 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
         plt.tight_layout()
 
 
+def tensor_to_list(images: torch.Tensor, batch_ind: int) -> list:
+    if images.ndim == 4:
+        N, C, H, W = images.shape
+        sequence_length = C // 3
+        image_list = [images[batch_ind, i * 3:i * 3 + 3, ...].transpose(1, 2, 0) for i in range(sequence_length)]
+    elif images.ndim == 5:
+        N, C, T, H, W = images.shape
+        image_list = [images[batch_ind, :, i, ...].transpose(1, 2, 0) for i in range(T)]
+    else:
+        raise ValueError('weird shape of input: {}'.format(images.shape))
+    return image_list
+
+
+def predictions_labels_string(pred, label, class_names=None):
+    if class_names is None:
+        class_names = [i for i in range(len(pred))]
+    inds = np.argsort(pred)[::-1]
+    string = 'label: '
+    if label.ndim > 0:
+        for i in range(len(label)):
+            if label[i] == 1:
+                string += '{} '.format(class_names[i])
+        string += '\n'
+    else:
+        string += '{}'.format(label)
+    for i in range(10):
+        if i >= len(inds):
+            break
+        ind = inds[i]
+        string += '{}: {:.3f} '.format(class_names[ind], pred[ind])
+        if (i % 5) == 4:
+            string += '\n'
+    return string
+
 def visualize_hidden(images, flows, predictions, labels, class_names: list = None, batch_ind: int = None,
                      max_flow: float = 5.0, height: float = 15.0, fig=None, normalizer=None):
     """ Visualize inputs and outputs of a hidden two stream model """
@@ -308,13 +343,8 @@ def visualize_hidden(images, flows, predictions, labels, class_names: list = Non
     batch_size = images.shape[0]
     if batch_ind is None:
         batch_ind = np.random.choice(batch_size)
-    if images.ndim == 4:
-        N, C, H, W = images.shape
-        sequence_length = C // 3
-        image_list = [images[batch_ind, i * 3:i * 3 + 3, ...].transpose(1, 2, 0) for i in range(sequence_length)]
-    elif images.ndim == 5:
-        N, C, T, H, W = images.shape
-        image_list = [images[batch_ind, :, i, ...].transpose(1, 2, 0) for i in range(T)]
+
+    image_list = tensor_to_list(images, batch_ind)
 
     stack = stack_image_list(image_list)
     minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
@@ -348,24 +378,7 @@ def visualize_hidden(images, flows, predictions, labels, class_names: list = Non
 
     pred = predictions[batch_ind].detach().cpu().numpy()
     label = labels[batch_ind].detach().cpu().numpy()
-    if class_names is None:
-        class_names = [i for i in range(len(pred))]
-    inds = np.argsort(pred)[::-1]
-    string = 'label: '
-    if label.ndim > 0:
-        for i in range(len(label)):
-            if label[i] == 1:
-                string += '{} '.format(class_names[i])
-        string += '\n'
-    else:
-        string += '{}'.format(label)
-    for i in range(10):
-        if i >= len(inds):
-            break
-        ind = inds[i]
-        string += '{}: {:.4f} '.format(class_names[ind], pred[ind])
-        if (i % 5) == 4:
-            string += '\n'
+    string = predictions_labels_string(pred, label, class_names)
 
     fig.suptitle(string)
 
@@ -418,6 +431,52 @@ def visualize_batch_unsupervised(downsampled_t0, estimated_t0, flows_reshaped, b
     # pdb.set_trace()
     ax.set_title('L1')
     plt.tight_layout()
+
+
+def visualize_batch_spatial(images, predictions, labels, fig=None, class_names=None):
+    """ visualize spatial stream of hidden two stream model """
+
+    plt.style.use('ggplot')
+    if fig is None:
+        fig = plt.figure(figsize=(16, 12))
+
+    images = images.detach().cpu().numpy()
+    images = images.clip(min=0, max=1)
+
+
+    batch_size = images.shape[0]
+
+    num_cols = 4
+    num_rows = min(np.ceil(batch_size/num_cols), 6)
+    axes = fig.subplots(num_rows, num_cols)
+    cnt = 0
+    for i in range(num_rows):
+        for j in range(num_cols):
+            ax = axes[i, j]
+            if cnt > batch_size:
+                ax.remove()
+                cnt+=1
+                continue
+            pred = predictions[cnt].detach().cpu().numpy()
+            label = labels[cnt].detach().cpu().numpy()
+            string = predictions_labels_string(pred, label, class_names)
+            string = '{:03d}: '.format(cnt) + string
+
+            # spatial stream should almost always be one single image
+            image = tensor_to_list(images, cnt)[0]
+
+            ax.imshow(image)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+            ax.set_title(string, size=8)
+            cnt+=1
+    fig.suptitle('Spatial stream')
+    plt.tight_layout()
+
+
+
+
 
 
 def visualize_batch_sequence(sequence, outputs, labels, N_in_batch=None, fig=None):

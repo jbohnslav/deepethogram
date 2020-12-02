@@ -609,19 +609,24 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms: dict, me
             # step in direction of gradients according to optimizer
             optimizer.step()
         if cnt < 10:
+            fig = plt.figure(figsize=(14, 14))
             if sequence:
                 # make sequence figures
-                fig = plt.figure(figsize=(14, 14))
                 viz.visualize_batch_sequence(inputs, predictions, labels, fig=fig)
                 viz.save_figure(fig, 'batch', True, cnt, mode)
             elif hasattr(model, 'flow_generator'):
-                fig = plt.figure(figsize=(14, 14))
                 # re-compute optic flows for this batch for visualization
                 with torch.no_grad():
                     flows = model.flow_generator(inputs)
                     inputs = gpu_transforms['denormalize'](inputs)
                 viz.visualize_hidden(inputs, flows, predictions, labels, fig=fig, normalizer=normalizer)
-                viz.save_figure(fig, 'batch', True, cnt, mode)
+                viz.save_figure(fig, 'batch_with_flows', True, cnt, mode)
+            else:
+                with torch.no_grad():
+                    inputs = gpu_transforms['denormalize'](inputs)
+                viz.visualize_batch_spatial(inputs, predictions, labels, fig=fig)
+
+                viz.save_figure(fig, 'batch_spatial', True, cnt, mode)
 
         # torch.cuda.synchronize()
         time_per_image = (time.time() - t0) / inputs.shape[0]
