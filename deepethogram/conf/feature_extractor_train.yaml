@@ -2,6 +2,7 @@ run:
   type: train
   model: feature_extractor
 defaults:
+  - augs
   - config
   - model/feature_extractor
   - model/flow_generator
