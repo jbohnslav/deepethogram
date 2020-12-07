@@ -3,6 +3,8 @@ augs:
   UD: 0.0
   brightness: 0.25
   contrast: 0.1
+  hue: 0.1
+  saturation: 0.1
   crop_size: null
   degrees: 10
   normalization:
