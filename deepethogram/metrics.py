@@ -13,6 +13,8 @@ from deepethogram import utils
 
 log = logging.getLogger(__name__)
 
+# small epsilon to prevent divide by zero
+EPS = 1e-7
 
 def index_to_onehot(index: np.ndarray, n_classes: int) -> np.ndarray:
     """ Convert an array if indices to one-hot vectors.
@@ -208,7 +210,7 @@ def remove_invalid_values_predictions_and_labels(predictions: np.ndarray, labels
     return predictions, labels
 
 
-def evaluate_thresholds(predictions: np.ndarray, labels: np.ndarray, thresholds: np.ndarray) -> Tuple[dict, dict]:
+def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, thresholds: np.ndarray) -> Tuple[dict, dict]:
     """ Given probabilities and labels, compute a bunch of metrics at each possible threshold value
 
     Also computes a number of metrics for which there is a single value for the input predictions / labels, something
@@ -217,7 +219,7 @@ def evaluate_thresholds(predictions: np.ndarray, labels: np.ndarray, thresholds:
     Metrics computed for each threshold:
     Parameters
     ----------
-    predictions: np.ndarray. shape (N,K)
+    probabilities: np.ndarray. shape (N,K)
         output probabilities from some classifier
     labels: np.ndarray. shape (N, K) or (N,)
         binary or indicator labels. indicator labels will be converted to one-hot
@@ -233,13 +235,13 @@ def evaluate_thresholds(predictions: np.ndarray, labels: np.ndarray, thresholds:
         each value is only a single float for the entire prediction / label set.
     """
     metrics_by_threshold = {}
-    if predictions.ndim == 1:
+    if probabilities.ndim == 1:
         raise ValueError('To calc threshold, predictions must be probabilities, not classes')
-    K = predictions.shape[1]
+    K = probabilities.shape[1]
     if labels.ndim == 1:
         labels = index_to_onehot(labels, K)
 
-    predictions, labels = remove_invalid_values_predictions_and_labels(predictions, labels)
+    probabilities, labels = remove_invalid_values_predictions_and_labels(probabilities, labels)
     # TODO: refactor this to use a defaultdict(list)
     accuracy_by_class = []
     f1_by_class = []
@@ -251,7 +253,7 @@ def evaluate_thresholds(predictions: np.ndarray, labels: np.ndarray, thresholds:
     fpr_by_class = []
     log.debug('Evaluating multiple metrics for many thresholds')
     for i, thresh in enumerate(thresholds):
-        estimated = (predictions > thresh).astype(int)
+        estimated = (probabilities > thresh).astype(int)
         accuracy_by_class.append(np.mean(estimated == labels, axis=0))
         # f1_by_class.append( [f1_score(labels[:,j], estimated[:,j]) for j in range(K)] )
         precision, recall = [], []
@@ -320,35 +322,38 @@ def evaluate_thresholds(predictions: np.ndarray, labels: np.ndarray, thresholds:
     heuristic_predictions = np.zeros_like(labels)
     independent_predictions = np.zeros_like(labels)
     for i in range(0, K):
-        heuristic_predictions[:, i] = (predictions[:, i] > optimum_thresholds[i]).astype(int)
-        independent_predictions[:, i] = (predictions[:, i] > optimum_thresholds[i]).astype(int)
+        heuristic_predictions[:, i] = (probabilities[:, i] > optimum_thresholds[i]).astype(int)
+        independent_predictions[:, i] = (probabilities[:, i] > optimum_thresholds[i]).astype(int)
     heuristic_predictions[:, 0] = np.logical_not(np.any(heuristic_predictions[:, 1:], axis=1)).astype(int)
 
+    # ALWAYS REPORT THE PERFORMANCE WITH "VALID" BACKGROUND
+    predictions = heuristic_predictions
     # metrics_by_threshold[]
 
-    epoch_metrics = {'accuracy': np.mean(independent_predictions == labels),
-                     'accuracy_valid_bg': np.mean(heuristic_predictions == labels),
-                     'f1_overall': f1_score(labels, independent_predictions, average='micro'),
-                     'f1_by_class': f1_score(labels, independent_predictions, average='macro'),
-                     'f1_overall_valid_bg': f1_score(labels, heuristic_predictions, average='micro'),
-                     'f1_by_class_valid_bg': f1_score(labels, heuristic_predictions, average='macro')}
+    epoch_metrics = {'accuracy_overall': np.mean(predictions == labels),
+                     'accuracy_by_class': np.mean(predictions == labels, axis=0),
+                     'f1_overall': f1_score(labels, predictions, average='micro'),
+                     'f1_class_mean': f1_score(labels, predictions, average='macro'),
+                     'f1_by_class': f1_score(labels, predictions, average=None)
+                     }
     try:
-        epoch_metrics['auroc'] = roc_auc_score(labels, predictions, average='micro')
+        epoch_metrics['auroc_overall'] = roc_auc_score(labels, probabilities, average='micro')
+        epoch_metrics['auroc_class_mean'] = roc_auc_score(labels, probabilities, average='macro')
+        epoch_metrics['auroc_by_class'] = roc_auc_score(labels, probabilities, average=None)
     except ValueError:
         # print('only one class in labels...')
-        epoch_metrics['auroc'] = np.nan
-    try:
-        epoch_metrics['auroc_by_class'] = roc_auc_score(labels, predictions, average='macro')
-    except ValueError:
-        # print('only one class in labels...')
+        epoch_metrics['auroc_overall'] = np.nan
+        epoch_metrics['auroc_class_mean'] = np.nan
         epoch_metrics['auroc_by_class'] = np.nan
 
-    epoch_metrics['mAP'] = average_precision_score(labels, predictions, average='micro')
-    epoch_metrics['mAP_by_class'] = average_precision_score(labels, predictions, average='macro')
+    epoch_metrics['mAP_overall'] = average_precision_score(labels, probabilities, average='micro')
+    epoch_metrics['mAP_class_mean'] = average_precision_score(labels, probabilities, average='macro')
+    # this is a misnomer: mAP by class is just AP
+    epoch_metrics['mAP_by_class'] = average_precision_score(labels, probabilities, average=None)
 
-    cms, cms_valid_bg = compute_binary_confusion(predictions, labels, optimum_thresholds)
-    epoch_metrics['binary_confusion'] = cms
-    epoch_metrics['binary_confusion_valid'] = cms_valid_bg
+    _, cms_valid_bg = compute_binary_confusion(probabilities, labels, optimum_thresholds)
+    epoch_metrics['binary_confusion'] = cms_valid_bg
+    # epoch_metrics['binary_confusion_valid'] = cms_valid_bg
 
     return metrics_by_threshold, epoch_metrics
 
@@ -361,10 +366,19 @@ def compute_tpr_fpr(cm: np.ndarray) -> Tuple[float, float]:
     tp = cm_normalized[1, 1]
     return tp, fp
 
+def get_denominator(expression: Union[float, np.ndarray]):
+    if isinstance(expression, (int, np.integer, float, np.floating)):
+        return max(EPS, expression)
+    # it's an array
+    expression[expression < EPS] = EPS
+    return expression
+
 
 def compute_f1(precision: float, recall: float) -> float:
     """ compute f1 if you already have precison and recall. Prevents re-computing confusion matrix, etc """
-    return 2 * (precision * recall) / (precision + recall + 1e-7)
+    num = 2 * (precision * recall)
+    denom = get_denominator(precision + recall)
+    return num / denom
 
 
 def compute_precision_recall(cm: np.ndarray) -> Tuple[float, float]:
@@ -374,14 +388,14 @@ def compute_precision_recall(cm: np.ndarray) -> Tuple[float, float]:
     fp = cm[0, 1]
     fn = cm[1, 0]
 
-    precision = tp / (tp + fp + 1e-7)
-    recall = tp / (tp + fn + 1e-7)
+    precision = tp / get_denominator(tp + fp)
+    recall = tp / get_denominator(tp + fn)
     return precision, recall
 
 
 def compute_mean_accuracy(cm: np.ndarray) -> float:
     """ compute the mean of true positive rate and true negative rate from a confusion matrix """
-    cm = cm.astype('float') / (cm.sum(axis=1)[:, np.newaxis] + 1e-7)
+    cm = cm.astype('float') / get_denominator(cm.sum(axis=1)[:, np.newaxis])
     tp = cm[1, 1]
     tn = cm[0, 0]
     return np.mean([tp, tn])
@@ -411,8 +425,8 @@ def compute_informedness(cm: np.ndarray, eps: float = 1e-7) -> float:
     fp = cm[0, 1]
     fn = cm[1, 0]
 
-    sensitivity = tp / (tp + fn + eps)
-    specificity = tn / (fp + tn + eps)
+    sensitivity = tp / get_denominator(tp + fn)
+    specificity = tn / get_denominator(fp + tn)
     return sensitivity + specificity - 1
 
 
@@ -459,6 +473,44 @@ def append_to_hdf5(f, name, value, axis=0):
     f[name][-1] = value
 
 
+class Buffer:
+    def __init__(self):
+        self.data = None
+        self.initialize()
+
+    def initialize(self):
+        self.data = defaultdict(list)
+
+    def append(self, data: dict):
+        for key, value in data.items():
+            if isinstance(value, torch.Tensor):
+                # don't convert to numpy for speed
+                value = value.detach().cpu()
+            self.data[key].append(value)
+
+    def stack(self):
+        stacked = {}
+        keys = list(self.data.keys())
+        # go by key so we can delete each value from memory after stacking
+        for key in keys:
+            value = self.data[key]
+            first_element = value[0]
+            if isinstance(value, (int, float, np.integer, np.floating, np.ndarray, list)):
+                try:
+                    # default is concatenating along the batch dimension
+                    value = np.concatenate(value)
+                except ValueError:
+                    # input is likely just a list
+                    value = np.stack(value)
+            elif isinstance(first_element, torch.Tensor):
+                value = torch.stack(value)
+            stacked[key] = value
+            del self.data[key]
+
+        self.initialize()
+        return stacked
+
+
 class Metrics:
     """Class for saving a list of per-epoch metrics to disk as an HDF5 file"""
 
@@ -492,111 +544,104 @@ class Metrics:
 
         self.metrics = metrics
         self.key_metric = key_metric
-
-        self.learning_rate = None
-        mode = 'r+' if os.path.isfile(self.fname) else 'w'
-        with h5py.File(self.fname, mode) as f:
-            f.attrs['num_parameters'] = num_parameters
-            f.attrs['key_metric'] = key_metric
-            f.create_dataset('learning_rates', (0,), maxshape=(None,), dtype=np.float64)
-            # make an HDF5 group for each split
-            for split in splits:
-                f.create_group(split)
-                # save loss and time for each split
-                f.create_dataset(split + '/' + 'time', (0,), maxshape=(None,), dtype=np.float64)
-                f.create_dataset(split + '/' + 'loss', (0,), maxshape=(None,), dtype=np.float64)
-
-                # create a dataset in this group
-                for metric in metrics:
-                    dset_name = split + '/' + metric
-                    # hack
-                    if metric == 'confusion':
-                        # this metric has a different shape than the rest, so we'll add this to
-                        continue
-                    else:
-                        shape = (0,)
-                        maxshape = (None,)
-                    # print(metric, shape, maxshape)
-                    f.create_dataset(dset_name, shape, maxshape=maxshape, dtype=np.float64)
-
-            f.create_dataset('test' + '/' + 'time', (0,), maxshape=(None,), dtype=np.float64)
-
-        self.epoch_predictions = []
-        self.epoch_labels = []
-        self.epoch_t = []
-        self.epoch_loss = []
         self.splits = splits
-        self.loss_components = defaultdict(list)
+        self.num_parameters = num_parameters
+        self.learning_rate = None
+        self.initialize_file()
+
+        self.buffer = Buffer()
         self.latest_key = {}
         self.latest_loss = {}
-
-    def loss_append(self, loss):
-        self.epoch_loss.append(loss)
-
-    def time_append(self, t):
-        self.epoch_t.append(t)
 
     def update_lr(self, lr):
         self.learning_rate = lr
 
-    def end_epoch_speedtest(self):
-        times = np.array(self.epoch_t)
-        mean_time = times.mean()
-        with h5py.File(self.fname, 'r+') as f:
-            append_to_hdf5(f, 'test' + '/' + 'time', mean_time)
-        self.epoch_t = []
 
-    def loss_components_append(self, loss_dict):
-        for metric, value in loss_dict.items():
-            if type(value) == torch.Tensor:
-                value = utils.tensor_to_np(value)
-            self.loss_components[metric].append(value)
+    def compute(self, data: dict) -> dict:
+        """ Computes metrics from one epoch's batch of data
+
+        Args:
+            data: dict
+                dict of Numpy arrays containing any data needed to compute metrics
+
+        Returns:
+            metrics: dict
+                dict of numpy arrays / floats containing metrics to be written to disk
+        """
+        metrics = {}
+        keys = list(data.keys())
+        if 'loss' in keys:
+            metrics['loss'] = np.mean(data['loss'])
+        if 'time' in keys:
+            # assume it's seconds per image
+            FPS = 1 / get_denominator(np.mean(data['time']))
+            metrics['fps'] = FPS
+        if 'lr' in keys:
+            # note: this should always be a scalar, but set to mean just in case there's multiple
+            metrics['lr'] = np.mean(data['lr'])
+        return metrics
+
+    def initialize_file(self):
+        mode = 'r+' if os.path.isfile(self.fname) else 'w'
+        with h5py.File(self.fname, mode) as f:
+            f.attrs['num_parameters'] = self.num_parameters
+            f.attrs['key_metric'] = self.key_metric
+            # make an HDF5 group for each split
+            for split in self.splits:
+                group = f.create_group(split)
+                # all splits and datasets will have loss values-- others will come from self.compute()
+                group.create_dataset('loss', (0,), maxshape=(None,), dtype=np.float32)
+
+    def save_metrics_to_disk(self, metrics: dict, split: str) -> None:
+        with h5py.File(self.fname, 'r+') as f:
+            if split not in f.keys():
+                # should've created top-level groups in initialize_file; this is for nesting
+                f.create_group(split)
+            group = f[split]
+            datasets = list(group.keys())
+            for key, array in metrics.items():
+                if isinstance(array, (int, float, np.integer, np.floating)):
+                    array = np.array(array)
+                # ALLOW FOR NESTING
+                if isinstance(array, dict):
+                    group_name = split + '/' + key
+                    self.save_metrics_to_disk(array, group_name)
+                elif isinstance(array, np.ndarray):
+                    if key in datasets:
+                        # expand along the epoch dimension
+                        group[key].resize(group[key].shape[0] + 1, axis=0)
+                    else:
+                        # create dataset
+                        shape = (1, *array.shape)
+                        maxshape = (None, *array.shape)
+                        log.debug('creating dataset {}/{}: shape {}'.format(split, key, shape))
+                        group.create_dataset(key, shape, maxshape=maxshape, dtype=array.dtype)
+                    group[key][-1] = array
+                else:
+                    raise ValueError('Metrics must contain dicts of np.ndarrays, not {} of type {}'.format(array,
+                                                                                                           type(array)))
 
     def end_epoch(self, split: str):
-        """ End the current training epoch. Saves any metrics in memory to didk
+        """ End the current training epoch. Saves any metrics in memory to disk
 
         Parameters
         ----------
         split: str
             which epoch just ended. train, validation, test, and speedtest are treated differently
         """
-        self.latest_key = {}
+        data = self.buffer.stack()
+        metrics = self.compute(data)
 
-        times = np.array(self.epoch_t)
-        mean_time = times.mean()
-        mean_loss = np.array(self.epoch_loss).mean()
-        self.latest_loss = {}
-        self.latest_loss[split] = mean_loss
+        # import pdb; pdb.set_trace()
 
-        # Save information in the "loss components" dictionary to disk
-        with h5py.File(self.fname, 'r+') as f:
-            for metric, value in self.loss_components.items():
-                name = split + '/' + metric
-                value = list_to_mean(value)
+        if split != 'speedtest':
+            assert 'loss' in data.keys()
 
-                append_to_hdf5(f, name, value)
-                if metric == self.key_metric:
-                    self.latest_key[split] = value
+            # store most recent loss and key metric as attributes, for use in scheduling, stopping, etc.
+            self.latest_loss[split] = metrics['loss']
+            self.latest_key[split] = metrics[self.key_metric]
 
-            append_to_hdf5(f, split + '/' + 'time', mean_time)
-            append_to_hdf5(f, split + '/' + 'loss', mean_loss)
-            append_to_hdf5(f, 'learning_rates', self.learning_rate)
-        if self.key_metric == 'loss':
-            self.latest_key[split] = self.latest_loss[split]
-        if len(self.epoch_predictions) != 0 and len(self.epoch_labels) != 0:
-            # some subclasses, instead of storing metrics as loss components, will store a set of predictions and labels
-            # we want to compute metrics all at once instead of on a per-batch basis
-            self.compute_metrics_from_batches_labels(split)
-
-        self.epoch_t = []
-        self.epoch_loss = []
-        self.epoch_predictions = []
-        self.epoch_labels = []
-        self.loss_components = defaultdict(list)
-
-    def compute_metrics_from_batches_labels(self, split):
-        # to be overwritten by subclass
-        raise NotImplementedError
+        self.save_metrics_to_disk(metrics, split)
 
 
 class Classification(Metrics):
@@ -639,133 +684,72 @@ class Classification(Metrics):
         self.ignore_index = ignore_index
         self.evaluate_threshold = evaluate_threshold
 
-        # custom initialization because confusion matrices don't have usual shape
-        with h5py.File(self.fname, 'r+') as f:
-            for split in self.splits:
-                # print('{} keys: {}'.format(split, list(f[split].keys())))
-                for metric in metrics:
-                    if metric == 'confusion':
-                        dset_name = split + '/' + metric
-                        shape = (0, num_classes, num_classes)
-                        maxshape = (None, num_classes, num_classes)
-                        # print(metric, shape, maxshape)
-                        f.create_dataset(dset_name, shape, maxshape=maxshape, dtype=np.float64)
-
         if self.evaluate_threshold:
             self.thresholds = np.linspace(0, 1, 101)
-            self.threshold_curves = ['thresholds', 'accuracy', 'f1', 'optimum', 'precision', 'recall',
-                                     'mean_accuracy', 'informedness', 'optimum_info', 'tpr', 'fpr']
-            self.threshold_metrics = ['accuracy', 'accuracy_valid_bg', 'f1_overall', 'f1_by_class',
-                                      'f1_overall_valid_bg', 'f1_by_class_valid_bg',
-                                      'auroc', 'auroc_by_class',
-                                      'mAP', 'mAP_by_class',
-                                      'binary_confusion', 'binary_confusion_valid']
-            self.metrics_by_threshold = {}
 
-        with h5py.File(self.fname, 'r+') as f:
-            if self.evaluate_threshold:
-                g = f.create_group('thresholds')
-            for split in splits:
-                if self.evaluate_threshold:
-                    g2 = g.create_group(split)
-                    for metric in self.threshold_metrics:
-                        if 'binary_confusion' in metric:
-                            shape = (0, num_classes, 2, 2)
-                            maxshape = (None, num_classes, 2, 2)
-                        else:
-                            shape = (0,)
-                            maxshape = (None,)
-                        g2.create_dataset(metric, shape, maxshape=maxshape, dtype=np.float64)
-
-    def batch_append(self, predictions, labels):
-        if type(predictions) == torch.Tensor:
-            predictions = utils.tensor_to_np(predictions)
-        if type(labels) == torch.Tensor:
-            labels = utils.tensor_to_np(labels)
-
-        # if we're in sequence_mode
-        if predictions.ndim == 3:
-            # batch, classes, time
-            if predictions.shape[1] < predictions.shape[2]:
-                N, K, T = predictions.shape
-                predictions = predictions.transpose(0, 2, 1).reshape(N * T, K)
-            else:
-                N, T, K = predictions.shape
-                predictions = predictions.reshape(N * T, K)
-        if labels.ndim == 3:
-            if labels.shape[1] < labels.shape[2]:
-                N, K, T = labels.shape
-                labels = labels.transpose(0, 2, 1).reshape(N * T, K)
-            else:
-                N, T, K = labels.shape
-                labels = labels.reshape(N * T, K)
-
-        self.epoch_predictions.append(predictions)
-        self.epoch_labels.append(labels)
-
-    def compute_metrics_from_batches_labels(self, split):
-
-        num_classes = self.epoch_predictions[0].shape[1]
-
-        predictions = np.concatenate(self.epoch_predictions, axis=0).reshape(-1, num_classes)
-
-        if self.epoch_labels[0].shape[-1] == num_classes:
-            # if labels are one-hot
-            labels = np.concatenate(self.epoch_labels, axis=0).reshape(-1, num_classes)
-            # axis=1
-            rows_with_false_labels = np.any(labels == self.ignore_index, axis=1)
-            one_hot = True
+    def stack_sequence_data(self, array: np.ndarray) -> np.ndarray:
+        # if probs or labels are one-hot N x K or indicator N, return
+        if array.ndim < 3:
+            return array
+        assert array.ndim == 3
+        if array.shape[1] < array.shape[2]:
+            N, K, T = array.shape
+            array = array.transpose(0, 2, 1).reshape(N * T, K)
         else:
-            labels = np.concatenate(self.epoch_labels, axis=0).reshape(-1, )
+            N, T, K = array.shape
+            array = array.reshape(N * T, K)
+        return array
+
+    def compute(self, data: dict):
+        # computes mean loss, etc
+        metrics = super().compute(data)
+
+        if 'probs' not in data.keys():
+            # might happen during speedtest
+            return metrics
+
+        # if data are from sequence models, stack into N*T x K not N x K x T
+        probs = self.stack_sequence_data(data['probs'])
+        labels = self.stack_sequence_data(data['labels'])
+
+        num_classes = probs.shape[1]
+        one_hot = probs.shape[-1] == labels.shape[-1]
+        if one_hot:
+            rows_with_false_labels = np.any(labels == self.ignore_index, axis=1)
+        else:
             rows_with_false_labels = labels == self.ignore_index
-            one_hot = False
 
         true_rows = np.logical_not(rows_with_false_labels)
-        predictions = predictions[true_rows, :]
+        probs = probs[true_rows, :]
         labels = labels[true_rows, :] if one_hot else labels[true_rows]
 
         if self.evaluate_threshold:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                metrics_by_threshold, epoch_metrics = evaluate_thresholds(predictions, labels, self.thresholds)
-            with h5py.File(self.fname, 'r+') as f:
-                for metric in self.threshold_metrics:
-                    value = epoch_metrics[metric]
-                    name = 'thresholds/' + split + '/' + metric
-                    append_to_hdf5(f, name, value)
-                # these are curves for each class for one single epoch
-                for metric in self.threshold_curves:
-                    name = 'threshold_curves/' + split + '/' + metric
-                    if name in f:
-                        del (f[name])
-                    f.create_dataset(name, data=metrics_by_threshold[metric])
+                metrics_by_threshold, epoch_metrics = evaluate_thresholds(probs, labels, self.thresholds)
+                metrics['metrics_by_threshold'] = metrics_by_threshold
+                for key, value in epoch_metrics.items():
+                    metrics[key] = value
+        else:
+            # multiclass classification, not multilabel
+            if one_hot:
+                labels = onehot_to_index(labels)
 
-        # convert to intermediate representation for speed
-        if one_hot:
-            labels = onehot_to_index(labels)
+            predictions = np.argmax(probs, axis=1)
 
-        predictions = np.argmax(predictions, axis=1)
-
-        with warnings.catch_warnings():
-            data = {}
-            for metric in self.metrics:
-                if metric == 'confusion':
-                    warnings.simplefilter("ignore")
-                    data[metric] = confusion(predictions, labels, K=self.num_classes)
-                    # import pdb
-                    # pdb.set_trace()
-                elif metric == 'binary_confusion':
-                    pass
-                else:
-                    warnings.simplefilter("ignore")
-                    data[metric] = self.metric_funcs[metric](predictions, labels)
-
-        with h5py.File(self.fname, 'r+') as f:
-            for metric, value in data.items():
-                name = split + '/' + metric
-                append_to_hdf5(f, name, value)
-        if self.key_metric != 'loss':
-            self.latest_key[split] = data[self.key_metric]
+            with warnings.catch_warnings():
+                for metric in self.metrics:
+                    if metric == 'confusion':
+                        warnings.simplefilter("ignore")
+                        metrics[metric] = confusion(predictions, labels, K=self.num_classes)
+                        # import pdb
+                        # pdb.set_trace()
+                    elif metric == 'binary_confusion':
+                        pass
+                    else:
+                        warnings.simplefilter("ignore")
+                        metrics[metric] = self.metric_funcs[metric](predictions, labels)
+        return metrics
 
 
 class OpticalFlow(Metrics):
@@ -774,46 +758,20 @@ class OpticalFlow(Metrics):
                  splits=['train', 'val']):
         super().__init__(run_dir, metrics, key_metric, 'opticalflow', num_parameters, splits)
 
-    def compute_metrics_from_batches_labels(self, split):
-        pass
+    def compute(self, data: dict) -> dict:
+        """ Computes metrics from one epoch's batch of data
 
+        Args:
+            data: dict
+                dict of Numpy arrays containing any data needed to compute metrics
 
-def load_threshold_data(logger_file: Union[str, os.PathLike]) -> Tuple[dict, dict]:
-    """ Convenience function for loading threshold data from a logger file. Useful for visualization
+        Returns:
+            metrics: dict
+                dict of numpy arrays / floats containing metrics to be written to disk
+        """
+        metrics = super().compute(data)
 
-    Parameters
-    ----------
-    logger_file: str, os.PathLike
-        path to a Classification metrics hdf5 file
-
-    Returns
-    -------
-    metrics_by_threshold: dict
-        see evaluate_thresholds
-    epoch_summaries: dict
-        see evaluate_thresholds
-    """
-    with h5py.File(logger_file, 'r') as f:
-        metrics_by_threshold = {}
-        epoch_summaries = {}
-        dataset = f['threshold_curves']
-        splits = list(dataset.keys())
-        keys = dataset[splits[0]].keys()
-        # print(splits)
-        summary_keys = f['thresholds/train'].keys()
-
-        for split in splits:
-            metrics_by_threshold[split] = {}
-            for key in keys:
-                metrics_by_threshold[split][key] = f['threshold_curves/' + split + '/' + key][:]
-
-        dataset = f['thresholds']
-        splits = list(dataset.keys())
-        # print(splits)
-        summary_keys = dataset[splits[0]].keys()
-        for split in splits:
-            epoch_summaries[split] = {}
-            for key in summary_keys:
-                epoch_summaries[split][key] = f['thresholds/' + split + '/' + key][:]
-        # print(metrics_by_threshold)
-    return metrics_by_threshold, epoch_summaries
+        for key in ['SSIM', 'L1', 'smoothness', 'sparsity', 'L1']:
+            if key in data.keys():
+                metrics[key] = data[key].mean()
+        return metrics
