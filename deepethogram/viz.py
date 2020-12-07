@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import itertools
 import logging
 import os
@@ -17,12 +18,13 @@ from sklearn.metrics import auc
 import torch
 
 from deepethogram.flow_generator.utils import flow_to_rgb_polar
-from deepethogram.metrics import load_threshold_data
+# from deepethogram.metrics import load_threshold_data
 from deepethogram.utils import tensor_to_np
 
 log = logging.getLogger(__name__)
 # override warning level for matplotlib, which outputs a million debugging statements
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
 
 def imshow_with_colorbar(image: np.ndarray,
                          ax_handle,
@@ -31,7 +33,7 @@ def imshow_with_colorbar(image: np.ndarray,
                          cmap: str = None,
                          interpolation: str = None,
                          symmetric: bool = False,
-                         func: str='imshow',
+                         func: str = 'imshow',
                          **kwargs) -> matplotlib.colorbar.Colorbar:
     """ Show an image in a matplotlib figure with a colorbar *with the same height as the axis!!*
 
@@ -199,7 +201,7 @@ def visualize_images_and_flows(downsampled_t0, flows_reshaped, sequence_length: 
     flows = flows_reshaped[0].detach().cpu().numpy().astype(np.float32)
 
     flow_list = [flows[i, ...].transpose(1, 2, 0).astype(np.float32) for i in range(batch_ind * sequence_length,
-                                                                 batch_ind * sequence_length + sequence_length)]
+                                                                                    batch_ind * sequence_length + sequence_length)]
     stack = stack_image_list(flow_list)
     minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
     stack = flow_to_rgb_polar(stack, maxval=max_flow)
@@ -242,7 +244,8 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
     if sequence_ind is None:
         sequence_ind = np.random.choice(sequence_length)
     index = batch_ind * sequence_length + sequence_ind
-    t0 = [downsampled_t0[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in range(N_resolutions)]
+    t0 = [downsampled_t0[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in
+          range(N_resolutions)]
 
     for i, image in enumerate(t0):
         ax = axes[0, i]
@@ -254,7 +257,8 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
         ax.set_title('min: {:.4f} mean: {:.4f} max: {:.4f}'.format(minimum, mean, maximum),
                      fontsize=8)
 
-    t1 = [estimated_t0[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in range(N_resolutions)]
+    t1 = [estimated_t0[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in
+          range(N_resolutions)]
     for i, image in enumerate(t1):
         ax = axes[1, i]
         minimum, mean, maximum = image.min(), image.mean(), image.max()
@@ -265,7 +269,8 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
         if i == 0:
             ax.set_ylabel('T1', fontsize=18)
 
-    flows = [flows_reshaped[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in range(N_resolutions)]
+    flows = [flows_reshaped[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in
+             range(N_resolutions)]
     for i, image in enumerate(flows):
         ax = axes[2, i]
         minimum, mean, maximum = image.min(), image.mean(), image.max()
@@ -324,6 +329,7 @@ def predictions_labels_string(pred, label, class_names=None):
         if (i % 5) == 4:
             string += '\n'
     return string
+
 
 def visualize_hidden(images, flows, predictions, labels, class_names: list = None, batch_ind: int = None,
                      max_flow: float = 5.0, height: float = 15.0, fig=None, normalizer=None):
@@ -443,11 +449,10 @@ def visualize_batch_spatial(images, predictions, labels, fig=None, class_names=N
     images = images.detach().cpu().numpy()
     images = images.clip(min=0, max=1)
 
-
     batch_size = images.shape[0]
 
     num_cols = 4
-    num_rows = min(np.ceil(batch_size/num_cols), 6)
+    num_rows = min(np.ceil(batch_size / num_cols), 6)
     axes = fig.subplots(num_rows, num_cols)
     cnt = 0
     for i in range(num_rows):
@@ -455,7 +460,7 @@ def visualize_batch_spatial(images, predictions, labels, fig=None, class_names=N
             ax = axes[i, j]
             if cnt > batch_size:
                 ax.remove()
-                cnt+=1
+                cnt += 1
                 continue
             pred = predictions[cnt].detach().cpu().numpy()
             label = labels[cnt].detach().cpu().numpy()
@@ -470,13 +475,9 @@ def visualize_batch_spatial(images, predictions, labels, fig=None, class_names=N
             ax.set_yticks([])
 
             ax.set_title(string, size=8)
-            cnt+=1
+            cnt += 1
     fig.suptitle('Spatial stream')
     plt.tight_layout()
-
-
-
-
 
 
 def visualize_batch_sequence(sequence, outputs, labels, N_in_batch=None, fig=None):
@@ -524,6 +525,7 @@ def visualize_batch_sequence(sequence, outputs, labels, N_in_batch=None, fig=Non
     ax.set_title('L1 between outputs and labels (not true loss)')
     ax.invert_yaxis()
     plt.tight_layout()
+
 
 def fig_to_img(fig_handle: matplotlib.figure.Figure) -> np.ndarray:
     """ Convenience function for returning the RGB values of a matplotlib figure """
@@ -590,7 +592,7 @@ def errorfill(x, y, yerr, color=None, alpha_fill=0.3, ax=None, label=None):
     ax.fill_between(x, ymax, ymin, color=color, alpha=alpha_fill)
 
 
-def plot_curve(x, ys, ax, xlabel: str=None, class_names=None, colors=None):
+def plot_curve(x, ys, ax, xlabel: str = None, class_names=None, colors=None):
     """ Plots a set of curves. Will add a scatter to the maximum of each curve with text indicating location """
     if colors is None:
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -622,58 +624,6 @@ def plot_curve(x, ys, ax, xlabel: str=None, class_names=None, colors=None):
     if xlabel is not None:
         ax.set_xlabel(xlabel)
     ax.legend()
-
-def make_thresholds_figure(metrics_by_threshold, class_names=None, fig=None):
-
-    plt.style.use('ggplot')
-
-    if fig is None:
-        fig = plt.figure(figsize=(14, 14))
-    #     axes = axes.flatten()
-
-    ax = fig.add_subplot(321)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['accuracy']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('Accuracy by class, independent')
-
-    ax = fig.add_subplot(322)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['f1']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('f1 by class, independent')
-
-    ax = fig.add_subplot(323)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['precision']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('precision by class, independent')
-
-    ax = fig.add_subplot(324)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['recall']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('recall by class, independent')
-
-    ax = fig.add_subplot(325)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['mean_accuracy']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('mean accuracy by class, independent')
-
-    ax = fig.add_subplot(326)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['informedness']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('informedness by class, independent')
-
-    plt.tight_layout()
 
 
 def thresholds_by_epoch_figure(epoch_summaries, class_names=None, fig=None):
@@ -775,87 +725,43 @@ def remove_nan_or_inf(value: Union[int, float]):
     return value
 
 
-def plot_metric(f, ax, name, legend=False):
-    """ plot metric from a Metrics hdf5 file. See deepethogram.metrics """
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    train = f['train/' + name][:]
-    val = f['val/' + name][:]
-    if name == 'time':
-        train *= 1000
-        val *= 1000
-        label = 'time per image (ms)'
-    else:
-        label = name
-    xs = np.arange(len(train))
-    ax.plot(xs, train, label='train')
-    if len(xs) > 0:
-        x, y = xs[len(xs) - 1], train[len(xs) - 1]
-        x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
-        string = '%.4f' % y
-        ax.text(x, y, string, color=colors[0])
-    xs = np.arange(len(val))
-    ax.plot(xs, val, label='val')
-    if len(xs) > 0:
-        y = val[len(xs) - 1]
-        string = '%.4f' % y
-        x = xs[-1]
-        x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
-        ax.text(x, y, string, color=colors[1])
-    if name == 'time':
-        test = f['test/' + name][:]
-        test *= 1000
-        xs = np.arange(len(test))
-        ax.plot(xs, test, label='test')
-        if len(xs) > 0:
-            y = test[len(xs) - 1]
-            string = '%.4f' % y
-            x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
-            ax.text(x, y, string, color=colors[2])
-    ax.set_xlim([-0.5, len(xs) - 0.5])
-    ax.set_ylabel(label)
-    ax.set_xlabel('Epochs')
-    ax.set_title(label)
-    if legend:
-        ax.legend()
-
-
-def plot_metrics(logger_file, fig):
-    """ plot all metrics in a Metrics hdf5 file. see deepethogram.metrics """
-    splits = ['train', 'val']
-    num_cols = 2
-
-    with h5py.File(logger_file, 'r') as f:
-        for split in splits:
-            keys = list(f[split].keys())
-            # all metrics files will have loss and time
-            num_custom_vars = len(keys) - 2
-            if 'confusion' in keys:
-                num_custom_vars -= 1
-    num_rows = int(np.ceil(num_custom_vars / num_cols)) + 1
-
-    forbidden = ['loss', 'time', 'confusion']
-
-    shape = (num_rows, num_cols)
-    with h5py.File(logger_file, 'r') as f:
-        ax = fig.add_subplot(num_rows, num_cols, 1)
-        plot_metric(f, ax, 'loss', legend=True)
-        ax = fig.add_subplot(num_rows, num_cols, 2)
-        plot_metric(f, ax, 'time')
-        cnt = 3
-        for key in keys:
-            if key in forbidden:
-                continue
-            ax = fig.add_subplot(num_rows, num_cols, cnt)
-            cnt += 1
-            plot_metric(f, ax, key)
-        keys = f.attrs.keys()
-        args = {}
-        for key in keys:
-            args[key] = f.attrs[key]
-    # title = 'Project {}: model:{} \nNotes: {}'.format(args['name'], args['model'], args['notes'])
-    # fig.suptitle(title, size=18)
-    plt.tight_layout()
-    fig.subplots_adjust(top=0.9)
+# def plot_metrics(logger_file, fig):
+#     """ plot all metrics in a Metrics hdf5 file. see deepethogram.metrics """
+#     splits = ['train', 'val']
+#     num_cols = 2
+#
+#     with h5py.File(logger_file, 'r') as f:
+#         for split in splits:
+#             keys = list(f[split].keys())
+#             # all metrics files will have loss and time
+#             num_custom_vars = len(keys) - 2
+#             if 'confusion' in keys:
+#                 num_custom_vars -= 1
+#     num_rows = int(np.ceil(num_custom_vars / num_cols)) + 1
+#
+#     forbidden = ['loss', 'time', 'confusion']
+#
+#     shape = (num_rows, num_cols)
+#     with h5py.File(logger_file, 'r') as f:
+#         ax = fig.add_subplot(num_rows, num_cols, 1)
+#         plot_metric(f, ax, 'loss', legend=True)
+#         ax = fig.add_subplot(num_rows, num_cols, 2)
+#         plot_metric(f, ax, 'time')
+#         cnt = 3
+#         for key in keys:
+#             if key in forbidden:
+#                 continue
+#             ax = fig.add_subplot(num_rows, num_cols, cnt)
+#             cnt += 1
+#             plot_metric(f, ax, key)
+#         keys = f.attrs.keys()
+#         args = {}
+#         for key in keys:
+#             args[key] = f.attrs[key]
+#     # title = 'Project {}: model:{} \nNotes: {}'.format(args['name'], args['model'], args['notes'])
+#     # fig.suptitle(title, size=18)
+#     plt.tight_layout()
+#     fig.subplots_adjust(top=0.9)
 
 
 def plot_confusion_from_logger(logger_file, fig, class_names=None, epoch=None):
@@ -895,233 +801,344 @@ def plot_confusion_from_logger(logger_file, fig, class_names=None, epoch=None):
     plt.tight_layout()
 
 
-def make_roc_figure(train_metrics, val_metrics, fig=None):
-    """ Plots ROC curves """
-    plt.style.use('ggplot')
+def make_precision_recall_figure(logger_file, fig=None):
+    """ Plots precision vs recall """
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     if fig is None:
-        fig = plt.figure(figsize=(14, 14))
+        fig = plt.figure(figsize=(14, 7))
 
-    ax = fig.add_subplot(1, 2, 1)
-    if train_metrics is not None:
-        tpr, fpr = train_metrics['tpr'], train_metrics['fpr']
-        K = tpr.shape[1]
-        for i in range(K):
-            color = colors[i] if i < len(colors) else colors[-1]
-            x = fpr[:, i]
-            y = tpr[:, i]
-            auroc = auc(x, y)
-            string = '{}: {:4f}'.format(i, auroc)
-            ax.plot(fpr[:, i], tpr[:, i], color=color, label=string)
-        ax.legend()
-        ax.set_xlabel('FPR')
-        ax.set_ylabel('TPR')
-        ax.set_title('Train')
+    for i, split in enumerate(['train', 'val']):
+        ap_by_class = load_logger_data(logger_file, 'mAP_by_class', split)
+        precision = load_logger_data(logger_file, 'precision', split, is_threshold=True)
+        recall = load_logger_data(logger_file, 'recall', split, is_threshold=True)
 
-    ax = fig.add_subplot(1, 2, 2)
-    if val_metrics is not None:
-        tpr, fpr = val_metrics['tpr'], val_metrics['fpr']
-        K = tpr.shape[1]
-        for i in range(K):
-            color = colors[i] if i < len(colors) else colors[-1]
-            x = fpr[:, i]
-            y = tpr[:, i]
-            auroc = auc(x, y)
-            string = '{}: {:.4f}'.format(i, auroc)
-            ax.plot(fpr[:, i], tpr[:, i], color=color, label=string)
+        ax = fig.add_subplot(1, 2, i + 1)
+        # precision, recall = train_metrics['precision'], train_metrics['recall']
+
+        K = precision.shape[1]
+        for j in range(K):
+            color = colors[j] if i < len(colors) else colors[-1]
+            x = recall[:, j]
+            y = precision[:, j]
+            # there's a bug in how this is computed
+            au_prc = ap_by_class[j]
+            string = '{}: {:.4f}'.format(j, au_prc)
+            ax.plot(x, y, color=color, label=string)
+            ax.set_aspect('equal', 'box')
         ax.legend()
-        ax.set_xlabel('FPR')
-        ax.set_ylabel('TPR')
-        ax.set_title('Val')
+        ax.set_xlabel('Recall')
+        ax.set_ylabel('Precision')
+        ax.set_title(split)
+
+    fig.suptitle('Precision vs recall. Legend: Average Precision\nNote: curves are approximated with only ' +
+                 '101 thresholds. Legend is exact')
     plt.tight_layout()
+    return fig
 
 
-def visualize_binary_confusion(cms, cms_valid_bg, fig=None):
+def add_text_to_line(xs, ys, ax, color):
+    if len(xs) == 1 or len(ys) == 1:
+        return
+    x, y = xs[-1], ys[-1]
+    x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
+    ax.text(x, y, '{:.4f}'.format(y), color=color)
+
+
+def plot_metric(data: Union[dict, OrderedDict], name, ax, legend: bool = False, plot_args: dict = None,
+                color_inds: list = None):
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    # data = {'train': train, 'val': val}
+    for i, (split, array) in enumerate(data.items()):
+        xs = np.arange(len(array))
+        color = colors[color_inds[i]] if color_inds is not None else colors[i]
+        if plot_args is not None and split in plot_args.keys():
+            ax.plot(xs, array, label=split, **plot_args[split], color=color)
+        else:
+            ax.plot(xs, array, label=split, color=color)
+        add_text_to_line(xs, array, ax, color)
+
+    ax.set_xlim([-0.5, len(xs) - 0.5])
+    ax.set_ylabel(name)
+    ax.set_xlabel('Epochs')
+    ax.set_title(name)
+    if legend:
+        ax.legend()
+
+
+def make_learning_curves_figure_multilabel_classification(logger_file, fig=None):
+    def get_data_from_file(f, name):
+        data = OrderedDict(train=f[f'train/{name}_overall'][:],
+                           train_class_mean=f[f'train/{name}_class_mean'][:],
+                           val=f[f'val/{name}_overall'][:],
+                           val_class_mean=f[f'val/{name}_class_mean'][:])
+        return data
+
+    with h5py.File(logger_file, 'r') as f:
+        plt.style.use('seaborn')
+        if fig is None:
+            fig = plt.figure(figsize=(12, 12))
+
+        # loss and learning rate
+        ax = fig.add_subplot(3, 2, 1)
+        data = OrderedDict(train=f['train/loss'][:],
+                           val=f['val/loss'][:])
+
+        plot_metric(data, 'loss', ax)
+        ax2 = ax.twinx()
+        ax2.plot(f['train/lr'][:], 'k', label='LR', alpha=0.5)
+        ax2.set_ylabel('learning rate')
+        ax2.grid(False)
+
+        # FPS
+        ax = fig.add_subplot(3, 2, 2)
+        data = OrderedDict(train=f['train/fps'][:],
+                           val=f['val/fps'][:],
+                           speedtest=f['speedtest/fps'][:])
+
+        plot_metric(data, 'FPS', ax, legend=True)
+        ax.semilogy()
+
+        # accuracy
+        ax = fig.add_subplot(3, 2, 3)
+        data = OrderedDict(train=f['train/accuracy_overall'][:],
+                           val=f['val/accuracy_overall'][:])
+
+        plot_metric(data, 'accuracy', ax)
+
+        # F1 score!
+        ax = fig.add_subplot(3, 2, 4)
+        # we'll reuse these for the following figures
+        plot_args = {'train_class_mean': {'linestyle': '--'},
+                     'val_class_mean': {'linestyle': '--'}}
+        color_inds = [0, 0, 1, 1]
+        data = get_data_from_file(f, 'f1')
+        plot_metric(data, 'F1', ax, False, plot_args, color_inds)
+
+        # AUROC
+        ax = fig.add_subplot(3, 2, 5)
+        data = get_data_from_file(f, 'auroc')
+        plot_metric(data, 'AUROC', ax, False, plot_args, color_inds)
+
+        # Average precision
+        ax = fig.add_subplot(3, 2, 6)
+        data = get_data_from_file(f, 'mAP')
+        plot_metric(data, 'Average Precision', ax, False, plot_args, color_inds)
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_multilabel_by_class(logger_file):
+    def load_data(f, name):
+        data = {'train': f[f'train/{name}_by_class'][:],
+                'val': f[f'val/{name}_by_class'][:]}
+        return data
+
+    with h5py.File(logger_file, 'r') as f:
+
+        def plot_row(row, name, legend: bool = False, title: bool = False):
+            data = load_data(f, name)
+
+            for i, split in enumerate(['train', 'val']):
+                array = data[split]
+                ax = row[i]
+                # loop over classes
+                class_data = OrderedDict()
+                for j in range(array.shape[1]):
+                    class_data[j] = array[:, j]
+                plot_metric(class_data, name, ax, legend and i == 0)
+                ax.set_xlabel('')
+                if title:
+                    ax.set_title(split)
+                else:
+                    ax.set_title('')
+
+        fig, axes = plt.subplots(4, 2, figsize=(8, 12))
+
+        row = axes[0]
+        plot_row(row, 'accuracy', True, True)
+
+        row = axes[1]
+        plot_row(row, 'f1')
+
+        row = axes[2]
+        plot_row(row, 'auroc')
+
+        row = axes[3]
+        plot_row(row, 'mAP')
+
+        plt.tight_layout()
+    return fig
+
+
+def load_logger_data(logger_file, name, split, is_threshold: bool = False, epoch: int = -1):
+    if is_threshold:
+        key = f'{split}/metrics_by_threshold/{name}'
+    else:
+        key = f'{split}/{name}'
+    with h5py.File(logger_file, 'r') as f:
+        data = f[key][epoch, ...]
+
+    return data
+
+
+def make_thresholds_figure(logger_file, split, fig=None, class_names=None):
+    plt.style.use('seaborn')
+
+    if fig is None:
+        fig = plt.figure(figsize=(12, 12))
+    #     axes = axes.flatten()
+
+    x = load_logger_data(logger_file, 'thresholds', split, True)
+
+    for i, metric in enumerate(['accuracy', 'f1', 'precision', 'recall', 'mean_accuracy', 'informedness']):
+        ax = fig.add_subplot(3, 2, i + 1)
+        y = load_logger_data(logger_file, metric, split, True)
+        plot_curve(x, y, ax, class_names)
+        ax.set_title(f'{metric} by class')
+
+    plt.tight_layout()
+    return fig
+
+
+def make_roc_figure(logger_file, fig=None):
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    if fig is None:
+        fig = plt.figure(figsize=(14, 7))
+
+    for i, split in enumerate(['train', 'val']):
+
+        auroc_by_class = load_logger_data(logger_file, 'auroc_by_class', split)
+        tpr = load_logger_data(logger_file, 'tpr', split, is_threshold=True)
+        fpr = load_logger_data(logger_file, 'fpr', split, is_threshold=True)
+
+        ax = fig.add_subplot(1, 2, i + 1)
+
+        K = tpr.shape[1]
+        for j in range(K):
+            color = colors[j] if j < len(colors) else colors[-1]
+            auroc = auroc_by_class[j]
+            string = '{}: {:4f}'.format(j, auroc)
+            ax.plot(fpr[:, j], tpr[:, j], color=color, label=string)
+        ax.legend()
+        ax.set_xlabel('FPR')
+        ax.set_ylabel('TPR')
+        ax.set_title(split)
+    fig.suptitle('ROC Curves. Curves are approximate because only 101 thresholds were used. AUC values are precise')
+    plt.tight_layout()
+    return fig
+
+
+def visualize_binary_confusion(logger_file, fig=None):
     """ Visualizes binary confusion matrices """
     if fig is None:
         fig = plt.figure(figsize=(14, 14))
+
+    cms = load_logger_data(logger_file, 'binary_confusion', 'train')
     # if there's more than 3 dimensions, it could be [epochs, classes, 2, 2]
     # take the last one
     if cms.ndim > 3:
         cms = cms[-1, ...]
-    if cms_valid_bg.ndim > 3:
-        cms_valid_bg = cms_valid_bg[-1, ...]
     K = cms.shape[0]
 
     num_rows = 4
     num_cols = K
     ind = 1
+
     # print(cms.shape)
-    for j in range(num_cols):
-        ax = fig.add_subplot(num_rows, num_cols, ind)
-        cm = cms[j, ...]
-        # print(cm.shape)
-        plot_confusion_matrix(cms[j, ...], range(cm.shape[0]),
-                              ax, fig, colorbar=False)
-        if j == 0:
-            ax.set_ylabel('Simple threshold\nTrue')
-            ax.set_xlabel('')
-        else:
-            ax.set_ylabel('')
-            ax.set_xlabel('')
-        ind += 1
 
-    for j in range(num_cols):
-        ax = fig.add_subplot(num_rows, num_cols, ind)
-        cm = cms[j, ...]
-        plot_confusion_matrix(cms[j, ...], range(cm.shape[0]),
-                              ax, fig, normalize=True, colorbar=False)
-        if j == 0:
-            ax.set_ylabel('Normalized\nTrue')
-            ax.set_xlabel('')
-        else:
-            ax.set_ylabel('')
-            ax.set_xlabel('')
-        ind += 1
+    def plot_cms_in_row(cms, ylabel, normalize: bool = False):
+        nonlocal ind
+        for j in range(num_cols):
+            ax = fig.add_subplot(num_rows, num_cols, ind)
+            cm = cms[j, ...]
+            # print(cm.shape)
+            plot_confusion_matrix(cms[j, ...], range(cm.shape[0]),
+                                  ax, fig, colorbar=False, normalize=normalize)
+            if j == 0:
+                ax.set_ylabel(ylabel)
+                ax.set_xlabel('')
+            else:
+                ax.set_ylabel('')
+                ax.set_xlabel('')
+            ind += 1
 
-    for j in range(num_cols):
-        ax = fig.add_subplot(num_rows, num_cols, ind)
-        cm = cms[j, ...]
-        plot_confusion_matrix(cms_valid_bg[j, ...], range(cm.shape[0]),
-                              ax, fig, normalize=False, colorbar=False)
-        if j == 0:
-            ax.set_ylabel('Valid background class\nTrue')
-            ax.set_xlabel('')
-        else:
-            ax.set_ylabel('')
-            ax.set_xlabel('')
-        ind += 1
-    for j in range(num_cols):
-        ax = fig.add_subplot(num_rows, num_cols, ind)
-        cm = cms[j, ...]
-        plot_confusion_matrix(cms_valid_bg[j, ...], range(cm.shape[0]),
-                              ax, fig, normalize=True, colorbar=False)
-        ind += 1
-        if j == 0:
-            ax.set_ylabel('Valid BG, normalized\nTrue')
-            ax.set_xlabel('Predicted')
-        else:
-            ax.set_ylabel('')
-            ax.set_xlabel('')
+    plot_cms_in_row(cms, 'Train')
+    plot_cms_in_row(cms, 'Train\nNormalized', normalize=True)
+
+    cms = load_logger_data(logger_file, 'binary_confusion', 'val')
+    plot_cms_in_row(cms, 'Val')
+    plot_cms_in_row(cms, 'Val\nNormalized', normalize=True)
 
     plt.tight_layout()
+    return fig
 
 
-def make_precision_recall_figure(train_metrics, val_metrics, fig=None):
-    """ Plots precision vs recall """
-    plt.style.use('ggplot')
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    if fig is None:
-        fig = plt.figure(figsize=(14, 14))
-
-    ax = fig.add_subplot(1, 2, 1)
-    precision, recall = train_metrics['precision'], train_metrics['recall']
-    K = precision.shape[1]
-    for i in range(K):
-        color = colors[i] if i < len(colors) else colors[-1]
-        x = recall[:, i]
-        y = precision[:, i]
-        # there's a bug in how this is computed
-        x = x[x != 0]
-        y = y[y != 0]
-        try:
-            au_prc = auc(x, y)
-        except ValueError as e:
-            # not enough points
-            au_prc = np.nan
-        string = '{}: {:.4f}'.format(i, au_prc)
-        ax.plot(x, y, color=color, label=string)
-        ax.set_aspect('equal', 'box')
-    ax.legend()
-    ax.set_xlabel('Recall')
-    ax.set_ylabel('Precision')
-    ax.set_title('Train')
-
-    ax = fig.add_subplot(1, 2, 2)
-    precision, recall = val_metrics['precision'], val_metrics['recall']
-    K = precision.shape[1]
-    for i in range(K):
-        color = colors[i] if i < len(colors) else colors[-1]
-        x = recall[:, i]
-        y = precision[:, i]
-        x = x[x != 0]
-        y = y[y != 0]
-        try:
-            au_prc = auc(x, y)
-        except ValueError as e:
-            # not enough points
-            au_prc = np.nan
-        string = '{}: {:.4f}'.format(i, au_prc)
-        ax.plot(x, y, color=color, label=string)
-        ax.set_aspect('equal', 'box')
-    ax.legend()
-    ax.set_xlabel('Recall')
-    ax.set_ylabel('Precision')
-    ax.set_title('Val')
-    # plt.tight_layout()
-    fig.suptitle('Precision vs recall. Legend: Average Precision')
-
-
-def visualize_logger(logger_file):
+def visualize_logger_multilabel_classification(logger_file):
     """ makes a bunch of figures from a Metrics hdf5 file """
-    ims = []
-    plt.style.use('ggplot')
-    fig = plt.figure(figsize=(14, 14))
-
-    plot_metrics(logger_file, fig)
+    plt.style.use('seaborn')
+    fig = make_learning_curves_figure_multilabel_classification(logger_file)
     save_figure(fig, 'learning_curves', False, 0)
 
+    fig = plot_multilabel_by_class(logger_file)
+    save_figure(fig, 'learning_curves_by_class', False, 1)
+
+    fig = make_thresholds_figure(logger_file, 'train')
+    save_figure(fig, 'thresholds_this_epoch_train', False, 2)
+
+    fig = make_thresholds_figure(logger_file, 'val')
+    save_figure(fig, 'thresholds_this_epoch_val', False, 3)
+
+    fig = visualize_binary_confusion(logger_file)
+    save_figure(fig, 'binary_confusion', False, 4)
+
+    fig = make_roc_figure(logger_file)
+    save_figure(fig, 'ROC', False, 5)
+
+    fig = make_precision_recall_figure(logger_file)
+    save_figure(fig, 'precision_recall', False, 6)
+
+
+def make_learning_curves_figure_opticalflow(logger_file, fig=None):
+    if fig is None:
+        fig = plt.figure(figsize=(12, 12))
+
+    def get_data(h5py_obj, name):
+        data = OrderedDict(train=h5py_obj[f'train/{name}'][:],
+                           val=h5py_obj[f'val/{name}'][:])
+        return data
+
+    ax = fig.add_subplot(3, 2, 1)
     with h5py.File(logger_file, 'r') as f:
-        keys = list(f.keys())
-        if 'thresholds' in keys:
-            metrics_by_threshold, epoch_summaries = load_threshold_data(logger_file)
+        data = get_data(f, 'loss')
+        plot_metric(data, 'loss', ax)
 
-            fig = plt.figure(figsize=(14, 14))
-            thresholds_by_epoch_figure(epoch_summaries, fig=fig)
-            save_figure(fig, 'thresholds_by_epoch', False, 1)
+        ax2 = ax.twinx()
 
-            fig = plt.figure(figsize=(14, 14))
-            make_thresholds_figure(metrics_by_threshold['train'], fig=fig)
-            save_figure(fig, 'train_thresholds_this_epoch', False, 2)
+        ax2.plot(f['train/lr'][:], 'k', label='LR', alpha=0.5)
+        ax2.set_ylabel('learning rate')
+        ax2.grid(False)
 
-            fig = plt.figure(figsize=(14, 14))
-            make_thresholds_figure(metrics_by_threshold['val'], fig=fig)
-            save_figure(fig, 'val_thresholds_this_epoch', False, 3)
+        keys = list(f['train'].keys())
 
-            fig = plt.figure(figsize=(14, 14))
-            make_roc_figure(metrics_by_threshold['train'], metrics_by_threshold['val'], fig=fig)
-            save_figure(fig, 'ROC', False, 4)
+        plot_ind = 2
+        for metric in ['fps', 'SSIM', 'L1', 'smoothness', 'sparsity']:
+            if metric in keys:
+                ax = fig.add_subplot(3, 2, plot_ind)
+                data = get_data(f, metric)
+                plot_metric(data, metric, ax, legend=metric == 'fps')
 
-            fig = plt.figure(figsize=(14, 14))
-            make_precision_recall_figure(metrics_by_threshold['train'], metrics_by_threshold['val'], fig=fig)
-            save_figure(fig, 'precision_recall', False, 5)
+                plot_ind += 1
 
-            fig = plt.figure(figsize=(14, 14))
-            # import pdb
-            # pdb.set_trace()
-            visualize_binary_confusion(epoch_summaries['train']['binary_confusion'],
-                                       epoch_summaries['train']['binary_confusion_valid'], fig=fig)
-            save_figure(fig, 'train_binary_confusion', False, 6)
+    plt.tight_layout()
+    return fig
 
-            fig = plt.figure(figsize=(14, 14))
-            visualize_binary_confusion(epoch_summaries['val']['binary_confusion'],
-                                       epoch_summaries['val']['binary_confusion_valid'], fig=fig)
-            save_figure(fig, 'val_binary_confusion', False, 7)
 
-    splits = ['train', 'val']
-    with h5py.File(logger_file, 'r') as f:
-        for split in splits:
-            keys = list(f[split].keys())
-
-        if 'confusion' in keys:
-            # confusion_fig = plt.figure(figsize=(16,16))
-            fig = plt.figure(figsize=(14, 14))
-            plot_confusion_from_logger(logger_file, fig, epoch=None)
-            save_figure(fig, 'confusion', False, 8)
-
-            fig = plt.figure(figsize=(14, 14))
-            plot_confusion_from_logger(logger_file, fig, epoch='last')
-            save_figure(fig, 'confusion_last_epoch', False, 9)
+def visualize_logger_optical_flow(logger_file):
+    """ makes a bunch of figures from a Metrics hdf5 file """
+    plt.style.use('seaborn')
+    fig = make_learning_curves_figure_opticalflow(logger_file)
+    save_figure(fig, 'learning_curves', False, 0)
 
 
 hues = [212, 4, 121, 36, 55, 276, 237, 299, 186]
@@ -1135,6 +1152,7 @@ gray_value = 102
 
 class Mapper:
     """ Applies a custom colormap to a K x T matrix. Used in the GUI to visualize probabilities and labels """
+
     def __init__(self, colormap='deepethogram'):
         if colormap == 'deepethogram':
             self.init_deepethogram()
@@ -1430,6 +1448,7 @@ def make_ethogram_movie_with_predictions(outfile: Union[str, bytes, os.PathLike]
     plt.close(fig)
     return out
 
+
 def make_figure_filename(name, is_example, num, split='train'):
     basedir = os.path.join(os.getcwd(), 'figures')
     if is_example:
@@ -1438,6 +1457,7 @@ def make_figure_filename(name, is_example, num, split='train'):
         os.makedirs(basedir)
     fname = os.path.join(basedir, '{:02d}_{}.png'.format(num, name))
     return fname
+
 
 def save_figure(figure, name, is_example, num, split='train'):
     fname = make_figure_filename(name, is_example, num, split)

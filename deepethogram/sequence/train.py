@@ -27,6 +27,7 @@ plt.switch_backend('agg')
 @hydra.main(config_path='../conf/sequence_train.yaml')
 def main(cfg: DictConfig) -> None:
     log.debug('cwd: {}'.format(os.getcwd()))
+    log.info('args: {}'.format(' '.join(sys.argv)))
     # only two custom overwrites of the configuration file
     # first, change the project paths from relative to absolute
 

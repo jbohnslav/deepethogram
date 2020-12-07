@@ -43,6 +43,7 @@ cudnn.deterministic = False
 @hydra.main(config_path='../conf/feature_extractor_train.yaml')
 def main(cfg: DictConfig) -> None:
     log.info('cwd: {}'.format(os.getcwd()))
+    log.info('args: {}'.format(' '.join(sys.argv)))
     # only two custom overwrites of the configuration file
     # first, change the project paths from relative to absolute
 
@@ -463,7 +464,7 @@ def train(model: Type[nn.Module],
                                 dali=dali)
 
         # use our metrics file to output graphs for this epoch
-        viz.visualize_logger(metrics.fname)
+        viz.visualize_logger_multilabel_classification(metrics.fname)
 
         # save a checkpoint
         utils.checkpoint(model, rundir, epoch)
@@ -592,14 +593,11 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms: dict, me
         log.debug('labels: {}'.format(labels.shape))
         log.debug('label max: {}'.format(labels.max()))
         log.debug('label min: {}'.format(labels.min()))
-        # if torch.sum(labels < 0) > 0:
-        #     log.warning('negative value found in labels')
-        #     import pdb
-        #     pdb.set_trace()
+
         loss = criterion(outputs, labels)
-        predictions = activation(outputs)
-        metrics.batch_append(predictions.detach(), labels.detach())
-        metrics.loss_append(loss.item())
+        probs = activation(outputs)
+        # metrics.batch_append(predictions.detach(), labels.detach())
+        # metrics.loss_append(loss.item())
 
         if train_mode:
             # zero the parameter gradients
@@ -612,30 +610,39 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms: dict, me
             fig = plt.figure(figsize=(14, 14))
             if sequence:
                 # make sequence figures
-                viz.visualize_batch_sequence(inputs, predictions, labels, fig=fig)
+                viz.visualize_batch_sequence(inputs, probs, labels, fig=fig)
                 viz.save_figure(fig, 'batch', True, cnt, mode)
             elif hasattr(model, 'flow_generator'):
                 # re-compute optic flows for this batch for visualization
                 with torch.no_grad():
                     flows = model.flow_generator(inputs)
                     inputs = gpu_transforms['denormalize'](inputs)
-                viz.visualize_hidden(inputs, flows, predictions, labels, fig=fig, normalizer=normalizer)
+                viz.visualize_hidden(inputs, flows, probs, labels, fig=fig, normalizer=normalizer)
                 viz.save_figure(fig, 'batch_with_flows', True, cnt, mode)
             else:
                 with torch.no_grad():
                     inputs = gpu_transforms['denormalize'](inputs)
-                viz.visualize_batch_spatial(inputs, predictions, labels, fig=fig)
+                viz.visualize_batch_spatial(inputs, probs, labels, fig=fig)
 
                 viz.save_figure(fig, 'batch_spatial', True, cnt, mode)
 
-        # torch.cuda.synchronize()
         time_per_image = (time.time() - t0) / inputs.shape[0]
-
-        metrics.time_append(time_per_image)
-        metrics.loss_append(loss.item())
-
-        t.set_description('{} loss: {:.4f}'.format(mode, loss.item()))
+        metrics.buffer.append({
+            'loss': loss.detach(),
+            'probs': probs.detach(),
+            'labels': labels.detach(),
+            'time': time_per_image
+        })
+        # # torch.cuda.synchronize()
+        #
+        #
+        # metrics.time_append(time_per_image)
+        # for performance
+        if cnt % 10 == 0:
+            t.set_description('{} loss: {:.4f}'.format(mode, loss.item()))
         cnt += 1
+    # save the learning rate
+    metrics.buffer.append({'lr': utils.get_minimum_learning_rate(optimizer)})
     metrics.end_epoch(mode)
     return metrics
 
@@ -655,6 +662,7 @@ def speedtest(loader, model,gpu_transforms: dict,
     dataiter = iter(loader)
 
     cnt = 0
+
     for i in t:
         t0 = time.time()
         try:
@@ -677,12 +685,13 @@ def speedtest(loader, model,gpu_transforms: dict,
             inputs = gpu_transforms['val'](inputs)
             outputs = model(inputs)
 
+
         # N,C,H,W = images.shape
         num_images = inputs.shape[0]
         time_per_image = (time.time() - t0) / (num_images + 1e-7)
-        metrics.time_append(time_per_image)
+        metrics.buffer.append({'time': time_per_image})
         t.set_description('FPS: {:.2f}'.format(1 / (time_per_image + 1e-7)))
-    metrics.end_epoch_speedtest()
+    metrics.end_epoch('speedtest')
     return metrics
 
 

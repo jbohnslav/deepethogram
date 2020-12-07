@@ -52,6 +52,7 @@ cudnn.deterministic = False
 @hydra.main(config_path='../conf/flow_train.yaml')
 def main(cfg: DictConfig) -> None:
     log.debug('cwd: {}'.format(os.getcwd()))
+    log.info('args: {}'.format(' '.join(sys.argv)))
     # only two custom overwrites of the configuration file
     # first, change the project paths from relative to absolute
 
@@ -207,7 +208,7 @@ def train(model,
                                 fp16=fp16)
 
         # use our metrics file to output graphs for this epoch
-        viz.visualize_logger(metrics.fname)
+        viz.visualize_logger_optical_flow(metrics.fname)
 
         # save a checkpoint
         utils.checkpoint(model, rundir, epoch)
@@ -323,11 +324,16 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms:dict, met
         # torch.cuda.synchronize()
         time_per_image = (time.time() - t0) / batch.shape[0]
 
-        metrics.loss_components_append(loss_components)
-        metrics.time_append(time_per_image)
-        metrics.loss_append(loss.item())
+        metrics.buffer.append(dict(loss=loss.detach(),
+                                   time=time_per_image,
+                                   **loss_components))
 
-        t.set_description('{} loss: {:.4f}'.format(mode, loss.item()))
+        # metrics.loss_components_append(loss_components)
+        # metrics.time_append(time_per_image)
+        # metrics.loss_append(loss.item())
+        if cnt % 10 == 0:
+            # for speed
+            t.set_description('{} loss: {:.4f}'.format(mode, loss.item()))
 
         if cnt < 10:
             batch_ind = np.random.choice(batch.shape[0])
@@ -358,6 +364,7 @@ def loop_one_epoch(loader, model, criterion, optimizer, gpu_transforms:dict, met
             viz.save_figure(fig, 'reconstruction', True, cnt, mode)
         cnt += 1
 
+    metrics.buffer.append({'lr': utils.get_minimum_learning_rate(optimizer)})
     metrics.end_epoch(mode)
     return model, metrics
 
@@ -411,12 +418,12 @@ def speedtest(loader, model, gpu_transforms: dict, metrics, steps, device=None, 
         # N,C,H,W = images.shape
         num_images = batch.shape[0]
         time_per_image = (time.time() - t0) / (num_images + 1e-7)
-        metrics.time_append(time_per_image)
+        metrics.buffer.append({'time': time_per_image})
         t.set_description('FPS: {:.2f}'.format(1 / (time_per_image + 1e-7)))
     total_t = time.time() - epoch_t
     batches_per_s = total_t / num_iters
     log.debug('batches per second in speedtest: {}'.format(batches_per_s))
-    metrics.end_epoch_speedtest()
+    metrics.end_epoch('speedtest')
     return metrics
 
 
