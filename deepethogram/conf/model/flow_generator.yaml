@@ -1,3 +1,4 @@
+# @package _global_
 flow_generator:
   type: flow_generator
   flow_loss: MotionNet

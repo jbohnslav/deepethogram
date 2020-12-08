@@ -1,3 +1,4 @@
+# @package _global_
 split:
   # if true, attempt to reload a previously made data split. If false, will randomly assign to splits new
   reload: true
@@ -37,7 +38,8 @@ preset: null
 # `train.dropout_p=0.5 notes=trying_lower_dropout`
 notes: null
 # do not change: for Hydra
-#defaults:
+defaults:
+  project: project_config
 #  project: project_config
 # hyra configuration: specifies how to create the run directory
 hydra:
