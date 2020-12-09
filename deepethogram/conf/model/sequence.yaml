@@ -1,3 +1,4 @@
+# @package _global_
 sequence:
   # the architecture for the sequence model. choices=['linear', 'conv_nonlinear', 'rnn', 'tgm', 'tgmj']
   # if RNN, the actual architecture will be rnn_style below

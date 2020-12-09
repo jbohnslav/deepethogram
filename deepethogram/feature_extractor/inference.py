@@ -11,6 +11,7 @@ from omegaconf import DictConfig
 from torch import nn
 from tqdm import tqdm
 
+import deepethogram.projects
 from deepethogram import utils, projects
 from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms_inference
 from deepethogram.data.datasets import SequentialIterator
@@ -250,7 +251,7 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
 @hydra.main(config_path='../conf/feature_extractor_inference.yaml')
 def main(cfg: DictConfig):
     # turn "models" in your project configuration to "full/path/to/models"
-    cfg = utils.get_absolute_paths_from_cfg(cfg)
+    cfg = deepethogram.projects.parse_cfg_paths(cfg)
     log.info('configuration used in inference: ')
     log.info(cfg.pretty())
     if cfg.sequence.latent_name is None:
@@ -280,7 +281,7 @@ def main(cfg: DictConfig):
     mode = '3d' if '3d' in cfg.feature_extractor.arch.lower() else '2d'
     # get the validation transforms. should have resizing, etc
     cpu_transform = get_cpu_transforms(cfg.augs)['val']
-    gpu_transform = get_gpu_transforms(cfg.augs, mode)['val']
+    gpu_transform = get_gpu_transforms_inference(cfg.augs, mode)['val']
 
     rgb = []
     for record in records:
@@ -317,5 +318,5 @@ def main(cfg: DictConfig):
 
 
 if __name__ == '__main__':
-    sys.argv = utils.process_config_file_from_cl(sys.argv)
+    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
     main()

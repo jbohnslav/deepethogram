@@ -368,17 +368,20 @@ def get_dataloaders_from_cfg(cfg: DictConfig, model_type: str, input_images: int
     """
     #
     supervised = model_type != 'flow_generator'
+    batch_size = cfg.compute.batch_size if cfg.compute.batch_size != 'auto' else cfg.batch_size
+    log.info('batch size: {}'.format(batch_size))
     if model_type == 'feature_extractor' or model_type == 'flow_generator':
         arch = cfg[model_type].arch
         mode = '3d' if '3d' in arch.lower() else '2d'
         log.info('getting dataloaders: {} convolution type detected'.format(mode))
         xform = get_cpu_transforms(cfg.augs)
 
+
         if cfg.project.name == 'kinetics':
             if cfg.compute.dali:
                 dataloaders = get_dataloaders_kinetics_dali(cfg.project.data_path,
                                                             rgb_frames=input_images,
-                                                            batch_size=cfg.compute.batch_size,
+                                                            batch_size=batch_size,
                                                             num_workers=cfg.compute.num_workers,
                                                             supervised=supervised,
                                                             conv_mode=mode,
@@ -396,7 +399,7 @@ def get_dataloaders_from_cfg(cfg: DictConfig, model_type: str, input_images: int
                                                        mode='rgb',
                                                        xform=xform,
                                                        rgb_frames=input_images,
-                                                       batch_size=cfg.compute.batch_size,
+                                                       batch_size=batch_size,
                                                        shuffle=True,
                                                        num_workers=cfg.compute.num_workers,
                                                        pin_memory=torch.cuda.is_available(),
@@ -411,7 +414,7 @@ def get_dataloaders_from_cfg(cfg: DictConfig, model_type: str, input_images: int
             dataloaders = get_video_dataloaders(cfg.project.data_path, xform=xform, is_two_stream=False,
                                                 splitfile=cfg.split.file, train_val_test=cfg.split.train_val_test,
                                                 weight_exp=cfg.train.loss_weight_exp, rgb_frames=input_images,
-                                                batch_size=cfg.compute.batch_size, num_workers=cfg.compute.num_workers,
+                                                batch_size=batch_size, num_workers=cfg.compute.num_workers,
                                                 pin_memory=torch.cuda.is_available(), drop_last=False,
                                                 supervised=supervised, reduce=reduce, conv_mode=mode)
     elif model_type == 'sequence':
@@ -420,7 +423,7 @@ def get_dataloaders_from_cfg(cfg: DictConfig, model_type: str, input_images: int
                                                nonoverlapping=cfg.sequence.nonoverlapping, splitfile=cfg.split.file,
                                                reload_split=True, store_in_ram=False, dimension=None,
                                                train_val_test=cfg.split.train_val_test,
-                                               weight_exp=cfg.train.loss_weight_exp, batch_size=cfg.compute.batch_size,
+                                               weight_exp=cfg.train.loss_weight_exp, batch_size=batch_size,
                                                shuffle=True, num_workers=cfg.compute.num_workers,
                                                pin_memory=torch.cuda.is_available(), drop_last=False, supervised=True,
                                                reduce=cfg.feature_extractor.final_activation == 'softmax',

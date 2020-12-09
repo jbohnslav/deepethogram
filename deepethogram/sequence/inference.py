@@ -12,6 +12,7 @@ from torch import nn
 from torch.utils import data
 from tqdm import tqdm
 
+import deepethogram.projects
 from deepethogram import utils, projects
 from deepethogram.data.datasets import SingleSequenceDataset
 from deepethogram.sequence.train import build_model_from_cfg
@@ -195,7 +196,7 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
 @hydra.main(config_path='../conf/sequence_inference.yaml')
 def main(cfg: DictConfig):
     # turn "models" in your project configuration to "full/path/to/models"
-    cfg = utils.get_absolute_paths_from_cfg(cfg)
+    cfg = deepethogram.projects.parse_cfg_paths(cfg)
     log.info('configuration used: ')
     log.info(cfg.pretty())
 
@@ -253,5 +254,5 @@ def main(cfg: DictConfig):
 
 
 if __name__ == '__main__':
-    sys.argv = utils.process_config_file_from_cl(sys.argv)
+    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
     main()

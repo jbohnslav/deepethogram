@@ -1,3 +1,4 @@
+# @package _global_
 train:
   # learning rate of your optimizer. default: 1e-4. Potentially set lower if you're retraining from a decent
   # checkpoint

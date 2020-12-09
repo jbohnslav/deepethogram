@@ -1,11 +1,11 @@
+from collections import Mapping, Container
 import logging
 import os
 import pkgutil
-import shutil
-import sys
 from collections import OrderedDict
 from inspect import isfunction
 from operator import itemgetter
+import sys
 from types import SimpleNamespace
 from typing import Union
 
@@ -15,8 +15,6 @@ import numpy as np
 import torch
 import yaml
 from omegaconf import OmegaConf, DictConfig
-
-import deepethogram
 
 log = logging.getLogger(__name__)
 
@@ -32,59 +30,6 @@ def load_config(filename: Union[str, os.PathLike]) -> DictConfig:
     """ loads a yaml file as dictionary and converts to an omegaconf DictConfig """
     dictionary = load_yaml(filename)
     return OmegaConf.create(dictionary)
-
-def process_config_file_from_cl(argv: list) -> list:
-    """ Unfortunate HACK for Hydra. Moves an input yaml file into Hydra's search path
-
-    Allows for fully-functional config compositions while passing a yaml file from the command line. For example,
-    deepethogram expects each project to have its own specific hyperparameters. We want to be able to integrate that
-    with our given defaults.
-
-    Example: in your project configuration file, you specify that the preset model should be deg_s. This changes
-    the loss function for the flow generator, but you didn't specify that in your project config. This function will
-    move your project config into Hydra's search path by literally copying a file to the deepethogram directory.
-    When Hydra sees this in its search path, it will figure out that you've changed the preset model, and automatically
-    change the associated hyperparameters (in this case, the loss function).
-
-    Parameters
-    ----------
-    argv: list
-        command line inputs
-
-    Returns
-    ------
-    argv: list
-        command line inputs
-    """
-    for arg in argv:
-        if 'project.config_file' in arg:
-            key, path = arg.split('=')
-            assert os.path.isfile(path)
-            log.debug('file: {}'.format(__file__))
-            log.debug('deepethogram loc: {}'.format(deepethogram.__file__))
-            conf_dir = os.path.join(os.path.dirname(deepethogram.__file__), 'conf', 'project')
-            shutil.copy(path, conf_dir)
-            basename = os.path.splitext(os.path.basename(path))[0]
-            argv.append('project={}'.format(basename))
-            log.debug('args: {}'.format(sys.argv))
-    return argv
-
-def get_absolute_paths_from_cfg(cfg: DictConfig) -> DictConfig:
-    """ Changes config file relative paths to absolute paths """
-    if cfg.project.path is None:
-        return cfg
-    assert os.path.isdir(cfg.project.path)
-    cfg.project.data_path = os.path.join(cfg.project.path, cfg.project.data_path)
-    assert os.path.isdir(cfg.project.data_path), 'Data path not found: {}'.format(cfg.project.data_path)
-    cfg.project.model_path = os.path.join(cfg.project.path, cfg.project.model_path)
-    assert os.path.isdir(cfg.project.model_path)
-    if cfg.reload.weights is not None:
-        # if it's not a file, assume it's a relative path within the model directory
-        if not os.path.isfile(cfg.reload.weights):
-            cfg.reload.weights = os.path.join(cfg.project.model_path, cfg.reload.weights)
-
-        assert os.path.isfile(cfg.reload.weights)
-    return cfg
 
 
 def get_minimum_learning_rate(optimizer):
@@ -123,7 +68,7 @@ def load_checkpoint(model, optimizer, checkpoint_file: Union[str, os.PathLike], 
     try:
         optimizer.load_state_dict(optimizer_dict)
     except Exception as e:
-        log.exception('Trouble loading optimizer state dict--might have requires-grad'\
+        log.exception('Trouble loading optimizer state dict--might have requires-grad' \
                       'for different parameters: {}'.format(e))
         log.warning('Not loading optimizer state.')
     if overwrite_args:
@@ -133,7 +78,7 @@ def load_checkpoint(model, optimizer, checkpoint_file: Union[str, os.PathLike], 
 
 
 def load_weights(model, checkpoint_file: Union[str, os.PathLike], distributed: bool = False,
-                 device:torch.device=None):
+                 device: torch.device = None):
     """"Reload model weights from a checkpoint.pt file
     Args:
         model: instance of torch.nn.Module class
@@ -695,11 +640,12 @@ def load_feature_extractor_components(model, checkpoint_file: Union[str, os.Path
     model: nn.Module
         pytorch model with loaded weights
     """
-    assert component in ['spatial', 'flow']
     if component == 'spatial':
         key = 'spatial_classifier' + '.'
     elif component == 'flow':
         key = 'flow_classifier' + '.'
+    else:
+        raise ValueError('component not one of spatial or flow: {}'.format(component))
     directory = os.path.dirname(checkpoint_file)
     subdir = os.path.join(directory, component)
 
@@ -747,6 +693,7 @@ def get_subfiles(root: Union[str, bytes, os.PathLike], return_type: str = None) 
         files = [i for i in files if os.path.isdir(i)]
     return files
 
+
 def print_hdf5(h5py_obj, level=-1, print_full_name: bool = False, print_attrs: bool = True) -> None:
     """ Prints the name and shape of datasets in a H5py HDF5 file.
     Parameters
@@ -764,6 +711,7 @@ def print_hdf5(h5py_obj, level=-1, print_full_name: bool = False, print_attrs: b
     -------
     None
     """
+
     def is_group(f):
         return type(f) == h5py._hl.group.Group
 
@@ -792,3 +740,51 @@ def print_hdf5(h5py_obj, level=-1, print_full_name: bool = False, print_attrs: b
     if level == -1:
         if print_attrs:
             print('attrs: ')
+
+
+#
+# def deep_getsizeof(o, ids):
+#     """Find the memory footprint of a Python object
+#
+#     This is a recursive function that drills down a Python object graph
+#     like a dictionary holding nested dictionaries with lists of lists
+#     and tuples and sets.
+#
+#     The sys.getsizeof function does a shallow size of only. It counts each
+#     object inside a container as pointer only regardless of how big it
+#     really is.
+#
+#     :param o: the object
+#     :param ids:
+#     :return:
+#     """
+#     d = deep_getsizeof
+#     if id(o) in ids:
+#         return 0
+#
+#     r = sys.getsizeof(o)
+#     ids.add(id(o))
+#
+#     if isinstance(o, str):
+#         return r
+#
+#     if isinstance(o, Mapping):
+#         return r + sum(d(k, ids) + d(v, ids) for k, v in o.iteritems())
+#
+#     if isinstance(o, Container):
+#         return r + sum(d(x, ids) for x in o)
+#
+#     return r
+
+def print_top_largest_variables(local_call, num: int=20):
+    def sizeof_fmt(num, suffix='B'):
+        ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
+        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+            if abs(num) < 1024.0:
+                return "%3.1f %s%s" % (num, unit, suffix)
+            num /= 1024.0
+        return "%.1f %s%s" % (num, 'Yi', suffix)
+
+    for name, size in sorted(((name, sys.getsizeof(value)) for name, value in local_call.items()),
+                             key=lambda x: -x[1])[:10]:
+        print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))

@@ -178,6 +178,9 @@ class Fusion(nn.Module):
             self.num_features_out = num_classes
             self.fc = nn.Linear(num_spatial_features + num_flow_features, num_classes)
 
+        elif self.style == 'weighted_average':
+            self.flow_weight = nn.Parameter(torch.Tensor([0.5]).float(), requires_grad=True)
+
     def forward(self, spatial_features, flow_features):
         if self.style == 'average':
             # spatial_logits = self.spatial_fc(spatial_features)
@@ -190,9 +193,9 @@ class Fusion(nn.Module):
             # logits that means we should apply an activation function note: this won't work if you froze both
             # encoding models
             features = self.activation(torch.cat((spatial_features, flow_features), dim=1))
-            out = self.fc(features)
-            return out
-
+            return self.fc(features)
+        elif self.style == 'weighted_average':
+            return self.flow_weight*flow_features + (1-self.flow_weight)*spatial_features
 
 # def get_num_classes(model):
 #     classes = []

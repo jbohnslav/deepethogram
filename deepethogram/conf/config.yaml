@@ -1,3 +1,4 @@
+# @package _global_
 split:
   # if true, attempt to reload a previously made data split. If false, will randomly assign to splits new
   reload: true
@@ -16,7 +17,8 @@ compute:
   num_workers: 8
   # batch size for training and inference. If you're getting out of VRAM errors, lower this. If you're less than say 8,
   # reduce model complexity or buy a better GPU instead
-  batch_size: 32
+  # "auto" will use Pytorch Lightning's automatic batch sizing feature
+  batch_size: auto
   # not implemented: for distributed training
   distributed: false
   # which GPU to use on a multi-GPU computer. use nvidia-smi to see which numbers correspond to which GPUs
@@ -37,7 +39,8 @@ preset: null
 # `train.dropout_p=0.5 notes=trying_lower_dropout`
 notes: null
 # do not change: for Hydra
-#defaults:
+defaults:
+  project: project_config
 #  project: project_config
 # hyra configuration: specifies how to create the run directory
 hydra:

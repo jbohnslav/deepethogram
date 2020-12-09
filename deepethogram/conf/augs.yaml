@@ -1,4 +1,4 @@
-
+# @package _global_
 # data augmentation parameters
 augs:
   # randomly alter the brightness of the image. Larger values = more distortion

@@ -10,6 +10,7 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 import deepethogram.file_io
+import deepethogram.projects
 from deepethogram import projects
 from deepethogram import utils
 
@@ -187,5 +188,5 @@ def main(cfg: DictConfig):
 
 
 if __name__ == '__main__':
-    sys.argv = utils.process_config_file_from_cl(sys.argv)
+    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
     main()

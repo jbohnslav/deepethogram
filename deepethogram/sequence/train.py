@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 from omegaconf import DictConfig
 
+import deepethogram.projects
 from deepethogram import utils, projects
 from deepethogram.data.dataloaders import get_dataloaders_from_cfg
 from deepethogram.feature_extractor.train import (get_metrics, train,
@@ -31,7 +32,7 @@ def main(cfg: DictConfig) -> None:
     # only two custom overwrites of the configuration file
     # first, change the project paths from relative to absolute
 
-    cfg = utils.get_absolute_paths_from_cfg(cfg)
+    cfg = deepethogram.projects.parse_cfg_paths(cfg)
     if cfg.sequence.latent_name is None:
         cfg.sequence.latent_name = cfg.feature_extractor.arch
     # second, use the model directory to find the most recent run of each model type
@@ -163,5 +164,5 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
 
 
 if __name__ == '__main__':
-    sys.argv = utils.process_config_file_from_cl(sys.argv)
+    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
     main()

@@ -7,3 +7,4 @@ defaults:
   - model/feature_extractor
   - model/flow_generator
   - train
+  - project/project_config

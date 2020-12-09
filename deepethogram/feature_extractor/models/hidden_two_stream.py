@@ -134,6 +134,7 @@ class HiddenTwoStream(nn.Module):
                              flow_fusion_weight=flow_fusion_weight)
 
         self.frozen_state = {}
+        self.freeze('flow_generator')
 
     def freeze(self, submodel_to_freeze: str):
         """ Freezes a component of the model. Useful for curriculum training
@@ -243,6 +244,7 @@ class HiddenTwoStream(nn.Module):
             flows = self.flow_generator(batch)
         RGB = self.viewer(batch)
         spatial_features = self.spatial_classifier(RGB)
+        # flows[0] because flow returns a pyramid of spatial resolutions, zero being the highest res
         flow_features = self.flow_classifier(flows[0])
         return self.fusion(spatial_features, flow_features)
 

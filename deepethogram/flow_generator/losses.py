@@ -262,6 +262,10 @@ class MotionNetLoss(torch.nn.Module):
                            }
         # mean across batch elements
         loss = torch.mean(SSIM_per_image) + torch.mean(L1_per_image) + torch.mean(smoothness_per_image)
+
+        if loss != loss:
+            import pdb; pdb.set_trace()
+
         if self.flow_sparsity:
             # sum across scales
             flow_sparsity = torch.stack(flow_l1s).sum(dim=0)
@@ -269,6 +273,7 @@ class MotionNetLoss(torch.nn.Module):
             loss += torch.mean(flow_sparsity)
             loss_components['flow_sparsity'] = flow_sparsity.detach()
             del flow_l1s
+
 
         del (SSIMs, SSIM_mean, L1s, L1_mean, smooths, smooth_mean)
         return loss, loss_components

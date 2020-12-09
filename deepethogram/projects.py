@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import shutil
+import sys
 import warnings
 from datetime import datetime
 from typing import Union
@@ -12,7 +13,8 @@ import pandas as pd
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from deepethogram.utils import get_subfiles
+import deepethogram
+from deepethogram.utils import get_subfiles, log
 from deepethogram.zscore import zscore_video
 from . import utils
 from .file_io import read_labels, convert_video
@@ -957,6 +959,14 @@ def get_weights_from_model_path(model_path: Union[str, os.PathLike]) -> dict:
 #             cfg[model].weights = latest_weights
 #     return cfg
 
+def get_weight_file_absolute_or_relative(cfg, path_to_weights):
+    if os.path.isfile(path_to_weights):
+        return path_to_weights
+    else:
+        abs_path = os.path.join(cfg.project.model_path, path_to_weights)
+        assert os.path.isfile(abs_path)
+        return abs_path
+
 
 def get_weightfile_from_cfg(cfg: DictConfig, model_type: str) -> Union[str, None]:
     """ Gets the correct weight files from the configuration.
@@ -997,9 +1007,10 @@ def get_weightfile_from_cfg(cfg: DictConfig, model_type: str) -> Union[str, None
             return trained_models['feature_extractor'][architecture][-1]
     else:
         if cfg[model_type].weights is not None and cfg[model_type].weights != 'latest':
-            assert os.path.isfile(cfg[model_type].weights)
+            path_to_weights = get_weight_file_absolute_or_relative(cfg, cfg[model_type].weights)
+            assert os.path.isfile(path_to_weights)
             log.info('loading specified weights')
-            return cfg[model_type].weights
+            return path_to_weights
         elif cfg.reload.latest or cfg[model_type].weights == 'latest':
             # print(trained_models)
             assert len(trained_models[model_type][architecture]) > 0
@@ -1055,13 +1066,7 @@ def load_config(path_to_config: Union[str, os.PathLike]) -> dict:
     assert os.path.isfile(path_to_config), 'configuration file does not exist! {}'.format(path_to_config)
 
     project = utils.load_yaml(path_to_config)
-    if project['project']['config_file'] != path_to_config:
-        log.warning('Erroneous path to config file in the config file itself, changing...')
-        project['project']['config_file'] = path_to_config
-    if project['project']['path'] != os.path.dirname(path_to_config):
-        log.warning('Erroneous project path in the config file itself, changing...')
-        project['project']['path'] = os.path.dirname(path_to_config)
-        utils.save_dict_to_yaml(project, path_to_config)
+    project = fix_config_paths(project, path_to_config)
     # project = convert_config_paths_to_absolute(project)
     return project
 
@@ -1084,3 +1089,115 @@ def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5'
     for key, record in tqdm(records.items(), desc='converting videos'):
         videofile = record['rgb']
         convert_video(videofile, movie_format)
+
+
+def get_config_from_path(path: Union[str, os.PathLike]) -> str:
+    for cfg_path in ['project', 'project_config']:
+        cfg_path = os.path.join(path, cfg_path + '.yaml')
+        if os.path.isfile(cfg_path):
+            return cfg_path
+    raise ValueError('No configuration file found in directory! {}'.format(os.listdir(path)))
+
+
+def fix_config_paths(cfg, path_to_config: Union[str, os.PathLike]):
+    error = False
+    if cfg['project']['path'] != os.path.dirname(path_to_config):
+        log.warning('Erroneous project path in the config file itself, changing...')
+        cfg['project']['path'] = os.path.dirname(path_to_config)
+        error = True
+    if cfg['project']['config_file'] != os.path.basename(path_to_config):
+        log.warning('Erroneous name of config file in the config file itself, changing...')
+        cfg['project']['config_file'] = os.path.basename(path_to_config)
+        error = True
+    if error:
+        utils.save_dict_to_yaml(cfg, path_to_config)
+    return cfg
+
+def fix_project_paths(project_path):
+    assert os.path.isdir(project_path)
+    cfg_file = get_config_from_path(project_path)
+    project_cfg = utils.load_yaml(cfg_file)
+    project_cfg = fix_config_paths(project_cfg, cfg_file)
+    return project_cfg
+
+# def parse_cfg_paths(cfg: DictConfig) -> DictConfig:
+#     """ Changes config file relative paths to absolute paths. Fixes broken paths, if any """
+#     project = cfg.project
+#
+#     if project.path is None:
+#         return cfg
+#
+#     assert os.path.isdir(project.path)
+#     # whatever's in project.path is the canonical location
+#     cfg_path = get_config_from_path(project.path)
+#     # make sure we save this path to the
+#     cfg_path = fix_config_paths(project, cfg_path)
+#
+#
+#     cfg.project.data_path = os.path.join(cfg.project.path, cfg.project.data_path)
+#     assert os.path.isdir(cfg.project.data_path), 'Data path not found: {}'.format(cfg.project.data_path)
+#     cfg.project.model_path = os.path.join(cfg.project.path, cfg.project.model_path)
+#     assert os.path.isdir(cfg.project.model_path)
+#     if cfg.reload.weights is not None:
+#         # if it's not a file, assume it's a relative path within the model directory
+#         if not os.path.isfile(cfg.reload.weights):
+#             cfg.reload.weights = os.path.join(cfg.project.model_path, cfg.reload.weights)
+#
+#         assert os.path.isfile(cfg.reload.weights)
+#     return cfg
+def process_config_file_from_cl(argv: list) -> list:
+    """ Unfortunate HACK for Hydra. Moves an input yaml file into Hydra's search path
+
+    Allows for fully-functional config compositions while passing a yaml file from the command line. For example,
+    deepethogram expects each project to have its own specific hyperparameters. We want to be able to integrate that
+    with our given defaults.
+
+    Example: in your project configuration file, you specify that the preset model should be deg_s. This changes
+    the loss function for the flow generator, but you didn't specify that in your project config. This function will
+    move your project config into Hydra's search path by literally copying a file to the deepethogram directory.
+    When Hydra sees this in its search path, it will figure out that you've changed the preset model, and automatically
+    change the associated hyperparameters (in this case, the loss function).
+
+    Parameters
+    ----------
+    argv: list
+        command line inputs
+
+    Returns
+    ------
+    argv: list
+        command line inputs
+    """
+    def move_project_file(path):
+        log.debug('file: {}'.format(__file__))
+        log.debug('deepethogram loc: {}'.format(deepethogram.__file__))
+        conf_dir = os.path.join(os.path.dirname(deepethogram.__file__), 'conf', 'project')
+        shutil.copy(path, conf_dir)
+        basename = os.path.splitext(os.path.basename(path))[0]
+        return basename
+
+    path = None
+    for arg in argv:
+        if 'project.config_file' in arg:
+            key, path = arg.split('=')
+            assert os.path.isfile(path)
+            # path is the path to the project directory, not the config file
+            path = os.path.dirname(path)
+        elif 'project.path' in arg:
+            key, path = arg.split('=')
+            assert os.path.isdir(path)
+
+        # if we found either one of config_file or path
+        if path is not None:
+            # make sure the locations in the config file match the current directory
+            project_cfg = fix_project_paths(path)
+            path = project_cfg['project']['path']
+            # argv.append('--config-dir')
+            # argv.append(path + '/')
+            cfg_path = get_config_from_path(path)
+            basename = move_project_file(cfg_path)
+            #
+            # # argv.append('project={}'.format(basename))
+            # log.debug('args: {}'.format(sys.argv))
+            return argv
+    return argv

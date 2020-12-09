@@ -344,7 +344,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
         # print('only one class in labels...')
         epoch_metrics['auroc_overall'] = np.nan
         epoch_metrics['auroc_class_mean'] = np.nan
-        epoch_metrics['auroc_by_class'] = np.nan
+        epoch_metrics['auroc_by_class'] = np.array([np.nan for _ in range(K)])
 
     epoch_metrics['mAP_overall'] = average_precision_score(labels, probabilities, average='micro')
     epoch_metrics['mAP_class_mean'] = average_precision_score(labels, probabilities, average='macro')
@@ -475,25 +475,27 @@ def append_to_hdf5(f, name, value, axis=0):
 
 class Buffer:
     def __init__(self):
-        self.data = None
-        self.initialize()
+        self.data = {}
+        self.splits = ['train', 'val', 'test', 'speedtest']
+        for split in self.splits:
+            self.initialize(split)
 
-    def initialize(self):
-        self.data = defaultdict(list)
+    def initialize(self, split):
+        self.data[split] = defaultdict(list)
 
-    def append(self, data: dict):
+    def append(self, split: str, data: dict):
         for key, value in data.items():
             if isinstance(value, torch.Tensor):
                 # don't convert to numpy for speed
                 value = value.detach().cpu()
-            self.data[key].append(value)
+            self.data[split][key].append(value)
 
-    def stack(self):
+    def stack(self, split):
         stacked = {}
-        keys = list(self.data.keys())
+        keys = list(self.data[split].keys())
         # go by key so we can delete each value from memory after stacking
         for key in keys:
-            value = self.data[key]
+            value = self.data[split][key]
             first_element = value[0]
             if isinstance(value, (int, float, np.integer, np.floating, np.ndarray, list)):
                 try:
@@ -505,10 +507,39 @@ class Buffer:
             elif isinstance(first_element, torch.Tensor):
                 value = torch.stack(value)
             stacked[key] = value
-            del self.data[key]
+            del self.data[split][key]
 
-        self.initialize()
+        self.initialize(split)
         return stacked
+
+    def clear(self, split=None):
+        if split is None:
+            for split in self.data.keys():
+                self.clear(split)
+        keys = list(self.data[split].keys())
+        for key in keys:
+            del self.data[split][key]
+        self.data[split] = defaultdict(list)
+
+
+class EmptyBuffer:
+    def __init__(self):
+        self.data = {}
+        self.splits = ['train', 'val', 'test', 'speedtest']
+        for split in self.splits:
+            self.initialize(split)
+
+    def initialize(self, split):
+        self.data[split] = defaultdict(list)
+
+    def append(self, split: str, data: dict):
+        pass
+
+    def stack(self, split):
+        pass
+
+    def clear(self, split=None):
+        pass
 
 
 class Metrics:
@@ -556,7 +587,6 @@ class Metrics:
     def update_lr(self, lr):
         self.learning_rate = lr
 
-
     def compute(self, data: dict) -> dict:
         """ Computes metrics from one epoch's batch of data
 
@@ -576,6 +606,9 @@ class Metrics:
             # assume it's seconds per image
             FPS = 1 / get_denominator(np.mean(data['time']))
             metrics['fps'] = FPS
+        elif 'fps' in keys:
+            FPS = np.mean(data['fps'])
+            metrics['fps'] = FPS
         if 'lr' in keys:
             # note: this should always be a scalar, but set to mean just in case there's multiple
             metrics['lr'] = np.mean(data['lr'])
@@ -594,6 +627,7 @@ class Metrics:
 
     def save_metrics_to_disk(self, metrics: dict, split: str) -> None:
         with h5py.File(self.fname, 'r+') as f:
+            # utils.print_hdf5(f)
             if split not in f.keys():
                 # should've created top-level groups in initialize_file; this is for nesting
                 f.create_group(split)
@@ -629,7 +663,7 @@ class Metrics:
         split: str
             which epoch just ended. train, validation, test, and speedtest are treated differently
         """
-        data = self.buffer.stack()
+        data = self.buffer.stack(split)
         metrics = self.compute(data)
 
         # import pdb; pdb.set_trace()
@@ -642,6 +676,31 @@ class Metrics:
             self.latest_key[split] = metrics[self.key_metric]
 
         self.save_metrics_to_disk(metrics, split)
+
+    def __getitem__(self, inp: tuple) -> np.ndarray:
+        split, metric_name, epoch_number = inp
+        with h5py.File(self.fname, 'r') as f:
+            assert split in f.keys(), 'split {} not found in file: {}'.format(split, list(f.keys()))
+            group = f[split]
+            assert metric_name in group.keys(), 'metric {} not found in group: {}'.format(metric_name,
+                                                                                          list(group.keys()))
+            data = group[metric_name][epoch_number, ...]
+        return data
+
+
+
+class EmptyMetrics(Metrics):
+    def __init__(self, *args, **kwargs):
+        super().__init__(os.getcwd(), [], 'loss', 'empty', 0)
+        self.buffer = EmptyBuffer()
+        self.key_metric = 'loss'
+
+    def end_epoch(self, split, *args, **kwargs):
+        # calling this clears the buffer
+        self.buffer.clear(split)
+
+    def initialize_file(self):
+        pass
 
 
 class Classification(Metrics):
