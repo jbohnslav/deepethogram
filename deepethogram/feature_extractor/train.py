@@ -215,7 +215,7 @@ def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
             hidden two stream CNN
     """
     device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
-    feature_extractor_weights = get_weightfile_from_cfg(cfg, 'feature_extractor')
+    feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
     num_classes = len(cfg.project.class_names)
 
     # if feature_extractor_weights is None:
@@ -251,7 +251,7 @@ def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
         return spatial_classifier, flow_classifier
 
     flow_generator = build_flow_generator(cfg)
-    flow_weights = get_weightfile_from_cfg(cfg, 'flow_generator')
+    flow_weights = projects.get_weightfile_from_cfg(cfg, 'flow_generator')
     assert flow_weights is not None, ('Must have a valid weightfile for flow generator. Use '
                                       'deepethogram.flow_generator.train or cfg.reload.latest')
     flow_generator = utils.load_weights(flow_generator, flow_weights, device=device)
