@@ -22,7 +22,8 @@ from deepethogram.feature_extractor.models.CNN import get_cnn
 from deepethogram.feature_extractor.models.hidden_two_stream import HiddenTwoStream, FlowOnlyClassifier
 from deepethogram.flow_generator.train import build_model_from_cfg as build_flow_generator
 from deepethogram.metrics import Classification
-from deepethogram.projects import get_weightfile_from_cfg, convert_config_paths_to_absolute
+# from deepethogram.projects import get_weightfile_from_cfg, convert_config_paths_to_absolute
+from deepethogram import projects
 from deepethogram.stoppers import get_stopper
 
 warnings.filterwarnings('ignore', category=UserWarning, message=
@@ -49,7 +50,7 @@ def main(cfg: DictConfig) -> None:
     log.info('args: {}'.format(' '.join(sys.argv)))
     # only two custom overwrites of the configuration file
     # first, change the project paths from relative to absolute
-    cfg = convert_config_paths_to_absolute(cfg)
+    cfg = projects.convert_config_paths_to_absolute(cfg)
     # allow for editing
     OmegaConf.set_struct(cfg, False)
     # second, use the model directory to find the most recent run of each model type
@@ -77,7 +78,7 @@ def train_from_cfg_lightning(cfg):
     #     torch.cuda.set_device(device)
 
     flow_generator = build_flow_generator(cfg)
-    flow_weights = get_weightfile_from_cfg(cfg, 'flow_generator')
+    flow_weights = projects.get_weightfile_from_cfg(cfg, 'flow_generator')
     assert flow_weights is not None, ('Must have a valid weightfile for flow generator. Use '
                                       'deepethogram.flow_generator.train or cfg.reload.latest')
     log.info('loading flow generator from file {}'.format(flow_weights))

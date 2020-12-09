@@ -253,5 +253,5 @@ def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_par
 
 
 if __name__ == '__main__':
-    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
+    sys.argv = projects.process_config_file_from_cl(sys.argv)
     main()
