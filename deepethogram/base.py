@@ -31,7 +31,10 @@ class BaseLightningModule(pl.LightningModule):
         self.hparams.weight_decay = None
         if 'feature_extractor' in self.hparams.keys():
             self.hparams.weight_decay = self.hparams.feature_extractor.weight_decay
-        self.is_key_metric_loss = self.metrics.key_metric == 'loss'
+
+        self.scheduler_mode = 'min' if self.is_key_metric_loss else 'max'
+        log.info('scheduler mode: {}'.format(scheduler_mode))
+        # self.is_key_metric_loss = self.metrics.key_metric == 'loss'
 
     def on_train_epoch_start(self) -> None:
         # self.viz_cnt['train'] = 0
@@ -83,9 +86,8 @@ class BaseLightningModule(pl.LightningModule):
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.hparams.train.lr,
                                weight_decay=weight_decay)
         self.optimizer = optimizer
-        mode = 'min' if self.is_key_metric_loss else 'max'
-        log.info('scheduler mode: {}'.format(mode))
-        scheduler = initialize_scheduler(optimizer, self.hparams, mode=mode,
+
+        scheduler = initialize_scheduler(optimizer, self.hparams, mode=self.scheduler_mode,
                                          reduction_factor=self.hparams.train.reduction_factor)
         return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': self.metrics.key_metric}
 
@@ -123,8 +125,10 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper) -> pl.Train
         lightning_module.metrics = empty_metrics
         # don't visualize our model inputs when batch size finding
         lightning_module.visualize_examples = False
-
-        new_batch_size = tuner.scale_batch_size(lightning_module, mode='power')
+        try:
+            new_batch_size = tuner.scale_batch_size(lightning_module, mode='power')
+        except KeyboardInterrupt:
+            raise
         cfg.compute.batch_size = new_batch_size
         log.info('auto-tuned batch size: {}'.format(new_batch_size))
 
