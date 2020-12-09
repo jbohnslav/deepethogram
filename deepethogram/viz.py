@@ -19,7 +19,7 @@ import torch
 
 from deepethogram.flow_generator.utils import flow_to_rgb_polar
 # from deepethogram.metrics import load_threshold_data
-from deepethogram.utils import tensor_to_np
+from deepethogram.utils import tensor_to_np, print_top_largest_variables
 
 log = logging.getLogger(__name__)
 # override warning level for matplotlib, which outputs a million debugging statements
@@ -296,11 +296,12 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
         plt.tight_layout()
 
 
-def tensor_to_list(images: torch.Tensor, batch_ind: int) -> list:
+def tensor_to_list(images: torch.Tensor, batch_ind: int, channels: int = 3) -> list:
     if images.ndim == 4:
         N, C, H, W = images.shape
-        sequence_length = C // 3
-        image_list = [images[batch_ind, i * 3:i * 3 + 3, ...].transpose(1, 2, 0) for i in range(sequence_length)]
+        sequence_length = C // channels
+        image_list = [images[batch_ind, i * channels:i * channels + channels, ...].transpose(1, 2, 0)
+                      for i in range(sequence_length)]
     elif images.ndim == 5:
         N, C, T, H, W = images.shape
         image_list = [images[batch_ind, :, i, ...].transpose(1, 2, 0) for i in range(T)]
@@ -342,15 +343,15 @@ def visualize_hidden(images, flows, predictions, labels, class_names: list = Non
     axes = fig.subplots(2, 1)
 
     # images = downsampled_t0[0].detach().cpu().numpy()
-    if normalizer is not None:
-        images = normalizer.denormalize(images)
-    images = images.detach().cpu().numpy()
-    # N is actually N * T
+    # if normalizer is not None:
+    #     images = normalizer.denormalize(images)
     batch_size = images.shape[0]
     if batch_ind is None:
         batch_ind = np.random.choice(batch_size)
 
+    images = images.detach().cpu().numpy()
     image_list = tensor_to_list(images, batch_ind)
+    del images
 
     stack = stack_image_list(image_list)
     minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
@@ -364,13 +365,7 @@ def visualize_hidden(images, flows, predictions, labels, class_names: list = Non
 
     ax = axes[1]
     flows = flows[0].detach().cpu().numpy()
-    if flows.ndim == 4:
-        N, C, H, W = flows.shape
-        sequence_length = C // 2
-        flow_list = [flows[batch_ind, i * 2:i * 2 + 2, ...].transpose(1, 2, 0) for i in range(sequence_length)]
-    elif flows.ndim == 5:
-        N, C, T, H, W = flows.shape
-        flow_list = [flows[batch_ind, :, i, ...].transpose(1, 2, 0) for i in range(T)]
+    flow_list = tensor_to_list(flows, batch_ind, 2)
     stack = stack_image_list(flow_list)
     minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
     stack = flow_to_rgb_polar(stack, maxval=max_flow)
@@ -392,6 +387,9 @@ def visualize_hidden(images, flows, predictions, labels, class_names: list = Non
         warnings.simplefilter("ignore")
         plt.tight_layout()
     fig.subplots_adjust(top=0.9)
+
+    # print_top_largest_variables(locals())
+    del stack, pred, label
 
 
 def to_uint8(im: np.ndarray) -> np.ndarray:
@@ -439,31 +437,40 @@ def visualize_batch_unsupervised(downsampled_t0, estimated_t0, flows_reshaped, b
     plt.tight_layout()
 
 
-def visualize_batch_spatial(images, predictions, labels, fig=None, class_names=None):
+def visualize_batch_spatial(images, predictions, labels, fig=None, class_names=None, num_cols: int=4):
     """ visualize spatial stream of hidden two stream model """
 
     plt.style.use('ggplot')
     if fig is None:
         fig = plt.figure(figsize=(16, 12))
 
-    images = images.detach().cpu().numpy()
+    batch_size = images.shape[0]
+    num_rows = int(min(np.ceil(batch_size / num_cols), 6))
+
+    total_images = min(num_rows*num_cols, batch_size)
+
+    # only use the first total_images elements in the batch, to try to reduce RAM usage
+    images = images[:total_images].detach().cpu().numpy()
+    predictions = predictions[:total_images].detach().cpu().numpy()
+    labels = labels[:total_images].detach().cpu().numpy()
+
     images = images.clip(min=0, max=1)
 
-    batch_size = images.shape[0]
 
-    num_cols = 4
-    num_rows = min(np.ceil(batch_size / num_cols), 6)
+
     axes = fig.subplots(num_rows, num_cols)
     cnt = 0
+    if num_rows == 1:
+        axes = axes[np.newaxis, ...]
     for i in range(num_rows):
         for j in range(num_cols):
             ax = axes[i, j]
-            if cnt > batch_size:
+            if cnt >= batch_size:
                 ax.remove()
                 cnt += 1
                 continue
-            pred = predictions[cnt].detach().cpu().numpy()
-            label = labels[cnt].detach().cpu().numpy()
+            pred = predictions[cnt]
+            label = labels[cnt]
             string = predictions_labels_string(pred, label, class_names)
             string = '{:03d}: '.format(cnt) + string
 
@@ -478,7 +485,7 @@ def visualize_batch_spatial(images, predictions, labels, fig=None, class_names=N
             cnt += 1
     fig.suptitle('Spatial stream')
     plt.tight_layout()
-
+    del images, predictions, labels
 
 def visualize_batch_sequence(sequence, outputs, labels, N_in_batch=None, fig=None):
     """ Visualize an input sequence, probabilities, and the true labels """
@@ -525,6 +532,7 @@ def visualize_batch_sequence(sequence, outputs, labels, N_in_batch=None, fig=Non
     ax.set_title('L1 between outputs and labels (not true loss)')
     ax.invert_yaxis()
     plt.tight_layout()
+    del sequence, outputs, labels
 
 
 def fig_to_img(fig_handle: matplotlib.figure.Figure) -> np.ndarray:
@@ -882,7 +890,7 @@ def make_learning_curves_figure_multilabel_classification(logger_file, fig=None)
         ax = fig.add_subplot(3, 2, 1)
         data = OrderedDict(train=f['train/loss'][:],
                            val=f['val/loss'][:])
-
+        # import pdb; pdb.set_trace()
         plot_metric(data, 'loss', ax)
         ax2 = ax.twinx()
         ax2.plot(f['train/lr'][:], 'k', label='LR', alpha=0.5)
@@ -891,9 +899,14 @@ def make_learning_curves_figure_multilabel_classification(logger_file, fig=None)
 
         # FPS
         ax = fig.add_subplot(3, 2, 2)
-        data = OrderedDict(train=f['train/fps'][:],
-                           val=f['val/fps'][:],
-                           speedtest=f['speedtest/fps'][:])
+        try:
+            data = OrderedDict(train=f['train/fps'][:],
+                               val=f['val/fps'][:],
+                               speedtest=f['speedtest/fps'][:])
+        except Exception as e:
+            # likely don't have speedtest, not too important
+            data = OrderedDict(train=f['train/fps'][:],
+                               val=f['val/fps'][:])
 
         plot_metric(data, 'FPS', ax, legend=True)
         ax.semilogy()
@@ -966,8 +979,9 @@ def plot_multilabel_by_class(logger_file):
 
         row = axes[3]
         plot_row(row, 'mAP')
-
-        plt.tight_layout()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            plt.tight_layout()
     return fig
 
 
@@ -1463,3 +1477,4 @@ def save_figure(figure, name, is_example, num, split='train'):
     fname = make_figure_filename(name, is_example, num, split)
     figure.savefig(fname)
     plt.close(figure)
+    del figure

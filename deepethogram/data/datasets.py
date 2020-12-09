@@ -4,10 +4,11 @@ import os
 import random
 import warnings
 from functools import partial
-from typing import Union
+from typing import Union, Tuple
 
 import h5py
 import numpy as np
+from omegaconf import DictConfig
 import pandas as pd
 import torch
 from opencv_transforms import transforms
@@ -15,8 +16,11 @@ from torch.utils import data
 from vidio import VideoReader
 
 # from deepethogram.dataloaders import log
+from deepethogram import projects
+from deepethogram.data.augs import get_transforms, get_cpu_transforms
 from deepethogram.data.utils import purge_unlabeled_videos, get_video_metadata, extract_metadata, find_labelfile, \
-    read_all_labels
+    read_all_labels, get_split_from_records, remove_invalid_records_from_split_dictionary, \
+    make_loss_weight
 from deepethogram.file_io import read_labels
 
 log = logging.getLogger(__name__)
@@ -583,13 +587,13 @@ class VideoDataset(data.Dataset):
         # if log.isEnabledFor(logging.DEBUG):
         #     log.debug('images shape after 3d -> 4d: {}'.format(images.shape))
         # print(images.shape)
+        outputs = {'images': images}
         if self.supervised:
             label = self.labels[index]
             if self.reduce:
                 label = np.where(label)[0][0].astype(np.int64)
-            return images, label
-        else:
-            return images
+            outputs['labels'] = label
+        return outputs
 
 
 class SingleSequenceDataset(data.Dataset):
@@ -1369,3 +1373,197 @@ class KineticsDataset(data.Dataset):
             return rgb
         elif self.mode == 'both':
             return rgb, flow
+
+
+def get_video_datasets(datadir: Union[str, os.PathLike], xform: dict, is_two_stream: bool = False,
+                          reload_split: bool = True, splitfile: Union[str, os.PathLike] = None,
+                          train_val_test: Union[list, np.ndarray] = [0.8, 0.1, 0.1], weight_exp: float = 1.0,
+                          rgb_frames: int = 1, flow_frames: int = 10, supervised=True, reduce=False, flow_max: int = 5,
+                          flow_style: str = 'linear', valid_splits_only: bool = True, conv_mode: str = '2d'):
+    """ Gets dataloaders for video-based datasets.
+
+    Parameters
+    ----------
+    datadir: str, os.PathLike
+        absolute path to root directory containing data. e.g. /path/to/DATA
+    xform: dict
+        Dictionary of augmentations, e.g. from get_transforms
+    is_two_stream: bool
+        if True, tries to load a two-stream dataloader, with optic flow saved to disk
+    reload_split: bool
+        if True, tries to reload train/val/test split in splitfile (or tries to find splitfile). if False, makes a new
+        train / val / test split
+    splitfile: str, os.PathLike
+        path to a yaml file containing train, val, test splits
+    train_val_test: list, np.ndarray. shape (3,)
+        contains fractions or numbers of elements in each split. see train_val_test_split
+    weight_exp: float
+        loss weights will be raised to this exponent. see DeepEthogram paper
+    rgb_frames: int
+        number of RGB frames in each training example. for hidden two-stream models, should be 11
+    flow_frames: int
+        number of optic flows in each training example if using pre-computed optic flow frames. deprecated
+    for remaining arguments, see https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
+    batch_size: int
+        number of elements in batch
+    shuffle: bool
+        whether or not to shuffle dataset. should be kept True
+    num_workers: int
+        number of CPU workers to use to load data
+    pin_memory: bool
+        if True, copy batch data to GPU pinned memory
+    drop_last: bool
+        if True, drop the last batch because it might have different numbers of elements. Should be False, as
+        VideoDataset pads images at the ends of movies and returns masked labels
+    supervised: bool
+        if True, return labels and require that files contain labels. if False, use all RGB movies in the dataset
+        regardless of label status, and do not return labels
+    reduce: bool
+        if True, reduce one-hot labels to the index of the positive example. Used with softmax activation and NLL loss
+        when there can only be one behavior at a time
+    flow_max: int
+        Number to divide flow results by for loading flows from disk. Deprecated
+    flow_style: str
+        one of linear, polar, or rgb. Denotes how pre-computed optic flows are stored on disk. Deprecated
+    valid_splits_only: bool
+        if True, require that each split has at least one example from each behavior. see train_val_test_split
+    conv_mode: str
+        one of '2d', '3d'. If 2D, batch will be of shape N, C*T, H, W. if 3D, batch will be of shape N, C, T, H, W
+
+    Returns
+    -------
+    dataloaders: dict
+        each of 'train', 'validation', 'test' will contain a PyTorch DataLoader:
+            https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
+        split contains the split dictionary, for saving
+        keys for loss weighting are also added. see make_loss_weight for explanation
+    """
+    return_types = ['rgb']
+    if is_two_stream:
+        return_types += ['flow']
+    if supervised:
+        return_types += ['label']
+    # records: dictionary of dictionaries. Keys: unique data identifiers
+    # values: a dictionary corresponding to different files. the first record might be:
+    # {'mouse000': {'rgb': path/to/rgb.avi, 'label':path/to/labels.csv} }
+    records = projects.get_records_from_datadir(datadir)
+    # some videos might not have flows yet, or labels. Filter records to only get those that have all required files
+    records = projects.filter_records_for_filetypes(records, return_types)
+    # returns a dictionary, where each split in ['train', 'val', 'test'] as a list of keys
+    # each key corresponds to a unique directory, and has
+    split_dictionary = get_split_from_records(records, datadir, splitfile, supervised, reload_split, valid_splits_only,
+                                              train_val_test)
+    # it's possible that your split has records that are invalid for the current task.
+    # e.g.: you've added a video, but not labeled it yet. In that case, it will already be in your split, but it is
+    # invalid for current purposes, because it has no label. Therefore, we want to remove it from the current split
+    split_dictionary = remove_invalid_records_from_split_dictionary(split_dictionary, records)
+
+    datasets = {}
+    for i, split in enumerate(['train', 'val', 'test']):
+        rgb = [records[i]['rgb'] for i in split_dictionary[split]]
+        flow = [records[i]['flow'] for i in split_dictionary[split]]
+
+        if split == 'test' and len(rgb) == 0:
+            datasets[split] = None
+            continue
+
+        if supervised:
+            labelfiles = [records[i]['label'] for i in split_dictionary[split]]
+        else:
+            labelfiles = None
+
+        if is_two_stream:
+            datasets[split] = TwoStreamDataset(rgb_list=rgb,
+                                               flow_list=flow,
+                                               rgb_frames=rgb_frames,
+                                               flow_frames=flow_frames,
+                                               spatial_transform=xform[split]['spatial'],
+                                               color_transform=xform[split]['color'],
+                                               label_list=labelfiles,
+                                               reduce=reduce,
+                                               flow_max=flow_max,
+                                               flow_style=flow_style
+                                               )
+        else:
+            datasets[split] = VideoDataset(rgb,
+                                           frames_per_clip=rgb_frames,
+                                           label_list=labelfiles,
+                                           reduce=reduce,
+                                           transform=xform[split],
+                                           conv_mode=conv_mode)
+    data_info = {'split': split_dictionary}
+
+    if supervised:
+        data_info['class_counts'] = datasets['train'].class_counts
+        data_info['num_classes'] = len(data_info['class_counts'])
+        pos_weight, softmax_weight = make_loss_weight(data_info['class_counts'],
+                                                      datasets['train'].num_pos,
+                                                      datasets['train'].num_neg,
+                                                      weight_exp=weight_exp)
+        data_info['pos'] = datasets['train'].num_pos
+        data_info['neg'] = datasets['train'].num_neg
+        data_info['pos_weight'] = pos_weight
+        data_info['loss_weight'] = softmax_weight
+
+    return datasets, data_info
+
+def get_datasets_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 1) -> Tuple[dict, dict]:
+    """ Returns dataloader objects using a Hydra-generated configuration dictionary.
+
+    This is the main entry point for getting dataloaders from the command line. it will return the correct dataloader
+    with given hyperparameters for either flow, feature extractor, or sequence models.
+
+    Parameters
+    ----------
+    cfg: DictConfig
+        Hydra-generated (or OmegaConf) configuration dictionary
+    model_type: str
+        one of flow_generator, feature_extractor, sequence
+        we need to specify model type and input images because the same config could be used to load any model type.
+    input_images: int
+        Number of images in each training example.
+        input images must be specified because if you're training a feature extractor, the flow extractor might take
+        11 images and the spatial model might take 1 image. End to end takes 11 images, because we select out the middle
+        image for the spatial model in the end-to-end version
+
+    Returns
+    -------
+    dataloaders: dict
+        train, val, and test will contain a PyTorch dataloader for that data split. Will also contain other useful
+        dataset-specific keys, e.g. number of examples in each class, how to weight the loss function, etc. for more
+        information see the specific dataloader of the model you're training, e.g. get_video_dataloaders
+    """
+    #
+    supervised = model_type != 'flow_generator'
+    if model_type == 'feature_extractor' or model_type == 'flow_generator':
+        arch = cfg[model_type].arch
+        mode = '3d' if '3d' in arch.lower() else '2d'
+        log.info('getting dataloaders: {} convolution type detected'.format(mode))
+        xform = get_cpu_transforms(cfg.augs)
+
+
+        if cfg.project.name == 'kinetics':
+            raise NotImplementedError
+        else:
+            reduce = False
+            if cfg.run.model == 'feature_extractor':
+                if cfg.feature_extractor.final_activation == 'softmax':
+                    reduce = True
+            datasets, info = get_video_datasets(datadir=cfg.project.data_path,
+                                          xform=xform,
+                                          is_two_stream=False,
+                                          reload_split=cfg.split.reload,
+                                          splitfile=cfg.split.file,
+                                          train_val_test=cfg.split.train_val_test,
+                                          weight_exp=cfg.train.loss_weight_exp,
+                                          rgb_frames=input_images,
+                                          supervised=supervised,
+                                          reduce=reduce,
+                                          valid_splits_only=True,
+                                          conv_mode=mode)
+
+    elif model_type == 'sequence':
+        raise NotImplementedError
+    else:
+        raise ValueError('Unknown model type: {}'.format(model_type))
+    return datasets, info

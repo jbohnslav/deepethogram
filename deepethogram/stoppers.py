@@ -87,6 +87,9 @@ class EarlyStopping(Stopper):
             best = True
         if self.epoch_counter > self.num_epochs:
             should_stop = True
+
+        import pdb; pdb.set_trace()
+
         return best, should_stop
 
 
@@ -144,13 +147,16 @@ def get_stopper(cfg: DictConfig) -> Type[Stopper]:
 
     """
     # ASSUME WE'RE USING LOSS AS THE KEY METRIC, WHICH IS AN ERROR
-    log.info('Using stopper type {}'.format(cfg.train.stopping_type))
-    if cfg.train.stopping_type == 'early':
+    stopping_type = cfg.train.stopping_type
+    log.info('Using stopper type {}'.format(stopping_type))
+    if stopping_type == 'early':
         return EarlyStopping(start_epoch=0, num_epochs=cfg.train.num_epochs,
                              patience=cfg.train.patience,
                              is_error=True, early_stopping_begins=cfg.train.early_stopping_begins)
-    elif cfg.train.stopping_type == 'learning_rate':
+    elif stopping_type == 'learning_rate':
         return LearningRateStopper(start_epoch=0, num_epochs=cfg.train.num_epochs,
                                    minimum_learning_rate=cfg.train.min_lr)
-    else:
+    elif stopping_type == 'num_epochs':
         return NumEpochsStopper('num_epochs', start_epoch=0, num_epochs=cfg.train.num_epochs)
+    else:
+        raise ValueError('invalid stopping name detected! {}'.format(stopping_type))

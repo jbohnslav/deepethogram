@@ -26,7 +26,12 @@ class NLLLossCNN(nn.Module):
 
     def forward(self, outputs, label):
         # make sure labels are one-hot
-        assert (outputs.shape == label.shape)
+        if outputs.shape != label.shape:
+            # see if it's just a batch issue
+            if (1, *label.shape) == outputs.shape:
+                label = label.unsqueeze(0)
+
+        assert outputs.shape == label.shape, 'Outputs shape must match labels! {}, {}'.format(outputs.shape, label.shape)
         # N, K, T = outputs.shape
         label = label.float()
 
@@ -69,7 +74,12 @@ class BCELossCustom(nn.Module):
 
     def forward(self, outputs, label):
         # make sure labels are one-hot
-        assert (outputs.shape == label.shape)
+        if outputs.shape != label.shape:
+            # see if it's just a batch issue
+            if (1, *label.shape) == outputs.shape:
+                label = label.unsqueeze(0)
+        assert outputs.shape == label.shape, 'Outputs shape must match labels! {}, {}'.format(outputs.shape,
+                                                                                              label.shape)
 
         if outputs.ndim == 3:
             sequence = True

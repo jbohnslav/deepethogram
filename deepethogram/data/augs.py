@@ -67,8 +67,8 @@ class DenormalizeVideo(nn.Module):
 
         mean = np.asarray(mean)
         std = np.asarray(std)
-        mean = torch.from_numpy(mean)
-        std = torch.from_numpy(std)
+        mean = torch.from_numpy(mean).float()
+        std = torch.from_numpy(std).float()
 
         self.mean = mean.reshape(1, -1, 1, 1, 1)
         self.std = std.reshape(1, -1, 1, 1, 1)

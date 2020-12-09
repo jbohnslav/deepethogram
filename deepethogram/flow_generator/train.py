@@ -13,12 +13,9 @@ import torch.nn as nn
 import torch.optim as optim
 from omegaconf import DictConfig
 
-try:
-    from torch.cuda.amp import autocast, GradScaler
-    torch_amp = True
-except ImportError:
-    torch_amp = False
+import pytorch_lightning as pl
 from tqdm import tqdm, trange
+
 
 import deepethogram.projects
 from deepethogram import utils, viz
@@ -56,7 +53,7 @@ def main(cfg: DictConfig) -> None:
     # only two custom overwrites of the configuration file
     # first, change the project paths from relative to absolute
 
-    cfg = utils.get_absolute_paths_from_cfg(cfg)
+    cfg = deepethogram.projects.parse_cfg_paths(cfg)
     # second, use the model directory to find the most recent run of each model type
     # cfg = projects.overwrite_cfg_with_latest_weights(cfg, cfg.project.model_path, model_type='flow_generator')
     # SHOULD NEVER MODIFY / MAKE ASSIGNMENTS TO THE CFG OBJECT AFTER RIGHT HERE!
@@ -139,6 +136,158 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
                            dali=cfg.compute.dali,
                            fp16=cfg.compute.fp16)
     return flow_generator
+
+
+class HiddenTwoStreamLightning(BaseLightningModule):
+    def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, visualization_func, data_info: dict,
+                 visualize_examples: bool = True):
+        super().__init__(model, cfg, datasets, metrics, visualization_func, visualize_examples)
+
+        # self.model = model
+        # self.hparams = cfg
+        # self.datasets = datasets
+        self.data_info = data_info
+        # self.metrics = metrics
+        # self.dali = dali
+        # self.visualize_examples = visualize_examples
+
+        arch = self.hparams.feature_extractor.arch
+        gpu_transforms = get_gpu_transforms(self.hparams.augs, '3d' if '3d' in arch.lower() else '2d')
+        self.gpu_transforms = gpu_transforms
+        self.has_logged_channels = False
+        # for convenience
+        self.final_activation = self.hparams.feature_extractor.final_activation
+        if self.final_activation == 'softmax':
+            self.activation = nn.Softmax(dim=1)
+        elif self.final_activation == 'sigmoid':
+            self.activation = nn.Sigmoid()
+        else:
+            raise NotImplementedError
+
+        self.criterion = get_criterion(self.final_activation, self.data_info)
+        # this will get overridden by the ExampleImagesCallback
+        self.viz_cnt = None
+
+    def validate_batch_size(self, batch: dict):
+        if self.hparams.compute.dali:
+            # no idea why they wrap this, maybe they fixed it?
+            batch = batch[0]
+        if 'images' in batch.keys():
+            # weird case of batch size = 1 somehow getting squeezed out
+            if batch['images'].ndim != 5:
+                batch['images'] = batch['images'].unsqueeze(0)
+        if 'labels' in batch.keys():
+            if self.final_activation == 'sigmoid' and batch['labels'].ndim == 1:
+                batch['labels'] = batch['labels'].unsqueeze(0)
+        return batch
+
+    def training_step(self, batch: dict, batch_idx: int):
+        # use the forward function
+        # return the image tensor so we can visualize after gpu transforms
+        images, outputs = self(batch, 'train')
+        probabilities = self.activation(outputs)
+
+        loss = self.criterion(outputs, batch['labels'])
+
+        self.visualize_batch(images, probabilities, batch['labels'], 'train')
+
+        self.metrics.buffer.append('train', {
+            'loss': loss.detach(),
+            'probs': probabilities.detach(),
+            'labels': batch['labels'].detach()
+        })
+        # need to use the native logger for lr scheduling, etc.
+        self.log('loss', loss)
+        return loss
+
+    def validation_step(self, batch: dict, batch_idx: int):
+        images, outputs = self(batch, 'val')
+        probabilities = self.activation(outputs)
+
+        loss = self.criterion(outputs, batch['labels'])
+        self.visualize_batch(images, probabilities, batch['labels'], 'val')
+        self.metrics.buffer.append('val', {
+            'loss': loss.detach(),
+            'probs': probabilities.detach(),
+            'labels': batch['labels'].detach()
+        })
+        # need to use the native logger for lr scheduling, etc.
+        # TESTING
+        self.log('loss', self.current_epoch)
+
+    def test_step(self, batch: dict, batch_idx: int):
+        images, outputs = self(batch, 'test')
+        probabilities = self.activation(outputs)
+
+    @torch.no_grad()
+    def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
+        images = self.gpu_transforms[mode](images)
+        return images
+
+    def visualize_batch(self, images, probs, labels, split: str):
+        if not self.visualize_examples:
+            return
+        # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
+        viz_cnt = self.viz_cnt[split]
+        if viz_cnt > 10:
+            return
+        fig = plt.figure(figsize=(14, 14))
+        if hasattr(self.model, 'flow_generator'):
+            # re-compute optic flows for this batch for visualization
+            with torch.no_grad():
+                flows = self.model.flow_generator(images)
+                inputs = self.gpu_transforms['denormalize'](images)
+            viz.visualize_hidden(inputs, flows, probs, labels, fig=fig)
+            viz.save_figure(fig, 'batch_with_flows', True, viz_cnt, split)
+        else:
+            with torch.no_grad():
+                inputs = self.gpu_transforms['denormalize'](images)
+            viz.visualize_batch_spatial(inputs, probs, labels, fig=fig)
+            viz.save_figure(fig, 'batch_spatial', True, viz_cnt, split)
+        # self.viz_cnt[split] += 1
+
+    def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
+        # try:
+        #     batch = next(dataiter)
+        # except StopIteration:
+        #     break
+        batch = self.validate_batch_size(batch)
+        # lightning handles transfer to device
+        images = batch['images']
+        images = self.apply_gpu_transforms(images, mode)
+
+        outputs = self.model(images)
+        self.log_image_statistics(images)
+
+        return images, outputs
+
+    def log_image_statistics(self, images):
+        if not self.has_logged_channels and log.isEnabledFor(logging.DEBUG):
+            if len(images.shape) == 4:
+                N, C, H, W = images.shape
+                log.debug('inputs shape: NCHW: {} {} {} {}'.format(N, C, H, W))
+                log.debug('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
+                log.debug('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
+                log.debug('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
+                log.debug('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
+            elif len(images.shape) == 5:
+                N, C, T, H, W = images.shape
+                log.debug('inputs shape: NCTHW: {} {} {} {} {}'.format(N, C, T, H, W))
+                log.debug('channel min:  {}'.format(images[0].min(dim=2).values))
+                log.debug('channel mean: {}'.format(images[0].mean(dim=2)))
+                log.debug('channel max : {}'.format(images[0].max(dim=2).values))
+                log.debug('channel std : {}'.format(images[0].std(dim=2)))
+            self.has_logged_channels = True
+
+    def log_model_statistics(self, images, outputs, labels):
+        # will print out shape and min, mean, max, std along image channels
+        # we use the isEnabledFor flag so that this doesnt slow down training in the non-debug case
+        log.debug('outputs: {}'.format(outputs))
+        log.debug('labels: {}'.format(labels))
+        log.debug('outputs: {}'.format(outputs.shape))
+        log.debug('labels: {}'.format(labels.shape))
+        log.debug('label max: {}'.format(labels.max()))
+        log.debug('label min: {}'.format(labels.min()))
 
 
 def train(model,
@@ -428,5 +577,5 @@ def speedtest(loader, model, gpu_transforms: dict, metrics, steps, device=None, 
 
 
 if __name__ == '__main__':
-    sys.argv = utils.process_config_file_from_cl(sys.argv)
+    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
     main()
