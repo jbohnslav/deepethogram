@@ -6,3 +6,4 @@ defaults:
   - model/flow_generator
   - train
   - augs
+  - project/project_config

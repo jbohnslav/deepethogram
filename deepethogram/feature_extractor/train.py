@@ -25,7 +25,6 @@ from deepethogram.metrics import Classification
 from deepethogram.projects import get_weightfile_from_cfg, convert_config_paths_to_absolute
 from deepethogram.stoppers import get_stopper
 
-
 warnings.filterwarnings('ignore', category=UserWarning, message=
 'Your val_dataloader has `shuffle=True`, it is best practice to turn this off for validation '
 'and test dataloaders.')
@@ -50,7 +49,6 @@ def main(cfg: DictConfig) -> None:
     log.info('args: {}'.format(' '.join(sys.argv)))
     # only two custom overwrites of the configuration file
     # first, change the project paths from relative to absolute
-    print(type(cfg))
     cfg = convert_config_paths_to_absolute(cfg)
     # allow for editing
     OmegaConf.set_struct(cfg, False)
@@ -68,6 +66,7 @@ def main(cfg: DictConfig) -> None:
         raise
     # for pytorch benchmarking
     # hydra._internal.hydra.GlobalHydra().clear()
+
 
 # @profile
 def train_from_cfg_lightning(cfg):
@@ -188,7 +187,6 @@ def train_from_cfg_lightning(cfg):
 
     trainer.fit(lightning_module)
     utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
-
 
 
 def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
@@ -338,7 +336,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         })
         # need to use the native logger for lr scheduling, etc.
         # TESTING
-        self.log('loss', self.current_epoch)
+        self.log('loss', loss)
 
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
@@ -478,6 +476,7 @@ def get_metrics(rundir: Union[str, bytes, os.PathLike], num_classes: int, num_pa
                              metrics=metric_list,
                              evaluate_threshold=True)
     return metrics
+
 
 if __name__ == '__main__':
     sys.argv = projects.process_config_file_from_cl(sys.argv)

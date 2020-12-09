@@ -28,7 +28,10 @@ class BaseLightningModule(pl.LightningModule):
         self.visualize_examples = visualize_examples
 
         self.optimizer = None # will be overridden in configure_optimizers
-
+        self.hparams.weight_decay = None
+        if 'feature_extractor' in self.hparams.keys():
+            self.hparams.weight_decay = self.hparams.feature_extractor.weight_decay
+        self.is_key_metric_loss = self.metrics.key_metric == 'loss'
 
     def on_train_epoch_start(self) -> None:
         # self.viz_cnt['train'] = 0
@@ -70,18 +73,18 @@ class BaseLightningModule(pl.LightningModule):
     def test_step(self, batch: dict, batch_idx: int):
         raise NotImplementedError
 
-    def visualize_batch(self, images, probs, labels, split: str):
-        raise NotImplementedError
-
-        # self.viz_cnt[split] += 1
-
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
-    def configure_optimizers(self, mode: str = 'min'):
+    def configure_optimizers(self):
+
+        weight_decay = 0 if self.hparams.weight_decay is None else self.hparams.weight_decay
+
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.hparams.train.lr,
-                               weight_decay=self.hparams.feature_extractor.weight_decay)
+                               weight_decay=weight_decay)
         self.optimizer = optimizer
+        mode = 'min' if self.is_key_metric_loss else 'max'
+        log.info('scheduler mode: {}'.format(mode))
         scheduler = initialize_scheduler(optimizer, self.hparams, mode=mode,
                                          reduction_factor=self.hparams.train.reduction_factor)
         return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': self.metrics.key_metric}
