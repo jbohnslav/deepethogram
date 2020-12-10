@@ -231,9 +231,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, criterion: nn.Module):
         super().__init__(model, cfg, datasets, metrics, viz.visualize_logger_multilabel_classification)
 
-        arch = self.hparams.feature_extractor.arch
-        gpu_transforms = get_gpu_transforms(self.hparams.augs, '3d' if '3d' in arch.lower() else '2d')
-        self.gpu_transforms = gpu_transforms
         self.has_logged_channels = False
         # for convenience
         self.final_activation = self.hparams.feature_extractor.final_activation
@@ -302,11 +299,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
         probabilities = self.activation(outputs)
-
-    def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
-        with torch.no_grad():
-            images = self.gpu_transforms[mode](images)
-        return images
 
     def visualize_batch(self, images, probs, labels, split: str):
         if not self.hparams.train.viz:

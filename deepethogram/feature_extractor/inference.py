@@ -7,7 +7,7 @@ import h5py
 import hydra
 import numpy as np
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch import nn
 from tqdm import tqdm
 
@@ -148,7 +148,7 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
     for i in tqdm(range(len(rgbs))):
         rgb = rgbs[i]
         log.info('Extracting from movie {}...'.format(rgb))
-        gen = SequentialIterator(rgb, num_rgb, transform=cpu_transform, device=device, stack_channels=conv_2d)
+        gen = SequentialIterator(rgb, num_rgb, transform=cpu_transform, device=device, stack_channels=False)
 
         log.debug('Making two stream iterator with parameters: ')
         log.debug('rgb: {}'.format(rgb))
@@ -182,6 +182,7 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
                         if type(batch) == tuple:
                             logits = model(*batch)
                         else:
+                            # import pdb; pdb.set_trace()
                             batch = gpu_transform(batch)
                             logits = model(batch)
                         spatial_features = activation['spatial']
@@ -190,7 +191,9 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
                         # or max, you should make sure that your input images are being properly normalized
                         # for each image in your input sequence. You should also make sure that weights are being
                         # reloaded properly
+                        # if not has_printed:
                         if not has_printed:
+
                             log.info('logits shape: {}'.format(logits.shape))
                             log.info('spatial_features shape: {}'.format(spatial_features.shape))
                             log.info('flow_features shape: {}'.format(flow_features.shape))
@@ -253,7 +256,7 @@ def main(cfg: DictConfig):
     # turn "models" in your project configuration to "full/path/to/models"
     cfg = projects.convert_config_paths_to_absolute(cfg)
     log.info('configuration used in inference: ')
-    log.info(cfg.pretty())
+    log.info(OmegaConf.to_yaml(cfg))
     if cfg.sequence.latent_name is None:
         latent_name = cfg.feature_extractor.arch
     else:
@@ -289,13 +292,14 @@ def main(cfg: DictConfig):
     for record in records:
         rgb.append(record['rgb'])
 
-    model = build_feature_extractor(cfg)
+    model_components = build_feature_extractor(cfg)
+    _, _, _, _, model = model_components
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
     feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
     metrics_file = os.path.join(os.path.dirname(feature_extractor_weights), 'classification_metrics.h5')
     assert os.path.isfile(metrics_file)
     with h5py.File(metrics_file, 'r') as f:
-        thresholds = f['threshold_curves']['val']['optimum'][:]
+        thresholds = f['val']['metrics_by_threshold']['optimum'][-1, :]
         log.info('thresholds: {}'.format(thresholds))
     class_names = list(cfg.project.class_names)
     # class_names = projects.get_classes_from_project(cfg)
@@ -320,5 +324,5 @@ def main(cfg: DictConfig):
 
 
 if __name__ == '__main__':
-    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
+    sys.argv = projects.process_config_file_from_cl(sys.argv)
     main()

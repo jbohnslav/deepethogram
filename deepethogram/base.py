@@ -8,6 +8,7 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
+from deepethogram.data.augs import get_gpu_transforms, get_empty_gpu_transforms
 from deepethogram.callbacks import FPSCallback, DebugCallback, SpeedtestCallback, MetricsCallback, \
     ExampleImagesCallback, CheckpointCallback, StopperCallback
 from deepethogram.metrics import Metrics, EmptyMetrics
@@ -25,6 +26,16 @@ class BaseLightningModule(pl.LightningModule):
         self.datasets = datasets
         self.metrics = metrics
         self.visualization_func = visualization_func
+
+        model_type = cfg.run.model
+        if model_type in ['feature_extractor', 'flow_generator']:
+            arch = self.hparams[model_type].arch
+            gpu_transforms = get_gpu_transforms(self.hparams.augs, '3d' if '3d' in arch.lower() else '2d')
+        elif model_type == 'sequence':
+            gpu_transforms = get_empty_gpu_transforms()
+        else:
+            raise NotImplementedError
+        self.gpu_transforms: dict = gpu_transforms
 
         self.optimizer = None # will be overridden in configure_optimizers
         self.hparams.weight_decay = None
@@ -80,6 +91,11 @@ class BaseLightningModule(pl.LightningModule):
 
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
+
+    def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
+        with torch.no_grad():
+            images = self.gpu_transforms[mode](images)
+        return images
 
     def configure_optimizers(self):
 
