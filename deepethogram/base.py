@@ -1,6 +1,7 @@
 import logging
 from typing import Tuple
 
+import matplotlib.pyplot as plt
 from omegaconf import DictConfig
 import pytorch_lightning as pl
 import torch
@@ -11,13 +12,12 @@ from deepethogram.callbacks import FPSCallback, DebugCallback, SpeedtestCallback
     ExampleImagesCallback, CheckpointCallback, StopperCallback
 from deepethogram.metrics import Metrics, EmptyMetrics
 from deepethogram.schedulers import initialize_scheduler
-from deepethogram import utils
+from deepethogram import viz
 
 log = logging.getLogger(__name__)
 
 class BaseLightningModule(pl.LightningModule):
-    def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics: Metrics, visualization_func,
-                 visualize_examples: bool = True):
+    def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics: Metrics, visualization_func):
         super().__init__()
 
         self.model = model
@@ -25,7 +25,6 @@ class BaseLightningModule(pl.LightningModule):
         self.datasets = datasets
         self.metrics = metrics
         self.visualization_func = visualization_func
-        self.visualize_examples = visualize_examples
 
         self.optimizer = None # will be overridden in configure_optimizers
         self.hparams.weight_decay = None
@@ -33,6 +32,9 @@ class BaseLightningModule(pl.LightningModule):
             self.hparams.weight_decay = self.hparams.feature_extractor.weight_decay
 
         self.scheduler_mode = 'min' if self.metrics.key_metric == 'loss' else 'max'
+        # need to move this to top-level for lightning's learning rate finder
+        # don't set it to auto here, so that we can automatically find batch size first
+        self.lr = self.hparams.train.lr if self.hparams.train.lr != 'auto' else 1e-4
         log.info('scheduler mode: {}'.format(self.scheduler_mode))
         # self.is_key_metric_loss = self.metrics.key_metric == 'loss'
 
@@ -83,10 +85,10 @@ class BaseLightningModule(pl.LightningModule):
 
         weight_decay = 0 if self.hparams.weight_decay is None else self.hparams.weight_decay
 
-        optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.hparams.train.lr,
+        optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.lr,
                                weight_decay=weight_decay)
         self.optimizer = optimizer
-
+        log.info('learning rate: {}'.format(self.lr))
         scheduler = initialize_scheduler(optimizer, self.hparams, mode=self.scheduler_mode,
                                          reduction_factor=self.hparams.train.reduction_factor)
         return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': self.metrics.key_metric}
@@ -100,6 +102,58 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper) -> pl.Train
 
     # reload_dataloaders_every_epoch = True: a bit slower, but enables validation dataloader to get the new, automatic
     # learning rate schedule.
+
+
+    if cfg.compute.batch_size == 'auto' or cfg.train.lr == 'auto':
+        trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
+                             precision=16 if cfg.compute.fp16 else 32,
+                             limit_train_batches=1.0,
+                             limit_val_batches=1.0,
+                             limit_test_batches=1.0,
+                             num_sanity_val_steps=0)
+        tmp_metrics = lightning_module.metrics
+        tmp_workers = lightning_module.hparams.compute.num_workers
+        # visualize_examples = lightning_module.visualize_examples
+
+        tuner = pl.tuner.tuning.Tuner(trainer)
+        # hack for lightning to find the batch size
+        cfg.batch_size = 2  # to start
+
+        empty_metrics = EmptyMetrics()
+
+        # don't store metrics when batch size finding
+        lightning_module.metrics = empty_metrics
+        # don't visualize our model inputs when batch size finding
+        # lightning_module.visualize_examples = False
+        should_viz = cfg.train.viz
+        lightning_module.hparams.train.viz = False
+        # dramatically reduces RAM usage by this process
+        lightning_module.hparams.compute.num_workers = min(tmp_workers, 1)
+        if cfg.compute.batch_size == 'auto':
+            new_batch_size = tuner.scale_batch_size(lightning_module, mode='power', steps_per_trial=10)
+
+            cfg.compute.batch_size = new_batch_size
+            log.info('auto-tuned batch size: {}'.format(new_batch_size))
+        if cfg.train.lr == 'auto':
+            lr_finder = trainer.tuner.lr_find(lightning_module, early_stop_threshold=None,
+                                              min_lr=1e-6, max_lr=10.0)
+            # log.info(lr_finder.results)
+            plt.style.use('seaborn')
+            fig = lr_finder.plot(suggest=True, show=False)
+            viz.save_figure(fig, 'auto_lr_finder', False, 0, overwrite=False)
+            plt.close(fig)
+            new_lr = lr_finder.suggestion()
+            log.info('auto-tuned learning rate: {}'.format(new_lr))
+            cfg.train.lr = new_lr
+            lightning_module.lr = new_lr
+            lightning_module.hparams.lr = new_lr
+        del trainer, tuner
+        #  restore lightning module to original state
+        lightning_module.hparams.train.viz = should_viz
+        lightning_module.metrics = tmp_metrics
+        lightning_module.hparams.compute.num_workers = tmp_workers
+
+        # tuning fucks with the callbacks
     trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
                          precision=16 if cfg.compute.fp16 else 32,
                          limit_train_batches=steps_per_epoch['train'],
@@ -110,33 +164,6 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper) -> pl.Train
                                     MetricsCallback(), ExampleImagesCallback(), CheckpointCallback(),
                                     StopperCallback(stopper)],
                          reload_dataloaders_every_epoch=True)
-
-
-    if cfg.compute.batch_size == 'auto':
-        tmp_metrics = lightning_module.metrics
-        visualize_examples = lightning_module.visualize_examples
-
-        tuner = pl.tuner.tuning.Tuner(trainer)
-        # hack for lightning to find the batch size
-        cfg.batch_size = 2  # to start
-        empty_metrics = EmptyMetrics()
-
-        # don't store metrics when batch size finding
-        lightning_module.metrics = empty_metrics
-        # don't visualize our model inputs when batch size finding
-        lightning_module.visualize_examples = False
-        try:
-            new_batch_size = tuner.scale_batch_size(lightning_module, mode='power')
-        except KeyboardInterrupt:
-            raise
-        cfg.compute.batch_size = new_batch_size
-        log.info('auto-tuned batch size: {}'.format(new_batch_size))
-
-        # restore lightning module to original state
-        lightning_module.metrics = tmp_metrics
-        lightning_module.visualize_examples = visualize_examples
-
-        del tuner
 
     return trainer
 

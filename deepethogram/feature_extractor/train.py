@@ -3,13 +3,14 @@ import logging
 import os
 import sys
 import warnings
-from typing import Union, Type, Tuple
+from typing import Union, Tuple
 
+import cv2
+cv2.setNumThreads(0)
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.backends.cudnn as cudnn
 import torch.nn as nn
 from omegaconf import OmegaConf, DictConfig
 
@@ -71,6 +72,8 @@ def train_from_cfg_lightning(cfg):
     _, data_info = get_datasets_from_cfg(cfg, model_type='feature_extractor',
                                          input_images=cfg.feature_extractor.n_flows + 1)
 
+    criterion = get_criterion(cfg.feature_extractor.final_activation, data_info)
+
     model_parts = build_model_from_cfg(cfg, pos=data_info['pos'], neg=data_info['neg'])
     _, spatial_classifier, flow_classifier, fusion, model = model_parts
     log.info('model: {}'.format(model))
@@ -85,6 +88,7 @@ def train_from_cfg_lightning(cfg):
     # cfg.compute.batch_size will be changed by the automatic batch size finder, possibly. store here so that
     # with each step of the curriculum, we can auto-tune it
     original_batch_size = cfg.compute.batch_size
+    original_lr = cfg.train.lr
 
     # training in a curriculum goes as follows:
     # first, we train the spatial classifier, which takes still images as input
@@ -99,12 +103,15 @@ def train_from_cfg_lightning(cfg):
                                                     input_images=cfg.feature_extractor.n_rgb)
         stopper = get_stopper(cfg)
 
-        lightning_module = HiddenTwoStreamLightning(spatial_classifier, cfg, datasets,
-                                                    metrics,
-                                                    viz.visualize_logger_multilabel_classification,
-                                                    data_info,
-                                                    visualize_examples=True)
+        lightning_module = HiddenTwoStreamLightning(spatial_classifier, cfg, datasets, metrics, criterion)
         trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
+        # this horrible syntax is because we just changed our configuration's batch size and learning rate, if they are
+        # set to auto. so we need to re-instantiate our lightning module
+        # https://pytorch-lightning.readthedocs.io/en/latest/lr_finder.html?highlight=auto%20scale%20learning%20rate
+        # I tried to do this without re-creating module, but finding the learning rate increments the epoch??
+        # del lightning_module
+        # log.info('epoch num: {}'.format(trainer.current_epoch))
+        # lightning_module = HiddenTwoStreamLightning(spatial_classifier, cfg, datasets, metrics, criterion)
         trainer.fit(lightning_module)
 
         # free RAM. note: this doesn't do much
@@ -120,18 +127,13 @@ def train_from_cfg_lightning(cfg):
         # re-initialize stopper so that it doesn't think we need to stop due to the previous model
         stopper = get_stopper(cfg)
         cfg.compute.batch_size = original_batch_size
+        cfg.train.lr = original_lr
 
         # this class will freeze the flow generator
         flow_generator_and_classifier = FlowOnlyClassifier(flow_generator, flow_classifier)
-
-        lightning_module = HiddenTwoStreamLightning(flow_generator_and_classifier, cfg, datasets,
-                                                    metrics,
-                                                    viz.visualize_logger_multilabel_classification,
-                                                    data_info,
-                                                    visualize_examples=True)
-
+        lightning_module = HiddenTwoStreamLightning(flow_generator_and_classifier, cfg, datasets, metrics, criterion)
         trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
-
+        # lightning_module = HiddenTwoStreamLightning(flow_generator_and_classifier, cfg, datasets, metrics, criterion)
         trainer.fit(lightning_module)
 
         del datasets, lightning_module, trainer, stopper, data_info
@@ -143,14 +145,13 @@ def train_from_cfg_lightning(cfg):
     datasets, data_info = get_datasets_from_cfg(cfg, model_type='feature_extractor',
                                                 input_images=cfg.feature_extractor.n_flows + 1)
     stopper = get_stopper(cfg)
-    lightning_module = HiddenTwoStreamLightning(model, cfg, datasets,
-                                                metrics,
-                                                viz.visualize_logger_multilabel_classification,
-                                                data_info,
-                                                visualize_examples=True)
     cfg.compute.batch_size = original_batch_size
-    trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
+    cfg.train.lr = original_lr
+    lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
 
+    trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
+    # see above for horrible syntax explanation
+    # lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
     trainer.fit(lightning_module)
     utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
 
@@ -227,11 +228,8 @@ def build_model_from_cfg(cfg: DictConfig,
 
 
 class HiddenTwoStreamLightning(BaseLightningModule):
-    def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, visualization_func, data_info: dict,
-                 visualize_examples: bool = True):
-        super().__init__(model, cfg, datasets, metrics, visualization_func, visualize_examples)
-
-        self.data_info = data_info
+    def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, criterion: nn.Module):
+        super().__init__(model, cfg, datasets, metrics, viz.visualize_logger_multilabel_classification)
 
         arch = self.hparams.feature_extractor.arch
         gpu_transforms = get_gpu_transforms(self.hparams.augs, '3d' if '3d' in arch.lower() else '2d')
@@ -246,9 +244,13 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         else:
             raise NotImplementedError
 
-        self.criterion = get_criterion(self.final_activation, self.data_info)
+        self.criterion = criterion
+
         # this will get overridden by the ExampleImagesCallback
         self.viz_cnt = None
+
+    # def on_train_epoch_start(self) -> None:
+    #     log.info('buffer on epoch start: {}'.format(self.metrics.buffer.data))
 
     def validate_batch_size(self, batch: dict):
         if self.hparams.compute.dali:
@@ -301,13 +303,13 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         images, outputs = self(batch, 'test')
         probabilities = self.activation(outputs)
 
-    @torch.no_grad()
     def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
-        images = self.gpu_transforms[mode](images)
+        with torch.no_grad():
+            images = self.gpu_transforms[mode](images)
         return images
 
     def visualize_batch(self, images, probs, labels, split: str):
-        if not self.visualize_examples:
+        if not self.hparams.train.viz:
             return
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]
