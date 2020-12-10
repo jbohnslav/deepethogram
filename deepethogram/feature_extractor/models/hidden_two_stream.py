@@ -113,7 +113,7 @@ class HiddenTwoStream(nn.Module):
         assert (isinstance(flow_generator, nn.Module) and isinstance(spatial_classifier, nn.Module)
                 and isinstance(flow_classifier, nn.Module))
 
-        if fusion_style == 'average':
+        if fusion_style == 'average' or fusion_style == 'weighted_average':
             # just so we can pass them to the fusion module
             num_spatial_features, num_flow_features = None, None
         elif fusion_style == 'concatenate':

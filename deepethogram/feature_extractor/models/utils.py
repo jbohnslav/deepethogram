@@ -180,6 +180,8 @@ class Fusion(nn.Module):
 
         elif self.style == 'weighted_average':
             self.flow_weight = nn.Parameter(torch.Tensor([0.5]).float(), requires_grad=True)
+        else:
+            raise NotImplementedError
 
     def forward(self, spatial_features, flow_features):
         if self.style == 'average':
