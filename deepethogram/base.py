@@ -32,8 +32,8 @@ class BaseLightningModule(pl.LightningModule):
         if 'feature_extractor' in self.hparams.keys():
             self.hparams.weight_decay = self.hparams.feature_extractor.weight_decay
 
-        self.scheduler_mode = 'min' if self.is_key_metric_loss else 'max'
-        log.info('scheduler mode: {}'.format(scheduler_mode))
+        self.scheduler_mode = 'min' if self.metrics.key_metric == 'loss' else 'max'
+        log.info('scheduler mode: {}'.format(self.scheduler_mode))
         # self.is_key_metric_loss = self.metrics.key_metric == 'loss'
 
     def on_train_epoch_start(self) -> None:
