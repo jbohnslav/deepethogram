@@ -644,16 +644,18 @@ def load_feature_extractor_components(model, checkpoint_file: Union[str, os.Path
         key = 'spatial_classifier' + '.'
     elif component == 'flow':
         key = 'flow_classifier' + '.'
+    elif component == 'fusion':
+        key = 'fusion.'
     else:
         raise ValueError('component not one of spatial or flow: {}'.format(component))
     directory = os.path.dirname(checkpoint_file)
     subdir = os.path.join(directory, component)
-
+    # log.info('device: {}'.format(device))
     log.info('loading component {} from file {}'.format(component, checkpoint_file))
 
     if not os.path.isdir(subdir):
         log.warning('{} directory not found in {}'.format(component, directory))
-        state = torch.load(checkpoint_file)
+        state = torch.load(checkpoint_file, map_location=device)
         state_dict = state['state_dict']
         params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
         # import pdb; pdb.set_trace()

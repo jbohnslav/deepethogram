@@ -19,7 +19,8 @@ from deepethogram.data.augs import get_gpu_transforms
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.feature_extractor.losses import BCELossCustom
 from deepethogram.feature_extractor.models.CNN import get_cnn
-from deepethogram.feature_extractor.models.hidden_two_stream import HiddenTwoStream, FlowOnlyClassifier
+from deepethogram.feature_extractor.models.hidden_two_stream import HiddenTwoStream, FlowOnlyClassifier, \
+    build_fusion_layer
 from deepethogram.flow_generator.train import build_model_from_cfg as build_flow_generator
 from deepethogram.metrics import Classification
 # from deepethogram.projects import get_weightfile_from_cfg, convert_config_paths_to_absolute
@@ -96,21 +97,12 @@ def train_from_cfg_lightning(cfg):
     # dataloaders = get_dataloaders_from_cfg(cfg, model_type='feature_extractor',
     #                                        input_images=cfg.feature_extractor.n_flows + 1)
 
-    spatial_classifier, flow_classifier = build_model_from_cfg(cfg, return_components=True,
-                                                               pos=data_info['pos'], neg=data_info['neg'])
-    # spatial_classifier = spatial_classifier.to(device)
+    model_parts = build_model_from_cfg(cfg, pos=data_info['pos'], neg=data_info['neg'])
+    flow_generator, spatial_classifier, flow_classifier, fusion, model = model_parts
 
-    # flow_classifier = flow_classifier.to(device)
     num_classes = len(cfg.project.class_names)
 
     utils.save_dict_to_yaml(data_info['split'], os.path.join(rundir, 'split.yaml'))
-
-    # criterion = get_criterion(cfg.feature_extractor.final_activation, dataloaders, device)
-    # steps_per_epoch = dict(cfg.train.steps_per_epoch)
-    # metrics = get_metrics(rundir, num_classes=num_classes,
-    #                       num_parameters=utils.get_num_parameters(spatial_classifier))
-
-    # dali = cfg.compute.dali
 
     metrics = get_metrics(rundir, num_classes=num_classes,
                           num_parameters=utils.get_num_parameters(spatial_classifier))
@@ -171,9 +163,7 @@ def train_from_cfg_lightning(cfg):
         torch.cuda.empty_cache()
         gc.collect()
 
-    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, cfg.feature_extractor.arch,
-                            fusion_style=cfg.feature_extractor.fusion,
-                            num_classes=num_classes)
+    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, fusion, cfg.feature_extractor.arch)
     model.set_mode('classifier')
     datasets, data_info = get_datasets_from_cfg(cfg, model_type='feature_extractor',
                                                 input_images=cfg.feature_extractor.n_flows + 1)
@@ -190,8 +180,8 @@ def train_from_cfg_lightning(cfg):
     utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
 
 
-def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
-                         pos: np.ndarray = None, neg: np.ndarray = None) -> Union[Type[nn.Module], tuple]:
+def build_model_from_cfg(cfg: DictConfig,
+                         pos: np.ndarray = None, neg: np.ndarray = None) -> tuple:
     """ Builds feature extractor from a configuration object.
 
     Parameters
@@ -214,7 +204,8 @@ def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
         hidden two stream model: nn.Module
             hidden two stream CNN
     """
-    device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
+    device = 'cpu'
     feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
     num_classes = len(cfg.project.class_names)
 
@@ -247,19 +238,25 @@ def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
     if feature_extractor_weights is not None:
         flow_classifier = utils.load_feature_extractor_components(flow_classifier, feature_extractor_weights,
                                                                   'flow', device=device)
-    if return_components:
-        return spatial_classifier, flow_classifier
 
     flow_generator = build_flow_generator(cfg)
     flow_weights = projects.get_weightfile_from_cfg(cfg, 'flow_generator')
     assert flow_weights is not None, ('Must have a valid weightfile for flow generator. Use '
                                       'deepethogram.flow_generator.train or cfg.reload.latest')
     flow_generator = utils.load_weights(flow_generator, flow_weights, device=device)
-    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, cfg.feature_extractor.arch,
-                            fusion_style=cfg.feature_extractor.fusion,
-                            num_classes=num_classes)
+
+    spatial_classifier, flow_classifier, fusion = build_fusion_layer(spatial_classifier, flow_classifier,
+                                                                     cfg.feature_extractor.fusion,
+                                                                     num_classes)
+    if feature_extractor_weights is not None:
+        fusion = utils.load_feature_extractor_components(fusion, feature_extractor_weights,
+                                                         'fusion', device=device)
+
+    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, fusion, cfg.feature_extractor.arch)
+    # log.info(model.fusion.flow_weight)
     model.set_mode('classifier')
-    return model
+
+    return flow_generator, spatial_classifier, flow_classifier, fusion, model
 
 
 class HiddenTwoStreamLightning(BaseLightningModule):

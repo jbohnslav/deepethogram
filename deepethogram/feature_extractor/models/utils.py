@@ -196,7 +196,8 @@ class Fusion(nn.Module):
             features = self.activation(torch.cat((spatial_features, flow_features), dim=1))
             return self.fc(features)
         elif self.style == 'weighted_average':
-            return self.flow_weight*flow_features + (1-self.flow_weight)*spatial_features
+            return self.flow_weight * flow_features + (1 - self.flow_weight) * spatial_features
+
 
 # def get_num_classes(model):
 #     classes = []

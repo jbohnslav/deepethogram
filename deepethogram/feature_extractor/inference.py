@@ -149,7 +149,6 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
         log.info('Extracting from movie {}...'.format(rgb))
         gen = SequentialIterator(rgb, num_rgb, transform=cpu_transform, device=device, stack_channels=conv_2d)
 
-
         log.debug('Making two stream iterator with parameters: ')
         log.debug('rgb: {}'.format(rgb))
         log.debug('num_images: {}'.format(num_rgb))
