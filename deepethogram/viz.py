@@ -1463,18 +1463,24 @@ def make_ethogram_movie_with_predictions(outfile: Union[str, bytes, os.PathLike]
     return out
 
 
-def make_figure_filename(name, is_example, num, split='train'):
+def make_figure_filename(name, is_example, num, split='train', overwrite:bool=True):
     basedir = os.path.join(os.getcwd(), 'figures')
     if is_example:
         basedir = os.path.join(basedir, 'examples', split)
     if not os.path.isdir(basedir):
         os.makedirs(basedir)
     fname = os.path.join(basedir, '{:02d}_{}.png'.format(num, name))
+    if overwrite:
+        return fname
+    cnt = 0
+    while os.path.isfile(fname):
+        fname = os.path.join(basedir, '{:02d}_{}_{}.png'.format(num, name, cnt))
+        cnt += 1
     return fname
 
 
-def save_figure(figure, name, is_example, num, split='train'):
-    fname = make_figure_filename(name, is_example, num, split)
+def save_figure(figure, name, is_example, num, split='train', overwrite:bool=True):
+    fname = make_figure_filename(name, is_example, num, split, overwrite)
     figure.savefig(fname)
     plt.close(figure)
     del figure

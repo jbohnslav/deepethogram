@@ -3,13 +3,14 @@ import logging
 import os
 import sys
 import warnings
-from typing import Union, Type, Tuple
+from typing import Union, Tuple
 
+import cv2
+cv2.setNumThreads(0)
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.backends.cudnn as cudnn
 import torch.nn as nn
 from omegaconf import OmegaConf, DictConfig
 
@@ -19,10 +20,10 @@ from deepethogram.data.augs import get_gpu_transforms
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.feature_extractor.losses import BCELossCustom
 from deepethogram.feature_extractor.models.CNN import get_cnn
-from deepethogram.feature_extractor.models.hidden_two_stream import HiddenTwoStream, FlowOnlyClassifier
+from deepethogram.feature_extractor.models.hidden_two_stream import HiddenTwoStream, FlowOnlyClassifier, \
+    build_fusion_layer
 from deepethogram.flow_generator.train import build_model_from_cfg as build_flow_generator
 from deepethogram.metrics import Classification
-# from deepethogram.projects import get_weightfile_from_cfg, convert_config_paths_to_absolute
 from deepethogram import projects
 from deepethogram.stoppers import get_stopper
 
@@ -33,50 +34,33 @@ warnings.filterwarnings('ignore', category=UserWarning, message=
 # flow_generators = utils.get_models_from_module(flow_models, get_function=False)
 plt.switch_backend('agg')
 
-# which GPUs should be available for training? I use 0,1 here manually because GPU2 is a tiny one for my displays
-n_gpus = torch.cuda.device_count()
-# DEVICE_IDS = [i for i in range(n_gpus)]
-# DEVICE_IDS = [0, 1]
-
-cudnn.benchmark = True
 log = logging.getLogger(__name__)
-# cudnn.benchmark = False
-cudnn.deterministic = False
 
 
 @hydra.main(config_path='../conf', config_name='feature_extractor_train')
 def main(cfg: DictConfig) -> None:
     log.info('cwd: {}'.format(os.getcwd()))
     log.info('args: {}'.format(' '.join(sys.argv)))
-    # only two custom overwrites of the configuration file
-    # first, change the project paths from relative to absolute
+    # change the project paths from relative to absolute
     cfg = projects.convert_config_paths_to_absolute(cfg)
     # allow for editing
     OmegaConf.set_struct(cfg, False)
-    # second, use the model directory to find the most recent run of each model type
-    # cfg = projects.overwrite_cfg_with_latest_weights(cfg, cfg.project.model_path, model_type='flow_generator')
     # SHOULD NEVER MODIFY / MAKE ASSIGNMENTS TO THE CFG OBJECT AFTER RIGHT HERE!
     log.info('configuration used ~~~~~')
     log.info(OmegaConf.to_yaml(cfg))
 
     try:
-        # model = train_from_cfg(cfg)
         train_from_cfg_lightning(cfg)
     except KeyboardInterrupt:
         torch.cuda.empty_cache()
         raise
-    # for pytorch benchmarking
-    # hydra._internal.hydra.GlobalHydra().clear()
 
 
 # @profile
 def train_from_cfg_lightning(cfg):
     rundir = os.getcwd()  # done by hydra
 
-    # device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
-    # if device != 'cpu':
-    #     torch.cuda.set_device(device)
-
+    # we build flow generator independently because you might want to load it from a different location
     flow_generator = build_flow_generator(cfg)
     flow_weights = projects.get_weightfile_from_cfg(cfg, 'flow_generator')
     assert flow_weights is not None, ('Must have a valid weightfile for flow generator. Use '
@@ -85,32 +69,18 @@ def train_from_cfg_lightning(cfg):
 
     flow_generator = utils.load_weights(flow_generator, flow_weights)
 
-    # flow_generator = flow_generator.to(device)
-
-    arch = cfg.feature_extractor.arch
-    # gpu_transforms = get_gpu_transforms(cfg.augs, '3d' if '3d' in arch.lower() else '2d')
-
     _, data_info = get_datasets_from_cfg(cfg, model_type='feature_extractor',
                                          input_images=cfg.feature_extractor.n_flows + 1)
 
-    # dataloaders = get_dataloaders_from_cfg(cfg, model_type='feature_extractor',
-    #                                        input_images=cfg.feature_extractor.n_flows + 1)
+    criterion = get_criterion(cfg.feature_extractor.final_activation, data_info)
 
-    spatial_classifier, flow_classifier = build_model_from_cfg(cfg, return_components=True,
-                                                               pos=data_info['pos'], neg=data_info['neg'])
-    # spatial_classifier = spatial_classifier.to(device)
+    model_parts = build_model_from_cfg(cfg, pos=data_info['pos'], neg=data_info['neg'])
+    _, spatial_classifier, flow_classifier, fusion, model = model_parts
+    log.info('model: {}'.format(model))
 
-    # flow_classifier = flow_classifier.to(device)
     num_classes = len(cfg.project.class_names)
 
     utils.save_dict_to_yaml(data_info['split'], os.path.join(rundir, 'split.yaml'))
-
-    # criterion = get_criterion(cfg.feature_extractor.final_activation, dataloaders, device)
-    # steps_per_epoch = dict(cfg.train.steps_per_epoch)
-    # metrics = get_metrics(rundir, num_classes=num_classes,
-    #                       num_parameters=utils.get_num_parameters(spatial_classifier))
-
-    # dali = cfg.compute.dali
 
     metrics = get_metrics(rundir, num_classes=num_classes,
                           num_parameters=utils.get_num_parameters(spatial_classifier))
@@ -118,6 +88,7 @@ def train_from_cfg_lightning(cfg):
     # cfg.compute.batch_size will be changed by the automatic batch size finder, possibly. store here so that
     # with each step of the curriculum, we can auto-tune it
     original_batch_size = cfg.compute.batch_size
+    original_lr = cfg.train.lr
 
     # training in a curriculum goes as follows:
     # first, we train the spatial classifier, which takes still images as input
@@ -132,15 +103,18 @@ def train_from_cfg_lightning(cfg):
                                                     input_images=cfg.feature_extractor.n_rgb)
         stopper = get_stopper(cfg)
 
-        lightning_module = HiddenTwoStreamLightning(spatial_classifier, cfg, datasets,
-                                                    metrics,
-                                                    viz.visualize_logger_multilabel_classification,
-                                                    data_info,
-                                                    visualize_examples=True)
+        lightning_module = HiddenTwoStreamLightning(spatial_classifier, cfg, datasets, metrics, criterion)
         trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
+        # this horrible syntax is because we just changed our configuration's batch size and learning rate, if they are
+        # set to auto. so we need to re-instantiate our lightning module
+        # https://pytorch-lightning.readthedocs.io/en/latest/lr_finder.html?highlight=auto%20scale%20learning%20rate
+        # I tried to do this without re-creating module, but finding the learning rate increments the epoch??
+        # del lightning_module
+        # log.info('epoch num: {}'.format(trainer.current_epoch))
+        # lightning_module = HiddenTwoStreamLightning(spatial_classifier, cfg, datasets, metrics, criterion)
         trainer.fit(lightning_module)
 
-        # free RAM
+        # free RAM. note: this doesn't do much
         log.info('free ram')
         del datasets, lightning_module, trainer, stopper, data_info
         torch.cuda.empty_cache()
@@ -153,45 +127,37 @@ def train_from_cfg_lightning(cfg):
         # re-initialize stopper so that it doesn't think we need to stop due to the previous model
         stopper = get_stopper(cfg)
         cfg.compute.batch_size = original_batch_size
+        cfg.train.lr = original_lr
 
         # this class will freeze the flow generator
         flow_generator_and_classifier = FlowOnlyClassifier(flow_generator, flow_classifier)
-
-        lightning_module = HiddenTwoStreamLightning(flow_generator_and_classifier, cfg, datasets,
-                                                    metrics,
-                                                    viz.visualize_logger_multilabel_classification,
-                                                    data_info,
-                                                    visualize_examples=True)
-
+        lightning_module = HiddenTwoStreamLightning(flow_generator_and_classifier, cfg, datasets, metrics, criterion)
         trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
-
+        # lightning_module = HiddenTwoStreamLightning(flow_generator_and_classifier, cfg, datasets, metrics, criterion)
         trainer.fit(lightning_module)
 
         del datasets, lightning_module, trainer, stopper, data_info
         torch.cuda.empty_cache()
         gc.collect()
 
-    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, cfg.feature_extractor.arch,
-                            fusion_style=cfg.feature_extractor.fusion,
-                            num_classes=num_classes)
+    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, fusion, cfg.feature_extractor.arch)
     model.set_mode('classifier')
     datasets, data_info = get_datasets_from_cfg(cfg, model_type='feature_extractor',
                                                 input_images=cfg.feature_extractor.n_flows + 1)
     stopper = get_stopper(cfg)
-    lightning_module = HiddenTwoStreamLightning(model, cfg, datasets,
-                                                metrics,
-                                                viz.visualize_logger_multilabel_classification,
-                                                data_info,
-                                                visualize_examples=True)
     cfg.compute.batch_size = original_batch_size
-    trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
+    cfg.train.lr = original_lr
+    lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
 
+    trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
+    # see above for horrible syntax explanation
+    # lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
     trainer.fit(lightning_module)
     utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
 
 
-def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
-                         pos: np.ndarray = None, neg: np.ndarray = None) -> Union[Type[nn.Module], tuple]:
+def build_model_from_cfg(cfg: DictConfig,
+                         pos: np.ndarray = None, neg: np.ndarray = None) -> tuple:
     """ Builds feature extractor from a configuration object.
 
     Parameters
@@ -214,17 +180,10 @@ def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
         hidden two stream model: nn.Module
             hidden two stream CNN
     """
-    device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
+    device = 'cpu'
     feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
     num_classes = len(cfg.project.class_names)
-
-    # if feature_extractor_weights is None:
-    #     # we get the dataloaders here just for the pos and negative example fields of this dictionary. This allows us
-    #     # to build our models with initialization based on the class imbalance of our dataset
-    #     dataloaders = get_dataloaders_from_cfg(cfg, model_type='feature_extractor',
-    #                                            input_images=cfg.feature_extractor.n_flows + 1)
-    # else:
-    #     dataloaders = {'pos': None, 'neg': None}
 
     in_channels = cfg.feature_extractor.n_rgb * 3 if '3d' not in cfg.feature_extractor.arch else 3
     reload_imagenet = feature_extractor_weights is None
@@ -247,33 +206,30 @@ def build_model_from_cfg(cfg: DictConfig, return_components: bool = False,
     if feature_extractor_weights is not None:
         flow_classifier = utils.load_feature_extractor_components(flow_classifier, feature_extractor_weights,
                                                                   'flow', device=device)
-    if return_components:
-        return spatial_classifier, flow_classifier
 
     flow_generator = build_flow_generator(cfg)
     flow_weights = projects.get_weightfile_from_cfg(cfg, 'flow_generator')
     assert flow_weights is not None, ('Must have a valid weightfile for flow generator. Use '
                                       'deepethogram.flow_generator.train or cfg.reload.latest')
     flow_generator = utils.load_weights(flow_generator, flow_weights, device=device)
-    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, cfg.feature_extractor.arch,
-                            fusion_style=cfg.feature_extractor.fusion,
-                            num_classes=num_classes)
+
+    spatial_classifier, flow_classifier, fusion = build_fusion_layer(spatial_classifier, flow_classifier,
+                                                                     cfg.feature_extractor.fusion,
+                                                                     num_classes)
+    if feature_extractor_weights is not None:
+        fusion = utils.load_feature_extractor_components(fusion, feature_extractor_weights,
+                                                         'fusion', device=device)
+
+    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, fusion, cfg.feature_extractor.arch)
+    # log.info(model.fusion.flow_weight)
     model.set_mode('classifier')
-    return model
+
+    return flow_generator, spatial_classifier, flow_classifier, fusion, model
 
 
 class HiddenTwoStreamLightning(BaseLightningModule):
-    def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, visualization_func, data_info: dict,
-                 visualize_examples: bool = True):
-        super().__init__(model, cfg, datasets, metrics, visualization_func, visualize_examples)
-
-        # self.model = model
-        # self.hparams = cfg
-        # self.datasets = datasets
-        self.data_info = data_info
-        # self.metrics = metrics
-        # self.dali = dali
-        # self.visualize_examples = visualize_examples
+    def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, criterion: nn.Module):
+        super().__init__(model, cfg, datasets, metrics, viz.visualize_logger_multilabel_classification)
 
         arch = self.hparams.feature_extractor.arch
         gpu_transforms = get_gpu_transforms(self.hparams.augs, '3d' if '3d' in arch.lower() else '2d')
@@ -288,9 +244,13 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         else:
             raise NotImplementedError
 
-        self.criterion = get_criterion(self.final_activation, self.data_info)
+        self.criterion = criterion
+
         # this will get overridden by the ExampleImagesCallback
         self.viz_cnt = None
+
+    # def on_train_epoch_start(self) -> None:
+    #     log.info('buffer on epoch start: {}'.format(self.metrics.buffer.data))
 
     def validate_batch_size(self, batch: dict):
         if self.hparams.compute.dali:
@@ -343,13 +303,13 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         images, outputs = self(batch, 'test')
         probabilities = self.activation(outputs)
 
-    @torch.no_grad()
     def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
-        images = self.gpu_transforms[mode](images)
+        with torch.no_grad():
+            images = self.gpu_transforms[mode](images)
         return images
 
     def visualize_batch(self, images, probs, labels, split: str):
-        if not self.visualize_examples:
+        if not self.hparams.train.viz:
             return
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]
@@ -371,10 +331,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         # self.viz_cnt[split] += 1
 
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
-        # try:
-        #     batch = next(dataiter)
-        # except StopIteration:
-        #     break
         batch = self.validate_batch_size(batch)
         # lightning handles transfer to device
         images = batch['images']

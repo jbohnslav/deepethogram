@@ -129,6 +129,7 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
     model = model.to(device)
     # freeze model and set to eval mode for batch normalization
     model.set_mode('inference')
+    # double checknig
     for parameter in model.parameters():
         parameter.requires_grad = False
     model.eval()
@@ -148,7 +149,6 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
         rgb = rgbs[i]
         log.info('Extracting from movie {}...'.format(rgb))
         gen = SequentialIterator(rgb, num_rgb, transform=cpu_transform, device=device, stack_channels=conv_2d)
-
 
         log.debug('Making two stream iterator with parameters: ')
         log.debug('rgb: {}'.format(rgb))
@@ -251,7 +251,7 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
 @hydra.main(config_path='../conf/feature_extractor_inference.yaml')
 def main(cfg: DictConfig):
     # turn "models" in your project configuration to "full/path/to/models"
-    cfg = deepethogram.projects.parse_cfg_paths(cfg)
+    cfg = projects.convert_config_paths_to_absolute(cfg)
     log.info('configuration used in inference: ')
     log.info(cfg.pretty())
     if cfg.sequence.latent_name is None:
@@ -265,6 +265,8 @@ def main(cfg: DictConfig):
     elif type(directory_list) == str and directory_list == 'all':
         basedir = cfg.project.data_path
         directory_list = utils.get_subfiles(basedir, 'directory')
+    else:
+        raise ValueError('unknown value for directory list: {}'.format(directory_list))
 
     # video files are found in your input list of directories using the records.yaml file that should be present
     # in each directory

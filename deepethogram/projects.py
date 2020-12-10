@@ -1022,7 +1022,7 @@ def get_weightfile_from_cfg(cfg: DictConfig, model_type: str) -> Union[str, None
             return
 
 
-def convert_config_paths_to_absolute(project_cfg: dict) -> dict:
+def convert_config_paths_to_absolute(project_cfg: DictConfig) -> DictConfig:
     """ Converts relative file paths in a project configuration into absolute paths.
 
     Example:

@@ -162,7 +162,6 @@ class Fusion(nn.Module):
     def __init__(self, style, num_spatial_features, num_flow_features, num_classes, flow_fusion_weight=1.5,
                  activation=nn.Identity()):
         super().__init__()
-        assert (style in ['concatenate', 'average'])
         self.style = style
         self.num_classes = num_classes
         self.activation = activation
@@ -180,6 +179,8 @@ class Fusion(nn.Module):
 
         elif self.style == 'weighted_average':
             self.flow_weight = nn.Parameter(torch.Tensor([0.5]).float(), requires_grad=True)
+        else:
+            raise NotImplementedError
 
     def forward(self, spatial_features, flow_features):
         if self.style == 'average':
@@ -195,7 +196,8 @@ class Fusion(nn.Module):
             features = self.activation(torch.cat((spatial_features, flow_features), dim=1))
             return self.fc(features)
         elif self.style == 'weighted_average':
-            return self.flow_weight*flow_features + (1-self.flow_weight)*spatial_features
+            return self.flow_weight * flow_features + (1 - self.flow_weight) * spatial_features
+
 
 # def get_num_classes(model):
 #     classes = []
