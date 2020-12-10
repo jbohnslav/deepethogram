@@ -23,7 +23,6 @@ from deepethogram.feature_extractor.models.hidden_two_stream import HiddenTwoStr
     build_fusion_layer
 from deepethogram.flow_generator.train import build_model_from_cfg as build_flow_generator
 from deepethogram.metrics import Classification
-# from deepethogram.projects import get_weightfile_from_cfg, convert_config_paths_to_absolute
 from deepethogram import projects
 from deepethogram.stoppers import get_stopper
 
@@ -34,50 +33,33 @@ warnings.filterwarnings('ignore', category=UserWarning, message=
 # flow_generators = utils.get_models_from_module(flow_models, get_function=False)
 plt.switch_backend('agg')
 
-# which GPUs should be available for training? I use 0,1 here manually because GPU2 is a tiny one for my displays
-n_gpus = torch.cuda.device_count()
-# DEVICE_IDS = [i for i in range(n_gpus)]
-# DEVICE_IDS = [0, 1]
-
-cudnn.benchmark = True
 log = logging.getLogger(__name__)
-# cudnn.benchmark = False
-cudnn.deterministic = False
 
 
 @hydra.main(config_path='../conf', config_name='feature_extractor_train')
 def main(cfg: DictConfig) -> None:
     log.info('cwd: {}'.format(os.getcwd()))
     log.info('args: {}'.format(' '.join(sys.argv)))
-    # only two custom overwrites of the configuration file
-    # first, change the project paths from relative to absolute
+    # change the project paths from relative to absolute
     cfg = projects.convert_config_paths_to_absolute(cfg)
     # allow for editing
     OmegaConf.set_struct(cfg, False)
-    # second, use the model directory to find the most recent run of each model type
-    # cfg = projects.overwrite_cfg_with_latest_weights(cfg, cfg.project.model_path, model_type='flow_generator')
     # SHOULD NEVER MODIFY / MAKE ASSIGNMENTS TO THE CFG OBJECT AFTER RIGHT HERE!
     log.info('configuration used ~~~~~')
     log.info(OmegaConf.to_yaml(cfg))
 
     try:
-        # model = train_from_cfg(cfg)
         train_from_cfg_lightning(cfg)
     except KeyboardInterrupt:
         torch.cuda.empty_cache()
         raise
-    # for pytorch benchmarking
-    # hydra._internal.hydra.GlobalHydra().clear()
 
 
 # @profile
 def train_from_cfg_lightning(cfg):
     rundir = os.getcwd()  # done by hydra
 
-    # device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
-    # if device != 'cpu':
-    #     torch.cuda.set_device(device)
-
+    # we build flow generator independently because you might want to load it from a different location
     flow_generator = build_flow_generator(cfg)
     flow_weights = projects.get_weightfile_from_cfg(cfg, 'flow_generator')
     assert flow_weights is not None, ('Must have a valid weightfile for flow generator. Use '
@@ -86,19 +68,12 @@ def train_from_cfg_lightning(cfg):
 
     flow_generator = utils.load_weights(flow_generator, flow_weights)
 
-    # flow_generator = flow_generator.to(device)
-
-    arch = cfg.feature_extractor.arch
-    # gpu_transforms = get_gpu_transforms(cfg.augs, '3d' if '3d' in arch.lower() else '2d')
-
     _, data_info = get_datasets_from_cfg(cfg, model_type='feature_extractor',
                                          input_images=cfg.feature_extractor.n_flows + 1)
 
-    # dataloaders = get_dataloaders_from_cfg(cfg, model_type='feature_extractor',
-    #                                        input_images=cfg.feature_extractor.n_flows + 1)
-
     model_parts = build_model_from_cfg(cfg, pos=data_info['pos'], neg=data_info['neg'])
-    flow_generator, spatial_classifier, flow_classifier, fusion, model = model_parts
+    _, spatial_classifier, flow_classifier, fusion, model = model_parts
+    log.info('model: {}'.format(model))
 
     num_classes = len(cfg.project.class_names)
 
@@ -132,7 +107,7 @@ def train_from_cfg_lightning(cfg):
         trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
         trainer.fit(lightning_module)
 
-        # free RAM
+        # free RAM. note: this doesn't do much
         log.info('free ram')
         del datasets, lightning_module, trainer, stopper, data_info
         torch.cuda.empty_cache()
@@ -209,14 +184,6 @@ def build_model_from_cfg(cfg: DictConfig,
     feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
     num_classes = len(cfg.project.class_names)
 
-    # if feature_extractor_weights is None:
-    #     # we get the dataloaders here just for the pos and negative example fields of this dictionary. This allows us
-    #     # to build our models with initialization based on the class imbalance of our dataset
-    #     dataloaders = get_dataloaders_from_cfg(cfg, model_type='feature_extractor',
-    #                                            input_images=cfg.feature_extractor.n_flows + 1)
-    # else:
-    #     dataloaders = {'pos': None, 'neg': None}
-
     in_channels = cfg.feature_extractor.n_rgb * 3 if '3d' not in cfg.feature_extractor.arch else 3
     reload_imagenet = feature_extractor_weights is None
     if cfg.feature_extractor.arch == 'resnet3d_34':
@@ -264,13 +231,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
                  visualize_examples: bool = True):
         super().__init__(model, cfg, datasets, metrics, visualization_func, visualize_examples)
 
-        # self.model = model
-        # self.hparams = cfg
-        # self.datasets = datasets
         self.data_info = data_info
-        # self.metrics = metrics
-        # self.dali = dali
-        # self.visualize_examples = visualize_examples
 
         arch = self.hparams.feature_extractor.arch
         gpu_transforms = get_gpu_transforms(self.hparams.augs, '3d' if '3d' in arch.lower() else '2d')
@@ -368,10 +329,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         # self.viz_cnt[split] += 1
 
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
-        # try:
-        #     batch = next(dataiter)
-        # except StopIteration:
-        #     break
         batch = self.validate_batch_size(batch)
         # lightning handles transfer to device
         images = batch['images']
