@@ -126,7 +126,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper) -> pl.Train
         # don't visualize our model inputs when batch size finding
         lightning_module.visualize_examples = False
         try:
-            new_batch_size = tuner.scale_batch_size(lightning_module, mode='power')
+            new_batch_size = tuner.scale_batch_size(lightning_module, mode='power', steps_per_trial=10)
         except KeyboardInterrupt:
             raise
         cfg.compute.batch_size = new_batch_size
