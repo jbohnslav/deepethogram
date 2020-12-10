@@ -162,7 +162,6 @@ class Fusion(nn.Module):
     def __init__(self, style, num_spatial_features, num_flow_features, num_classes, flow_fusion_weight=1.5,
                  activation=nn.Identity()):
         super().__init__()
-        assert (style in ['concatenate', 'average'])
         self.style = style
         self.num_classes = num_classes
         self.activation = activation
