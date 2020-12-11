@@ -111,7 +111,7 @@ class BaseLightningModule(pl.LightningModule):
 
 
 # @profile
-def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper) -> pl.Trainer:
+def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler:str=None) -> pl.Trainer:
     steps_per_epoch = cfg.train.steps_per_epoch
     for split in ['train', 'val', 'test']:
         steps_per_epoch[split] = steps_per_epoch[split] if steps_per_epoch[split] is not None else 1.0
@@ -179,7 +179,8 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper) -> pl.Train
                          callbacks=[FPSCallback(),  # DebugCallback(),# SpeedtestCallback(),
                                     MetricsCallback(), ExampleImagesCallback(), CheckpointCallback(),
                                     StopperCallback(stopper)],
-                         reload_dataloaders_every_epoch=True)
+                         reload_dataloaders_every_epoch=True,
+                         profiler=profiler)
 
     return trainer
 

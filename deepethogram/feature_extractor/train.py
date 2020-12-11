@@ -400,7 +400,7 @@ def get_criterion(final_activation: str, dataloaders: dict, device=None):
 
 
 def get_metrics(rundir: Union[str, bytes, os.PathLike], num_classes: int, num_parameters: Union[int, float],
-                is_kinetics: bool = False, key_metric='loss'):
+                is_kinetics: bool = False, key_metric='loss', num_workers: int=4):
     """ get metrics object for classification. See deepethogram/metrics.py.
 
     In brief, it's a Metrics object that provides utilities for computing metrics over predictions, saving various
@@ -423,7 +423,8 @@ def get_metrics(rundir: Union[str, bytes, os.PathLike], num_classes: int, num_pa
     metrics = Classification(rundir, key_metric, num_parameters,
                              num_classes=num_classes,
                              metrics=metric_list,
-                             evaluate_threshold=True)
+                             evaluate_threshold=True,
+                             num_workers=num_workers)
     return metrics
 
 

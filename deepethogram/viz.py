@@ -511,7 +511,7 @@ def visualize_batch_sequence(sequence, outputs, labels, N_in_batch=None, fig=Non
     # seq = cv2.resize(sequence[N_in_batch], (tmp.shape[1]*10,tmp.shape[0]*10), interpolation=cv2.INTER_NEAREST)
     # seq = cv2.imresize(sequence[N_in_batch], )
     imshow_with_colorbar(seq, ax, fig, interpolation='nearest',
-                         symmetric=False, func='pcolor')
+                         symmetric=False, func='pcolor', cmap='viridis')
     ax.invert_yaxis()
     ax.set_ylabel('inputs')
 
@@ -1005,7 +1005,7 @@ def make_thresholds_figure(logger_file, split, fig=None, class_names=None):
 
     x = load_logger_data(logger_file, 'thresholds', split, True)
 
-    for i, metric in enumerate(['accuracy', 'f1', 'precision', 'recall', 'mean_accuracy', 'informedness']):
+    for i, metric in enumerate(['accuracy', 'f1', 'precision', 'recall', 'informedness']):
         ax = fig.add_subplot(3, 2, i + 1)
         y = load_logger_data(logger_file, metric, split, True)
         plot_curve(x, y, ax, class_names)

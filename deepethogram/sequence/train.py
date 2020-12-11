@@ -59,55 +59,56 @@ def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
     stopper = get_stopper(cfg)
 
     metrics = get_metrics(os.getcwd(), data_info['num_classes'],
-                          num_parameters=utils.get_num_parameters(model), key_metric='loss')
+                          num_parameters=utils.get_num_parameters(model), key_metric='loss',
+                          num_workers=cfg.compute.num_workers)
     criterion = get_criterion(cfg.feature_extractor.final_activation, data_info)
     lightning_module = SequenceLightning(model, cfg, datasets, metrics, criterion)
     trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
     trainer.fit(lightning_module)
     return model
 
-def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
-    rundir = os.getcwd()  # done by hydra
-
-    device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
-    if device != 'cpu': torch.cuda.set_device(device)
-    log.info('Training sequence model...')
-
-
-    # dataloaders = get_dataloaders_from_cfg(cfg, model_type='sequence')
-    # utils.save_dict_to_yaml(dataloaders['split'], os.path.join(rundir, 'split.yaml'))
-    log.debug('Num training batches {}, num val: {}'.format(len(dataloaders['train']), len(dataloaders['val'])))
-    model = build_model_from_cfg(cfg, dataloaders['num_features'], dataloaders['num_classes'],
-                                 pos=dataloaders['pos'],
-                                 neg=dataloaders['neg'])
-    weights = projects.get_weightfile_from_cfg(cfg, model_type='sequence')
-    if weights is not None:
-        model = utils.load_weights(model, weights)
-    model = model.to(device)
-    log.info('Total trainable params: {:,}'.format(utils.get_num_parameters(model)))
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.train.lr)
-    torch.save(model, os.path.join(rundir, cfg.sequence.arch + '_definition.pt'))
-
-    stopper = get_stopper(cfg)
-    scheduler = initialize_scheduler(optimizer, cfg, mode='max', reduction_factor=cfg.train.reduction_factor)
-    metrics = get_metrics(rundir, num_classes=len(cfg.project.class_names),
-                          num_parameters=utils.get_num_parameters(model), key_metric='f1')
-    criterion = get_criterion(cfg.feature_extractor.final_activation, dataloaders, device)
-    steps_per_epoch = dict(cfg.train.steps_per_epoch)
-
-    model = train(model,
-                  dataloaders,
-                  criterion,
-                  optimizer,
-                  gpu_transforms,
-                  metrics,
-                  scheduler,
-                  rundir,
-                  stopper,
-                  device,
-                  steps_per_epoch,
-                  final_activation=cfg.feature_extractor.final_activation,
-                  sequence=True)
+# def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
+#     rundir = os.getcwd()  # done by hydra
+#
+#     device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
+#     if device != 'cpu': torch.cuda.set_device(device)
+#     log.info('Training sequence model...')
+#
+#
+#     # dataloaders = get_dataloaders_from_cfg(cfg, model_type='sequence')
+#     # utils.save_dict_to_yaml(dataloaders['split'], os.path.join(rundir, 'split.yaml'))
+#     log.debug('Num training batches {}, num val: {}'.format(len(dataloaders['train']), len(dataloaders['val'])))
+#     model = build_model_from_cfg(cfg, dataloaders['num_features'], dataloaders['num_classes'],
+#                                  pos=dataloaders['pos'],
+#                                  neg=dataloaders['neg'])
+#     weights = projects.get_weightfile_from_cfg(cfg, model_type='sequence')
+#     if weights is not None:
+#         model = utils.load_weights(model, weights)
+#     model = model.to(device)
+#     log.info('Total trainable params: {:,}'.format(utils.get_num_parameters(model)))
+#     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.train.lr)
+#     torch.save(model, os.path.join(rundir, cfg.sequence.arch + '_definition.pt'))
+#
+#     stopper = get_stopper(cfg)
+#     scheduler = initialize_scheduler(optimizer, cfg, mode='max', reduction_factor=cfg.train.reduction_factor)
+#     metrics = get_metrics(rundir, num_classes=len(cfg.project.class_names),
+#                           num_parameters=utils.get_num_parameters(model), key_metric='f1')
+#     criterion = get_criterion(cfg.feature_extractor.final_activation, dataloaders, device)
+#     steps_per_epoch = dict(cfg.train.steps_per_epoch)
+#
+#     model = train(model,
+#                   dataloaders,
+#                   criterion,
+#                   optimizer,
+#                   gpu_transforms,
+#                   metrics,
+#                   scheduler,
+#                   rundir,
+#                   stopper,
+#                   device,
+#                   steps_per_epoch,
+#                   final_activation=cfg.feature_extractor.final_activation,
+#                   sequence=True)
 
 
 class SequenceLightning(BaseLightningModule):
@@ -176,7 +177,8 @@ class SequenceLightning(BaseLightningModule):
             return
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]
-        if viz_cnt > 10:
+        # only visualize every 10 epochs for speed
+        if viz_cnt > 10 or self.current_epoch % 10 != 0:
             return
         fig = plt.figure(figsize=(14, 14))
         viz.visualize_batch_sequence(features, predictions, labels, fig=fig)

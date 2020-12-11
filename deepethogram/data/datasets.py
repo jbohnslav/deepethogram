@@ -808,9 +808,10 @@ class SingleSequenceDataset(data.Dataset):
             #     pad_right = self.sequence_length - values.shape[1]
             # else:
             #     pad_right = 0
-            pad_left = 0
             pad_right = 0
-
+            if len(indices) < self.sequence_length:
+                pad_right = self.sequence_length - len(indices)
+            pad_left = 0
         else:
             middle = index
             start = middle - self.sequence_length // 2
@@ -835,11 +836,10 @@ class SingleSequenceDataset(data.Dataset):
         else:
             logits, values = self.load_sequence(start, end)
 
-        # if values.shape[1] < self.sequence_length:
-        #     pad_right = self.sequence_length - values.shape[1]
 
-        # if len(indices) != self.sequence_length:
-        #     import pdb; pdb.set_trace()
+
+        if (len(indices) + pad_left + pad_right) != self.sequence_length:
+            import pdb; pdb.set_trace()
 
 
         if log.isEnabledFor(logging.DEBUG):
@@ -1615,8 +1615,8 @@ def get_sequence_datasets(datadir: Union[str, os.PathLike], latent_name: str, se
     # e.g.: you've added a video, but not labeled it yet. In that case, it will already be in your split, but it is
     # invalid for current purposes, because it has no label. Therefore, we want to remove it from the current split
     split_dictionary = remove_invalid_records_from_split_dictionary(split_dictionary, records)
-    log.info('~~~~~ train val test split ~~~~~')
-    pprint.pprint(split_dictionary)
+    # log.info('~~~~~ train val test split ~~~~~')
+    # pprint.pprint(split_dictionary)
 
     splits = ['train', 'val', 'test']
     datasets = {}
