@@ -52,3 +52,5 @@ sequence:
   # to N x num_features x T, before another conv1d to N x num_classes x T.
   # if False, go straight from N x D x T to N x num_classes x T
   nonlinear_classification: False
+  # use a batch normalization layer on the outputs
+  final_bn: False

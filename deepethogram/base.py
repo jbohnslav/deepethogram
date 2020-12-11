@@ -52,7 +52,7 @@ class BaseLightningModule(pl.LightningModule):
     def on_train_epoch_start(self) -> None:
         # self.viz_cnt['train'] = 0
         # I couldn't figure out how to make sure that this is called after BOTH train and validation ends
-        if self.current_epoch > 0:
+        if self.current_epoch > 0 and self.hparams.train.viz:
             # all models shall define a visualization function that points to the metrics file on disk
             self.visualization_func(self.metrics.fname)
 
@@ -169,7 +169,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler:st
         lightning_module.metrics = tmp_metrics
         lightning_module.hparams.compute.num_workers = tmp_workers
 
-        # tuning fucks with the callbacks
+    # tuning fucks with the callbacks
     trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
                          precision=16 if cfg.compute.fp16 else 32,
                          limit_train_batches=steps_per_epoch['train'],

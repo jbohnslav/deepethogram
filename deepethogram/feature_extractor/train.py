@@ -153,7 +153,7 @@ def train_from_cfg_lightning(cfg):
     # see above for horrible syntax explanation
     # lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
     trainer.fit(lightning_module)
-    utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
+    # utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
 
 
 def build_model_from_cfg(cfg: DictConfig,

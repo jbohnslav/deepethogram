@@ -1,8 +1,11 @@
+import logging
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+log = logging.getLogger(__name__)
 
 def compute_pad(stride, k, s):
     if s % stride == 0:
@@ -252,7 +255,7 @@ class TGMJ(nn.Module):
                  classes: int = 8, num_layers: int = 3, reduction: str = 'max', c_in: int = 1, c_out: int = 8,
                  soft: bool = False, num_features: int = 512, viz: bool = False,
                  nonlinear_classification: bool = False, concatenate_inputs=True, pos=None, neg=None,
-                 use_fe_logits: bool = True):
+                 use_fe_logits: bool = True, final_bn: bool=False):
         super().__init__()
 
         self.D = D  # dimensionality of inputs. E.G. 1024 features from a CNN penultimate layer
@@ -287,20 +290,31 @@ class TGMJ(nn.Module):
         if nonlinear_classification:
             self.h = nn.Conv1d(N, self.num_features, 1)
             self.h2 = nn.Conv1d(N, self.num_features, 1)
-            self.classify1 = nn.Conv1d(self.num_features, classes, 1)
-            self.classify2 = nn.Conv1d(self.num_features, classes, 1)
+            classify1 = nn.Conv1d(self.num_features, classes, 1, bias= not final_bn)
+            classify2 = nn.Conv1d(self.num_features, classes, 1, bias= not final_bn)
         else:
             self.h = None
-            self.classify1 = nn.Conv1d(N, classes, 1)
-            self.classify2 = nn.Conv1d(N, classes, 1)
-            # https://www.tensorflow.org/tutorials/structured_data/imbalanced_data
-            if pos is not None and neg is not None:
-                with torch.no_grad():
-                    bias = np.nan_to_num(np.log(pos / neg), neginf=0.0)
-                    bias = torch.nn.Parameter(torch.from_numpy(bias).float())
-                    # print('Custom bias: {}'.format(bias))
-                    self.classify1.bias = bias
-                    self.classify2.bias = bias
+            classify1 = nn.Conv1d(N, classes, 1, bias= not final_bn)
+            classify2 = nn.Conv1d(N, classes, 1, bias= not final_bn)
+
+        # https://www.tensorflow.org/tutorials/structured_data/imbalanced_data
+        if pos is not None and neg is not None:
+            with torch.no_grad():
+                bias = np.nan_to_num(np.log(pos / neg), neginf=0.0)
+                bias = torch.nn.Parameter(torch.from_numpy(bias).float())
+        if final_bn:
+            bn_1 = nn.BatchNorm1d(classes)
+            bn_2 = nn.BatchNorm1d(classes)
+            bn_1.bias = bias
+            bn_2.bias = bias
+            self.classify1 = nn.Sequential(classify1, bn_1)
+            self.classify2 = nn.Sequential(classify2, bn_2)
+            # log.info(bn_1, bn_2)
+        else:
+            self.classify1 = classify1
+            self.classify2 = classify2
+            self.classify1.bias = bias
+            self.classify2.bias = bias
 
         # self.inp = inp
         self.viz = viz

@@ -55,6 +55,7 @@ def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
     weights = projects.get_weightfile_from_cfg(cfg, model_type='sequence')
     if weights is not None:
         model = utils.load_weights(model, weights)
+    log.info('model arch: {}'.format(model))
     log.info('Total trainable params: {:,}'.format(utils.get_num_parameters(model)))
     stopper = get_stopper(cfg)
 
@@ -130,19 +131,6 @@ class SequenceLightning(BaseLightningModule):
         # this will get overridden by the ExampleImagesCallback
         self.viz_cnt = None
 
-    def validate_batch_size(self, batch: dict):
-        if self.hparams.compute.dali:
-            # no idea why they wrap this, maybe they fixed it?
-            batch = batch[0]
-        if 'images' in batch.keys():
-            # weird case of batch size = 1 somehow getting squeezed out
-            if batch['images'].ndim != 5:
-                batch['images'] = batch['images'].unsqueeze(0)
-        if 'labels' in batch.keys():
-            if self.final_activation == 'sigmoid' and batch['labels'].ndim == 1:
-                batch['labels'] = batch['labels'].unsqueeze(0)
-        return batch
-
     def common_step(self, batch: dict, batch_idx: int, split: str):
         # images, outputs = self(batch, split)
         outputs = self(batch, split)
@@ -175,6 +163,7 @@ class SequenceLightning(BaseLightningModule):
     def visualize_batch(self, features, predictions,labels, split: str):
         if not self.hparams.train.viz:
             return
+        # log.info('current epoch: {}'.format(self.current_epoch))
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]
         # only visualize every 10 epochs for speed
@@ -277,7 +266,8 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
                      dropout_p=seq.dropout_p, num_layers=seq.num_layers, reduction=seq.tgm_reduction,
                      c_in=seq.c_in, c_out=seq.c_out, soft=seq.soft_attn,
                      num_features=seq.num_features, pos=pos, neg=neg, use_fe_logits=False,
-                     nonlinear_classification=seq.nonlinear_classification)
+                     nonlinear_classification=seq.nonlinear_classification,
+                     final_bn=seq.final_bn)
     else:
         raise ValueError('arch not found: {}'.format(seq.arch))
     # print(model)

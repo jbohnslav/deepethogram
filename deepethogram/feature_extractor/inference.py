@@ -253,6 +253,8 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
 
 @hydra.main(config_path='../conf/feature_extractor_inference.yaml')
 def main(cfg: DictConfig):
+    import pdb; pdb.set_trace()
+    log.info('args: {}'.format(' '.join(sys.argv)))
     # turn "models" in your project configuration to "full/path/to/models"
     cfg = projects.convert_config_paths_to_absolute(cfg)
     log.info('configuration used in inference: ')

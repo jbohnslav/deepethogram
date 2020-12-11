@@ -409,6 +409,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     try:
         epoch_metrics['auroc_overall'] = roc_auc_score(labels, probabilities, average='micro')
         epoch_metrics['auroc_by_class'] = roc_auc_score(labels, probabilities, average=None)
+        # small perf improvement is not worth worrying about bugs
         # epoch_metrics['auroc_overall'] = fast_auc(labels.flatten(), probabilities.flatten())
         # epoch_metrics['auroc_by_class'] = fast_auc(labels, probabilities)
         epoch_metrics['auroc_class_mean'] = epoch_metrics['auroc_by_class'].mean()
@@ -858,8 +859,8 @@ class Classification(Metrics):
         if self.evaluate_threshold:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                metrics_by_threshold, epoch_metrics = evaluate_thresholds_vectorized(probs, labels, self.thresholds,
-                                                                                     self.num_workers)
+                metrics_by_threshold, epoch_metrics = evaluate_thresholds(probs, labels, self.thresholds,
+                                                                          self.num_workers)
                 metrics['metrics_by_threshold'] = metrics_by_threshold
                 for key, value in epoch_metrics.items():
                     metrics[key] = value
