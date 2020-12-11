@@ -100,10 +100,6 @@ class OpticalFlowLightning(BaseLightningModule):
 
         self.reconstructor = Reconstructor(self.hparams)
 
-        arch = self.hparams.flow_generator.arch
-
-        gpu_transforms = get_gpu_transforms(self.hparams.augs, '3d' if '3d' in arch.lower() else '2d')
-        self.gpu_transforms = gpu_transforms
         self.has_logged_channels = False
         # for convenience
 
@@ -157,11 +153,6 @@ class OpticalFlowLightning(BaseLightningModule):
 
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
-
-    @torch.no_grad()
-    def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
-        images = self.gpu_transforms[mode](images)
-        return images
 
     def visualize_batch(self, images, downsampled_t0, estimated_t0, flows_reshaped, split: str):
         if not self.visualize_examples:

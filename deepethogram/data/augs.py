@@ -277,10 +277,24 @@ def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
 
 def get_gpu_transforms_inference(augs: DictConfig, mode: str = '2d', num_images:int=11) -> dict:
     # sequential iterator already handles casting to float, dividing by 255, and stacking in channel dimension
-    norm = get_normalization_layer(augs.normalization.mean, augs.normalization.std, num_images, mode)
-    xform = transforms.Compose([norm])
+    # import pdb; pdb.set_trace()
+    # norm = get_normalization_layer(np.array(augs.normalization.mean), np.array(augs.normalization.std),
+    #                                num_images, mode)
+    xform = [NormalizeVideo(mean=augs.normalization.mean,
+                          std=augs.normalization.std)]
+    if mode == '2d':
+        xform.append(StackClipInChannels())
+    xform = nn.Sequential(*xform)
     gpu_transforms = dict(val=xform,
                           test=xform)
+    return gpu_transforms
+
+
+def get_empty_gpu_transforms():
+    gpu_transforms = dict(train=nn.Identity(),
+                          val=nn.Identity(),
+                          test=nn.Identity(),
+                          denormalize=nn.Identity())
     return gpu_transforms
 
 

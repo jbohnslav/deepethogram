@@ -195,6 +195,7 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
 
 @hydra.main(config_path='../conf/sequence_inference.yaml')
 def main(cfg: DictConfig):
+    log.info('args: {}'.format(' '.join(sys.argv)))
     # turn "models" in your project configuration to "full/path/to/models"
     cfg = deepethogram.projects.parse_cfg_paths(cfg)
     log.info('configuration used: ')

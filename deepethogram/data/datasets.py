@@ -1,6 +1,7 @@
 import bisect
 import logging
 import os
+import pprint
 import random
 import warnings
 from functools import partial
@@ -61,7 +62,7 @@ class SequentialIterator:
         Returns:
             SequentialIterator object
         """
-        assert (os.path.isfile(videofile))
+        assert os.path.isfile(videofile) or os.path.isdir(videofile)
         # self.num_flows = num_flows
         self.num_images = int(num_images)
 
@@ -619,8 +620,9 @@ class SingleSequenceDataset(data.Dataset):
     def __init__(self, h5file: Union[str, os.PathLike], labelfile: Union[str, os.PathLike],
                  h5_key: str, sequence_length: int = 60,
                  dimension=None, nonoverlapping: bool = True,
-                 store_in_ram: bool = True, is_two_stream: bool = False, return_logits=False):
-        assert (os.path.isfile(h5file))
+                 store_in_ram: bool = True, is_two_stream: bool = False, return_logits=False,
+                 reduce: bool=False):
+        assert os.path.isfile(h5file)
         self.h5file = h5file
         if labelfile is not None:
             assert (os.path.isfile(labelfile))
@@ -653,7 +655,7 @@ class SingleSequenceDataset(data.Dataset):
         #     print(f[self.logit_key][:].shape)
         #     print(self.h5file)
         # print('logit key: {}'.format(self.logit_key))
-
+        self.reduce = reduce
         self.verify_keys()
 
         if self.store_in_ram:
@@ -778,8 +780,8 @@ class SingleSequenceDataset(data.Dataset):
                                                                                                     self.h5file,
                                                                                                     list(f.keys())))
             if self.is_two_stream:
-                assert (self.flow_key in f)
-                assert (self.image_key in f)
+                assert self.flow_key in f
+                assert self.image_key in f
             if self.return_logits:
                 try:
                     logits = f[self.logit_key][:]
@@ -789,7 +791,7 @@ class SingleSequenceDataset(data.Dataset):
     def __len__(self):
         return self.N
 
-    def __getitem__(self, index: int):
+    def __getitem__(self, index: int) -> dict:
         if self.nonoverlapping:
             start = self.starts[index]
             end = self.ends[index]
@@ -798,16 +800,18 @@ class SingleSequenceDataset(data.Dataset):
             if self.supervised:
                 labels = self.label[:, indices]
 
-            if self.store_in_ram:
-                logits, values = self.logits[:, indices], self.sequence[:, indices]
-            else:
-                logits, values = self.load_sequence(start, end)
-            if values.shape[1] < self.sequence_length:
-                pad_right = self.sequence_length - values.shape[1]
-            else:
-                pad_right = 0
+            # if self.store_in_ram:
+            #     logits, values = self.logits[:, indices], self.sequence[:, indices]
+            # else:
+            #     logits, values = self.load_sequence(start, end)
+            # if values.shape[1] < self.sequence_length:
+            #     pad_right = self.sequence_length - values.shape[1]
+            # else:
+            #     pad_right = 0
+            pad_right = 0
+            if len(indices) < self.sequence_length:
+                pad_right = self.sequence_length - len(indices)
             pad_left = 0
-
         else:
             middle = index
             start = middle - self.sequence_length // 2
@@ -826,45 +830,56 @@ class SingleSequenceDataset(data.Dataset):
                 pad_right = 0
             indices = np.arange(start, end)
 
-            # print(start, middle, end)
-            if self.store_in_ram:
-                logits, values = self.logits[:, indices], self.sequence[:, indices]
-            else:
-                logits, values = self.load_sequence(start, end)
-            if self.supervised:
-                labels = self.label[:, indices]
-        if self.supervised:
-            labels = labels.astype(np.int64)
+        # print(start, middle, end)
+        if self.store_in_ram:
+            logits, values = self.logits[:, indices], self.sequence[:, indices]
+        else:
+            logits, values = self.load_sequence(start, end)
+
+
+
+        if (len(indices) + pad_left + pad_right) != self.sequence_length:
+            import pdb; pdb.set_trace()
+
+
         if log.isEnabledFor(logging.DEBUG):
             print('start: {} end: {}'.format(start, end))
 
         logits = np.pad(logits, ((0, 0), (pad_left, pad_right)), mode='constant')
         values = np.pad(values, ((0, 0), (pad_left, pad_right)), mode='constant')
         if self.supervised:
+            labels = self.label[:, indices].astype(np.int64)
             labels = np.pad(labels, ((0, 0), (pad_left, pad_right)), mode='constant', constant_values=-1)
-
+            labels = torch.from_numpy(labels).to(torch.long)
         # for torch dataloaders
         #         values = values.T
         #         labels = labels.T
         logits = torch.from_numpy(logits).float()
         values = torch.from_numpy(values).float()
+
+        out = {'features': values, 'logits': logits}
+
         if self.supervised:
-            labels = torch.from_numpy(labels).to(torch.long)
-            if self.return_logits:
-                return values, logits, labels
-            else:
-                return values, labels
-        else:
-            if self.return_logits:
-                return values, logits
-            else:
-                return values
+            out['labels'] = labels
+
+        return out
+
+        # if self.supervised:
+        #     if self.return_logits:
+        #         return values, logits, labels
+        #     else:
+        #         return values, labels
+        # else:
+        #     if self.return_logits:
+        #         return values, logits
+        #     else:
+        #         return values
 
     def __del__(self):
         if hasattr(self, 'sequences'):
-            del (self.sequences)
+            del self.sequences
         if hasattr(self, 'labels'):
-            del (self.labels)
+            del self.labels
 
 
 class SequenceDataset(data.Dataset):
@@ -1507,6 +1522,144 @@ def get_video_datasets(datadir: Union[str, os.PathLike], xform: dict, is_two_str
 
     return datasets, data_info
 
+
+def get_sequence_datasets(datadir: Union[str, os.PathLike], latent_name: str, sequence_length: int = 60,
+                             is_two_stream: bool = True, nonoverlapping: bool = True, splitfile: str = None,
+                             reload_split: bool = True, store_in_ram: bool = False, dimension: int = None,
+                             train_val_test: Union[list, np.ndarray] = [0.8, 0.2, 0.0], weight_exp: float = 1.0,
+                             supervised=True, reduce=False, valid_splits_only: bool = True,
+                             return_logits=False) -> Tuple[dict, dict]:
+    """ Gets dataloaders for sequence models assuming DeepEthogram file structure.
+
+    Parameters
+    ----------
+    datadir: str, os.PathLike
+        absolute path to directory. Will have sub-directories where actual data is stored
+    latent_name: str
+        Key of HDF5 dataset containing extracted features and probabilities
+    sequence_length: int
+        Number of elements in sequence
+    is_two_stream: bool
+        If True, look for image_features and flow_features in the HDF5 dataset
+    nonoverlapping: bool
+        If True, indexing into dataset will return non-overlapping sequences. With a sequence length of 10, for example,
+        if nonoverlapping:
+            sequence[0] contains data from frames [0:10], sequence[1]: frames [11:20], etc...
+        else:
+            sequence[0] contains data from frames [0:10], sequence[1]: frames[1:11], etc...
+    splitfile: str
+        path to a yaml file containing train, validation, test information. If none, make a new one
+    reload_split: bool
+        if True, try to reload a passed splitfile. Else, make a new split
+    store_in_ram: bool
+        if True, tries to store all the sequence information in RAM. Note: data IO is not a bottleneck unless you have
+        a very slow hard drive. using this = True is not recommended
+    dimension: int
+        Can be used to reduce the dimensionality of inputs to your sequences. If you have 1024 features, but pass 256,
+        will only use the top 256 features. Not recommended
+    train_val_test: list, np.ndarray shape (3,)
+        Fractions or numbers of elements to use in each split of the data, if creating a new one
+    weight_exp: float
+        Loss weights will be raised to this exponent. See DeepEthogram paper
+    batch_size: int
+        Batch size. Can be relatively large for sequences due to their light weight, but they also don't use batch
+        normalization, so ¯\_(ツ)_/¯
+    shuffle: bool
+        if True, shuffle the data. Highly recommend keeping True
+    num_workers: int
+        Number of CPU workers to use to load data
+    pin_memory: bool
+        Set to true to reserve memory on the GPU. can improve performance. see
+        https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
+    drop_last: bool
+        If true, drop last batch. However, SequenceDatasets use padding and loss weighting, so you don't need to
+        ever drop the last batch
+    supervised: bool
+        If True, return labels along with features
+    reduce: bool
+        if True,  return class indices as labels
+        if False, return one-hot vectors as labels
+    valid_splits_only: bool
+        if True, require train, validation, and test to have at least one example from each class
+    return_logits: bool
+        if True, returns the logits from the feature extractor as well as the feature vectors
+
+    Returns
+    -------
+    dataloaders: dict with keys:
+        train: dataloader for train
+        val: dataloader for validation
+        test: dataloader for test
+        class_counts: number of examples for each class
+        pos: ibid
+        neg: number of negative examples for each class
+        pos_weight: loss weight for sigmoid activation / BCEloss
+        loss_weight: loss weight for softmax activation / NLL loss
+
+    """
+    return_types = ['output']
+    if supervised:
+        return_types += ['label']
+
+    # records: dictionary of dictionaries. Keys: unique data identifiers
+    # values: a dictionary corresponding to different files. the first record might be:
+    # {'mouse000': {'rgb': path/to/rgb.avi, 'label':path/to/labels.csv} }
+    records = projects.get_records_from_datadir(datadir)
+    # some videos might not have flows yet, or labels. Filter records to only get those that have all required files
+    records = projects.filter_records_for_filetypes(records, return_types)
+    # returns a dictionary, where each split in ['train', 'val', 'test'] as a list of keys
+    # each key corresponds to a unique directory, and has
+    split_dictionary = get_split_from_records(records, datadir, splitfile, supervised, reload_split, valid_splits_only,
+                                              train_val_test)
+    # it's possible that your split has records that are invalid for the current task.
+    # e.g.: you've added a video, but not labeled it yet. In that case, it will already be in your split, but it is
+    # invalid for current purposes, because it has no label. Therefore, we want to remove it from the current split
+    split_dictionary = remove_invalid_records_from_split_dictionary(split_dictionary, records)
+    # log.info('~~~~~ train val test split ~~~~~')
+    # pprint.pprint(split_dictionary)
+
+    splits = ['train', 'val', 'test']
+    datasets = {}
+    for split in splits:
+        outputfiles = [records[i]['output'] for i in split_dictionary[split]]
+
+        if split == 'test' and len(outputfiles) == 0:
+            datasets[split] = None
+            continue
+        # h5file, labelfile = outputs[i]
+        # print('making dataset:{}'.format(split))
+
+        if supervised:
+            labelfiles = [records[i]['label'] for i in split_dictionary[split]]
+        else:
+            labelfiles = None
+
+
+        datasets[split] = SequenceDataset(outputfiles, labelfiles, latent_name, sequence_length,
+                                          is_two_stream=is_two_stream, nonoverlapping=nonoverlapping,
+                                          dimension=dimension,
+                                          store_in_ram=store_in_ram, return_logits=return_logits, reduce=reduce)
+
+
+    # figure out what our inputs to our model will be (D dimension)
+    data_info = {'split': split_dictionary}
+    data_info['num_features'] = datasets['train'].num_features
+
+    if supervised:
+        data_info['class_counts'] = datasets['train'].class_counts
+        data_info['num_classes'] = len(data_info['class_counts'])
+        pos_weight, softmax_weight = make_loss_weight(data_info['class_counts'],
+                                                      datasets['train'].num_pos,
+                                                      datasets['train'].num_neg,
+                                                      weight_exp=weight_exp)
+        data_info['pos'] = datasets['train'].num_pos
+        data_info['neg'] = datasets['train'].num_neg
+        data_info['pos_weight'] = pos_weight
+        data_info['loss_weight'] = softmax_weight
+
+    return datasets, data_info
+
+
 def get_datasets_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 1) -> Tuple[dict, dict]:
     """ Returns dataloader objects using a Hydra-generated configuration dictionary.
 
@@ -1563,7 +1716,14 @@ def get_datasets_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 
                                           conv_mode=mode)
 
     elif model_type == 'sequence':
-        raise NotImplementedError
+        datasets, info = get_sequence_datasets(cfg.project.data_path, cfg.sequence.latent_name,
+                                               cfg.sequence.sequence_length, is_two_stream=True,
+                                               nonoverlapping=cfg.sequence.nonoverlapping, splitfile=cfg.split.file,
+                                               reload_split=True, store_in_ram=False, dimension=None,
+                                               train_val_test=cfg.split.train_val_test,
+                                               weight_exp=cfg.train.loss_weight_exp, supervised=True,
+                                               reduce=cfg.feature_extractor.final_activation == 'softmax',
+                                               valid_splits_only=True, return_logits=False)
     else:
         raise ValueError('Unknown model type: {}'.format(model_type))
     return datasets, info

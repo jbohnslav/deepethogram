@@ -4,6 +4,8 @@
 deepethogram/models/*
 tests/DATA
 gui_logs/
+# line profiling
+*.lprof
 
 tests/testing_directory.txt
 *.user

@@ -6,3 +6,4 @@ defaults:
   - model/sequence
   - model/feature_extractor
   - train
+  - project/project_config

@@ -153,7 +153,7 @@ def train_from_cfg_lightning(cfg):
     # see above for horrible syntax explanation
     # lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
     trainer.fit(lightning_module)
-    utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
+    # utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
 
 
 def build_model_from_cfg(cfg: DictConfig,
@@ -231,9 +231,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, criterion: nn.Module):
         super().__init__(model, cfg, datasets, metrics, viz.visualize_logger_multilabel_classification)
 
-        arch = self.hparams.feature_extractor.arch
-        gpu_transforms = get_gpu_transforms(self.hparams.augs, '3d' if '3d' in arch.lower() else '2d')
-        self.gpu_transforms = gpu_transforms
         self.has_logged_channels = False
         # for convenience
         self.final_activation = self.hparams.feature_extractor.final_activation
@@ -302,11 +299,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
         probabilities = self.activation(outputs)
-
-    def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
-        with torch.no_grad():
-            images = self.gpu_transforms[mode](images)
-        return images
 
     def visualize_batch(self, images, probs, labels, split: str):
         if not self.hparams.train.viz:
@@ -408,7 +400,7 @@ def get_criterion(final_activation: str, dataloaders: dict, device=None):
 
 
 def get_metrics(rundir: Union[str, bytes, os.PathLike], num_classes: int, num_parameters: Union[int, float],
-                is_kinetics: bool = False, key_metric='loss'):
+                is_kinetics: bool = False, key_metric='loss', num_workers: int=4):
     """ get metrics object for classification. See deepethogram/metrics.py.
 
     In brief, it's a Metrics object that provides utilities for computing metrics over predictions, saving various
@@ -431,7 +423,8 @@ def get_metrics(rundir: Union[str, bytes, os.PathLike], num_classes: int, num_pa
     metrics = Classification(rundir, key_metric, num_parameters,
                              num_classes=num_classes,
                              metrics=metric_list,
-                             evaluate_threshold=True)
+                             evaluate_threshold=True,
+                             num_workers=num_workers)
     return metrics
 
 

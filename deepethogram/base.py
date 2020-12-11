@@ -8,6 +8,7 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
+from deepethogram.data.augs import get_gpu_transforms, get_empty_gpu_transforms
 from deepethogram.callbacks import FPSCallback, DebugCallback, SpeedtestCallback, MetricsCallback, \
     ExampleImagesCallback, CheckpointCallback, StopperCallback
 from deepethogram.metrics import Metrics, EmptyMetrics
@@ -26,6 +27,16 @@ class BaseLightningModule(pl.LightningModule):
         self.metrics = metrics
         self.visualization_func = visualization_func
 
+        model_type = cfg.run.model
+        if model_type in ['feature_extractor', 'flow_generator']:
+            arch = self.hparams[model_type].arch
+            gpu_transforms = get_gpu_transforms(self.hparams.augs, '3d' if '3d' in arch.lower() else '2d')
+        elif model_type == 'sequence':
+            gpu_transforms = get_empty_gpu_transforms()
+        else:
+            raise NotImplementedError
+        self.gpu_transforms: dict = gpu_transforms
+
         self.optimizer = None # will be overridden in configure_optimizers
         self.hparams.weight_decay = None
         if 'feature_extractor' in self.hparams.keys():
@@ -41,7 +52,7 @@ class BaseLightningModule(pl.LightningModule):
     def on_train_epoch_start(self) -> None:
         # self.viz_cnt['train'] = 0
         # I couldn't figure out how to make sure that this is called after BOTH train and validation ends
-        if self.current_epoch > 0:
+        if self.current_epoch > 0 and self.hparams.train.viz:
             # all models shall define a visualization function that points to the metrics file on disk
             self.visualization_func(self.metrics.fname)
 
@@ -81,6 +92,11 @@ class BaseLightningModule(pl.LightningModule):
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
+    def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
+        with torch.no_grad():
+            images = self.gpu_transforms[mode](images)
+        return images
+
     def configure_optimizers(self):
 
         weight_decay = 0 if self.hparams.weight_decay is None else self.hparams.weight_decay
@@ -95,7 +111,7 @@ class BaseLightningModule(pl.LightningModule):
 
 
 # @profile
-def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper) -> pl.Trainer:
+def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler:str=None) -> pl.Trainer:
     steps_per_epoch = cfg.train.steps_per_epoch
     for split in ['train', 'val', 'test']:
         steps_per_epoch[split] = steps_per_epoch[split] if steps_per_epoch[split] is not None else 1.0
@@ -153,7 +169,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper) -> pl.Train
         lightning_module.metrics = tmp_metrics
         lightning_module.hparams.compute.num_workers = tmp_workers
 
-        # tuning fucks with the callbacks
+    # tuning fucks with the callbacks
     trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
                          precision=16 if cfg.compute.fp16 else 32,
                          limit_train_batches=steps_per_epoch['train'],
@@ -163,7 +179,8 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper) -> pl.Train
                          callbacks=[FPSCallback(),  # DebugCallback(),# SpeedtestCallback(),
                                     MetricsCallback(), ExampleImagesCallback(), CheckpointCallback(),
                                     StopperCallback(stopper)],
-                         reload_dataloaders_every_epoch=True)
+                         reload_dataloaders_every_epoch=True,
+                         profiler=profiler)
 
     return trainer
 

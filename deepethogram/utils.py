@@ -144,6 +144,8 @@ def save_hidden_two_stream(model, rundir: Union[os.PathLike, str], config: dict 
     flowdir = os.path.join(rundir, 'flow_generator')
     if not os.path.isdir(flowdir):
         os.makedirs(flowdir)
+    if type(config) == DictConfig:
+        config = OmegaConf.to_container(config)
     checkpoint(model.flow_generator, flowdir, epoch, config)
     save_two_stream(model, rundir, config, epoch)
 
@@ -648,21 +650,27 @@ def load_feature_extractor_components(model, checkpoint_file: Union[str, os.Path
         key = 'fusion.'
     else:
         raise ValueError('component not one of spatial or flow: {}'.format(component))
-    directory = os.path.dirname(checkpoint_file)
-    subdir = os.path.join(directory, component)
+    # directory = os.path.dirname(checkpoint_file)
+    # subdir = os.path.join(directory, component)
     # log.info('device: {}'.format(device))
     log.info('loading component {} from file {}'.format(component, checkpoint_file))
 
-    if not os.path.isdir(subdir):
-        log.warning('{} directory not found in {}'.format(component, directory))
-        state = torch.load(checkpoint_file, map_location=device)
-        state_dict = state['state_dict']
-        params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
-        # import pdb; pdb.set_trace()
-        model = load_state_from_dict(model, params)
-    else:
-        sub_checkpoint = os.path.join(subdir, 'checkpoint.pt')
-        model, _, _, _ = load_state(model, sub_checkpoint, device=device)
+    state = torch.load(checkpoint_file, map_location=device)
+    state_dict = state['state_dict']
+    params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
+    # import pdb; pdb.set_trace()
+    model = load_state_from_dict(model, params)
+
+    # if not os.path.isdir(subdir):
+    #     log.warning('{} directory not found in {}'.format(component, directory))
+    #     state = torch.load(checkpoint_file, map_location=device)
+    #     state_dict = state['state_dict']
+    #     params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
+    #     # import pdb; pdb.set_trace()
+    #     model = load_state_from_dict(model, params)
+    # else:
+    #     sub_checkpoint = os.path.join(subdir, 'checkpoint.pt')
+    #     model, _, _, _ = load_state(model, sub_checkpoint, device=device)
     return model
 
 
