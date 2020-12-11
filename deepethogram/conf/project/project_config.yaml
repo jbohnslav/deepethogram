@@ -1,50 +1,42 @@
 augs:
   LR: 0.5
-  UD: 0.5
+  UD: 0.0
   brightness: 0.25
   contrast: 0.1
   crop_size: null
   degrees: 10
-  grayscale: 0.5
-  hue: 0.1
   normalization:
-    N: 2624187500
+    N: 0
     mean:
-    - 0.01454289804920942
-    - 0.02817190216691717
-    - 0.020522172717325645
+    - 0.5
+    - 0.5
+    - 0.5
     std:
-    - 0.02249148419196855
-    - 0.06188721519616518
-    - 0.03946180638664142
-  pad:
-  - 3
-  - 3
+    - 0.5
+    - 0.5
+    - 0.5
+  pad: null
   random_resize: false
-  resize: null
-  saturation: 0.1
+  resize:
+  - 224
+  - 224
 compute:
   batch_size: 32
   distributed: false
   gpu_id: 0
   num_workers: 8
 project:
-  class_names:
-  - background
-  - face_groom
-  - body_groom
-  - dig
-  - scratch
-  config_file: project_config.yaml
+  class_names: null
+  config_file: null
   data_path: DATA
   labeler: null
   model_path: models
-  name: woolf_revision
-  path: /media/jim/DATA_SSD/woolf_revision_deepethogram
+  name: null
+  path: null
 sequence:
   filter_length: 15
 split:
   file: null
   reload: true
 train:
-  loss_weight_exp: 0.5
+  loss_weight_exp: 1.0
