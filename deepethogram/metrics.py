@@ -3,6 +3,7 @@ import os
 import warnings
 from collections import defaultdict
 from typing import Union, Tuple
+from multiprocessing import Pool
 
 import h5py
 import numpy as np
@@ -15,6 +16,7 @@ log = logging.getLogger(__name__)
 
 # small epsilon to prevent divide by zero
 EPS = 1e-7
+
 
 def index_to_onehot(index: np.ndarray, n_classes: int) -> np.ndarray:
     """ Convert an array if indices to one-hot vectors.
@@ -159,8 +161,89 @@ def confusion(predictions: np.ndarray, labels: np.ndarray, K: int = None) -> np.
     for i in range(K):
         for j in range(K):
             # these_inds = labels==i
+            # cm[i, j] = np.sum((labels==i)*(predictions==j))
             cm[i, j] = np.sum(np.logical_and(labels == i, predictions == j))
-            # cm[i,j] = np.sum(predictions[these_inds]==j)
+    return cm
+
+
+def binary_confusion_matrix(predictions, labels) -> np.ndarray:
+    # behaviors x thresholds x 2 x 2
+    # cms = np.zeros((K, N, 2, 2), dtype=int)
+    ndim = predictions.ndim
+
+    if ndim == 3:
+        # 2 x 2 x K x N
+        cms = np.zeros((2, 2, predictions.shape[1], predictions.shape[2]), dtype=int)
+    elif ndim == 2:
+        # 2 x 2 x K
+        cms = np.zeros((2, 2, predictions.shape[1]), dtype=int)
+    elif ndim == 1:
+        # 2 x 2
+        cms = np.zeros((2, 2), dtype=int)
+    else:
+        raise ValueError('unknown input shape: {}'.format(predictions.shape))
+
+    neg_lab = np.logical_not(labels)
+    neg_pred = np.logical_not(predictions)
+
+    cms[0, 0] = (neg_lab * neg_pred).sum(axis=0)
+    cms[0, 1] = (neg_lab * predictions).sum(axis=0)
+    cms[1, 0] = (labels * neg_pred).sum(axis=0)
+    cms[1, 1] = (labels * predictions).sum(axis=0)
+
+    if ndim == 3:
+        # output of shape 2 x 2 x N x K
+        return cms.transpose(0, 1, 3, 2)
+    # either 2 x 2 x K or just 2 x 2
+    return cms
+
+
+def binary_confusion_matrix_multiple_thresholds(probabilities, labels, thresholds):
+    # this is the fastest I could possibly write it
+    K = probabilities.shape[1]
+    N = len(thresholds)
+
+    pred = np.greater(probabilities.reshape(-1, 1), thresholds.reshape(1, -1)).reshape(-1, K, N)
+    lab = labels.reshape(-1, 1).repeat(N, 1).reshape(-1, K, N)
+
+    return binary_confusion_matrix(pred, lab)
+
+def confusion_multiple_thresholds_alias(inp):
+    # alias so that binary_confusion_matrix_multiple_thresholds only needs one tuple as input
+    return binary_confusion_matrix_multiple_thresholds(*inp)
+
+
+def confusion_alias(inp):
+    return binary_confusion_matrix(*inp)
+
+
+def binary_confusion_matrix_parallel(probs_or_preds, labels, thresholds=None, chunk_size: int = 100,
+                                     num_workers: int = 4, parallel_chunk: int = 100):
+    # log.info('num workers binary confusion parallel: {}'.format(num_workers))
+    N = probs_or_preds.shape[0]
+
+    starts = np.arange(0, N, chunk_size)
+    ends = np.concatenate((starts[1:], [N]))
+
+    if thresholds is not None:
+        # probabilities
+        iterator = ((probs_or_preds[start:end], labels[start:end], thresholds) for start, end in zip(starts, ends))
+        cm = np.zeros((2, 2, len(thresholds), probs_or_preds.shape[1]), dtype=int)
+        func = confusion_multiple_thresholds_alias
+    else:
+        # predictions
+        iterator = ((probs_or_preds[start:end], labels[start:end]) for start, end in zip(starts, ends))
+        if probs_or_preds.ndim == 2:
+            cm = np.zeros((2, 2, probs_or_preds.shape[1]), dtype=int)
+        elif probs_or_preds.ndim == 1:
+            cm = np.zeros((2,2), dtype=int)
+        else:
+            raise ValueError('weird shape in probs_or_preds: {}'.format(probs_or_preds.shape))
+        func = confusion_alias
+
+    with Pool(num_workers) as pool:
+        for res in pool.imap_unordered(func, iterator, parallel_chunk):
+            cm += res
     return cm
 
 
@@ -210,7 +293,49 @@ def remove_invalid_values_predictions_and_labels(predictions: np.ndarray, labels
     return predictions, labels
 
 
-def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, thresholds: np.ndarray) -> Tuple[dict, dict]:
+def compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers: int = 4, cm=None):
+    # if we've computed cms elsewhere
+    if cm is None:
+        cm = binary_confusion_matrix_parallel(probabilities, labels, thresholds, num_workers=num_workers)
+    acc = (cm[0, 0] + cm[1, 1]) / cm.sum(axis=0).sum(axis=0)
+    p, r = compute_precision_recall(cm)
+    tp, fp = compute_tpr_fpr(cm)
+    info = compute_informedness(cm)
+    f1 = compute_f1(p, r)
+    fbeta_2 = compute_f1(p, r, beta=2.0)
+    metrics_by_threshold = {
+        'thresholds': thresholds,
+        'accuracy': acc,
+        'f1': f1,
+        'precision': p,
+        'recall': r,
+        'fbeta_2': fbeta_2,
+        'informedness': info,
+        'tpr': tp,
+        'fpr': fp,
+        'confusion': cm
+    }
+    return metrics_by_threshold
+
+
+def fast_auc(y_true, y_prob):
+    if y_true.ndim == 2:
+        return np.array([fast_auc(y_true[:,i], y_prob[:,i]) for i in range(y_true.shape[1])])
+    # https://www.kaggle.com/c/microsoft-malware-prediction/discussion/76013
+    y_true = np.asarray(y_true)
+    y_true = y_true[np.argsort(y_prob)]
+
+    n = len(y_true)
+
+    nfalse = np.cumsum(1 - y_true)
+    auc = np.cumsum((y_true*nfalse))[-1]
+    # print(auc)
+    auc /= (nfalse[-1] * (n - nfalse[-1]))
+    return auc
+
+# @profile
+def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, thresholds: np.ndarray,
+                                   num_workers: int = 4) -> Tuple[dict, dict]:
     """ Given probabilities and labels, compute a bunch of metrics at each possible threshold value
 
     Also computes a number of metrics for which there is a single value for the input predictions / labels, something
@@ -234,6 +359,10 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     epoch_metrics: dict
         each value is only a single float for the entire prediction / label set.
     """
+    # this is a safety check-- num_workers > 4 can easily overfill RAM
+    # num_workers = min(num_workers, 4)
+    # log.info('num workers in evaluate thresholds: {}'.format(num_workers))
+    # log.info('probabilities shape: {}'.format(probabilities.shape))
     metrics_by_threshold = {}
     if probabilities.ndim == 1:
         raise ValueError('To calc threshold, predictions must be probabilities, not classes')
@@ -242,118 +371,57 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
         labels = index_to_onehot(labels, K)
 
     probabilities, labels = remove_invalid_values_predictions_and_labels(probabilities, labels)
-    # TODO: refactor this to use a defaultdict(list)
-    accuracy_by_class = []
-    f1_by_class = []
-    precision_by_class = []
-    recall_by_class = []
-    mean_acc_by_class = []
-    informedness_by_class = []
-    tpr_by_class = []
-    fpr_by_class = []
-    log.debug('Evaluating multiple metrics for many thresholds')
-    for i, thresh in enumerate(thresholds):
-        estimated = (probabilities > thresh).astype(int)
-        accuracy_by_class.append(np.mean(estimated == labels, axis=0))
-        # f1_by_class.append( [f1_score(labels[:,j], estimated[:,j]) for j in range(K)] )
-        precision, recall = [], []
-        mean_acc = []
-        informedness = []
-        f1_val = []
-        tpr, fpr = [], []
-        for j in range(K):
-            cm = confusion(estimated[:, j], labels[:, j], K=2)
-            # import pdb; pdb.set_trace()
-            p, r = compute_precision_recall(cm)
-            tp, fp = compute_tpr_fpr(cm)
-            ma = compute_mean_accuracy(cm)
-            info = compute_informedness(cm)
-            f1_val.append(compute_f1(p, r))
-            mean_acc.append(ma)
-            precision.append(p)
-            recall.append(r)
-            informedness.append(info)
-            tpr.append(tp)
-            fpr.append(fp)
 
-        precision = np.stack(precision)
-        recall = np.stack(recall)
-        mean_acc = np.stack(mean_acc)
-        informedness = np.stack(informedness)
-        f1_by_class.append(f1_val)
-        precision_by_class.append(precision)
-        recall_by_class.append(recall)
-        mean_acc_by_class.append(mean_acc)
-        informedness_by_class.append(informedness)
-        tpr_by_class.append(np.stack(tpr))
-        fpr_by_class.append(np.stack(fpr))
-    accuracy_by_class = np.stack(accuracy_by_class, axis=0)
-    f1_by_class = np.stack(f1_by_class, axis=0)
-    precision_by_class = np.stack(precision_by_class, axis=0)
-    recall_by_class = np.stack(recall_by_class, axis=0)
-    mean_acc_by_class = np.stack(mean_acc_by_class, axis=0)
-    informedness_by_class = np.stack(informedness_by_class, axis=0)
-    tpr_by_class = np.stack(tpr_by_class, axis=0)
-    fpr_by_class = np.stack(fpr_by_class, axis=0)
-
-    metrics_by_threshold = {'thresholds': thresholds, 'accuracy': accuracy_by_class, 'f1': f1_by_class,
-                            'precision': precision_by_class, 'recall': recall_by_class,
-                            'mean_accuracy': mean_acc_by_class, 'informedness': informedness_by_class,
-                            'tpr': tpr_by_class, 'fpr': fpr_by_class}
+    metrics_by_threshold = compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers)
 
     # optimum threshold: one that maximizes F1
-    optimum_thresholds = np.zeros((K,), dtype=np.float32)
-    for i in range(K):
-        # ax.plot(t, f1[:,i], label=class_names[i])
-        index = np.argmax(f1_by_class[:, i])
-        max_acc = f1_by_class[index, i]
-        optimum_thresholds[i] = thresholds[index]
+    optimum_thresholds = thresholds[np.argmax(metrics_by_threshold['f1'], axis=0)]
 
     # optimum info: maximizes informedness
-    optimum_thresholds_info = np.zeros((K,), dtype=np.float32)
-    for i in range(K):
-        index = np.argmax(informedness_by_class[:, i])
-        max_acc = informedness_by_class[index, i]
-        optimum_thresholds_info[i] = thresholds[index]
+    optimum_thresholds_info = thresholds[np.argmax(metrics_by_threshold['informedness'], axis=0)]
 
     metrics_by_threshold['optimum'] = optimum_thresholds
     metrics_by_threshold['optimum_info'] = optimum_thresholds_info
 
-    heuristic_predictions = np.zeros_like(labels)
-    independent_predictions = np.zeros_like(labels)
-    for i in range(0, K):
-        heuristic_predictions[:, i] = (probabilities[:, i] > optimum_thresholds[i]).astype(int)
-        independent_predictions[:, i] = (probabilities[:, i] > optimum_thresholds[i]).astype(int)
-    heuristic_predictions[:, 0] = np.logical_not(np.any(heuristic_predictions[:, 1:], axis=1)).astype(int)
-
+    # vectorized
+    predictions = probabilities > optimum_thresholds
     # ALWAYS REPORT THE PERFORMANCE WITH "VALID" BACKGROUND
-    predictions = heuristic_predictions
-    # metrics_by_threshold[]
+    predictions[:, 0] = np.logical_not(np.any(predictions[:, 1:], axis=1))
 
-    epoch_metrics = {'accuracy_overall': np.mean(predictions == labels),
-                     'accuracy_by_class': np.mean(predictions == labels, axis=0),
-                     'f1_overall': f1_score(labels, predictions, average='micro'),
-                     'f1_class_mean': f1_score(labels, predictions, average='macro'),
-                     'f1_by_class': f1_score(labels, predictions, average=None)
-                     }
+    # re-use our confusion matrix calculation. returns N x N x K values
+    metrics_by_class = compute_metrics_by_threshold(predictions, labels, thresholds=None)
+
+    # summing over classes is the same as flattening the array. ugly syntax
+    # TODO: make function that computes metrics from a stack of confusion matrices rather than this none None business
+    overall_metrics = compute_metrics_by_threshold(None, None, thresholds=None,
+                                                   cm=metrics_by_class['confusion'].sum(axis=2))
+
+    epoch_metrics = {
+        'accuracy_overall': overall_metrics['accuracy'],
+        'accuracy_by_class': metrics_by_class['accuracy'],
+        'f1_overall': overall_metrics['f1'],
+        'f1_class_mean': metrics_by_class['f1'].mean(),
+        'f1_by_class': metrics_by_class['f1'],
+        'binary_confusion': metrics_by_class['confusion'].transpose(2, 0, 1)
+    }
+
+    # it is too much of a pain to increase the speed on roc_auc_score and mAP
     try:
         epoch_metrics['auroc_overall'] = roc_auc_score(labels, probabilities, average='micro')
-        epoch_metrics['auroc_class_mean'] = roc_auc_score(labels, probabilities, average='macro')
         epoch_metrics['auroc_by_class'] = roc_auc_score(labels, probabilities, average=None)
+        # epoch_metrics['auroc_overall'] = fast_auc(labels.flatten(), probabilities.flatten())
+        # epoch_metrics['auroc_by_class'] = fast_auc(labels, probabilities)
+        epoch_metrics['auroc_class_mean'] = epoch_metrics['auroc_by_class'].mean()
     except ValueError:
-        # print('only one class in labels...')
+        # only one class in labels...
         epoch_metrics['auroc_overall'] = np.nan
         epoch_metrics['auroc_class_mean'] = np.nan
         epoch_metrics['auroc_by_class'] = np.array([np.nan for _ in range(K)])
 
     epoch_metrics['mAP_overall'] = average_precision_score(labels, probabilities, average='micro')
-    epoch_metrics['mAP_class_mean'] = average_precision_score(labels, probabilities, average='macro')
-    # this is a misnomer: mAP by class is just AP
     epoch_metrics['mAP_by_class'] = average_precision_score(labels, probabilities, average=None)
-
-    _, cms_valid_bg = compute_binary_confusion(probabilities, labels, optimum_thresholds)
-    epoch_metrics['binary_confusion'] = cms_valid_bg
-    # epoch_metrics['binary_confusion_valid'] = cms_valid_bg
+    # this is a misnomer: mAP by class is just AP
+    epoch_metrics['mAP_class_mean'] = epoch_metrics['mAP_by_class'].mean()
 
     return metrics_by_threshold, epoch_metrics
 
@@ -366,18 +434,22 @@ def compute_tpr_fpr(cm: np.ndarray) -> Tuple[float, float]:
     tp = cm_normalized[1, 1]
     return tp, fp
 
+
 def get_denominator(expression: Union[float, np.ndarray]):
     if isinstance(expression, (int, np.integer, float, np.floating)):
         return max(EPS, expression)
     # it's an array
+    # convert to floating point type-- if it's integer, it will just ignore the eps and not throw an error
+    expression = expression.astype(np.float32)
     expression[expression < EPS] = EPS
     return expression
 
 
-def compute_f1(precision: float, recall: float) -> float:
+def compute_f1(precision: float, recall: float, beta: float = 1.0) -> float:
     """ compute f1 if you already have precison and recall. Prevents re-computing confusion matrix, etc """
-    num = 2 * (precision * recall)
-    denom = get_denominator(precision + recall)
+
+    num = (1 + beta ** 2) * (precision * recall)
+    denom = get_denominator((beta ** 2) * precision + recall)
     return num / denom
 
 
@@ -450,7 +522,7 @@ all_metrics = {
     'mean_class_accuracy': mean_class_accuracy,
     'f1': f1,
     'roc_auc': roc_auc,
-    'confusion': confusion
+    'confusion': binary_confusion_matrix
 }
 
 
@@ -550,7 +622,8 @@ class Metrics:
                  key_metric: str,
                  name: str,
                  num_parameters: int,
-                 splits: list = ['train', 'val']):
+                 splits: list = ['train', 'val'],
+                 num_workers: int = 4):
         """ Metrics constructor
 
         Parameters
@@ -579,6 +652,7 @@ class Metrics:
         self.num_parameters = num_parameters
         self.learning_rate = None
         self.initialize_file()
+        self.num_workers = num_workers
 
         self.buffer = Buffer()
         self.latest_key = {}
@@ -688,7 +762,6 @@ class Metrics:
         return data
 
 
-
 class EmptyMetrics(Metrics):
     def __init__(self, *args, **kwargs):
         super().__init__(os.getcwd(), [], 'loss', 'empty', 0)
@@ -709,7 +782,7 @@ class Classification(Metrics):
     def __init__(self, run_dir: Union[str, bytes, os.PathLike], key_metric: str, num_parameters: int,
                  num_classes: int = None, metrics: list = ['accuracy', 'mean_class_accuracy', 'f1', 'roc_auc'],
                  splits: list = ['train', 'val'],
-                 ignore_index: int = -1, evaluate_threshold: bool = False):
+                 ignore_index: int = -1, evaluate_threshold: bool = False, num_workers: int = 4):
         """ Constructor for classification metrics class
 
         Parameters
@@ -732,7 +805,7 @@ class Classification(Metrics):
             Hack for multi-label classification problems. If True, at each epoch will compute a bunch of metrics for
             each potential threshold. See evaluate_thresholds
         """
-        super().__init__(run_dir, metrics, key_metric, 'classification', num_parameters, splits)
+        super().__init__(run_dir, metrics, key_metric, 'classification', num_parameters, splits, num_workers)
 
         self.metric_funcs = all_metrics
 
@@ -785,7 +858,8 @@ class Classification(Metrics):
         if self.evaluate_threshold:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                metrics_by_threshold, epoch_metrics = evaluate_thresholds(probs, labels, self.thresholds)
+                metrics_by_threshold, epoch_metrics = evaluate_thresholds_vectorized(probs, labels, self.thresholds,
+                                                                                     self.num_workers)
                 metrics['metrics_by_threshold'] = metrics_by_threshold
                 for key, value in epoch_metrics.items():
                     metrics[key] = value
@@ -813,6 +887,7 @@ class Classification(Metrics):
 
 class OpticalFlow(Metrics):
     """ Metrics class for saving optic flow metrics to disk """
+
     def __init__(self, run_dir, key_metric, num_parameters, metrics=['SSIM_full'],
                  splits=['train', 'val']):
         super().__init__(run_dir, metrics, key_metric, 'opticalflow', num_parameters, splits)
