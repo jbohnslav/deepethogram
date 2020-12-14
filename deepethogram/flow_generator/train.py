@@ -86,17 +86,15 @@ def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
 
     stopper = get_stopper(cfg)
     metrics = get_metrics(cfg, os.getcwd(), utils.get_num_parameters(flow_generator))
-    lightning_module = OpticalFlowLightning(flow_generator, cfg, datasets, metrics, viz.visualize_logger_optical_flow,
-                                            visualize_examples=True)
+    lightning_module = OpticalFlowLightning(flow_generator, cfg, datasets, metrics, viz.visualize_logger_optical_flow)
 
     trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
     trainer.fit(lightning_module)
 
 
 class OpticalFlowLightning(BaseLightningModule):
-    def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, visualization_func,
-                 visualize_examples: bool = True):
-        super().__init__(model, cfg, datasets, metrics, visualization_func, visualize_examples)
+    def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, visualization_func):
+        super().__init__(model, cfg, datasets, metrics, visualization_func)
 
         self.reconstructor = Reconstructor(self.hparams)
 
@@ -155,7 +153,7 @@ class OpticalFlowLightning(BaseLightningModule):
         images, outputs = self(batch, 'test')
 
     def visualize_batch(self, images, downsampled_t0, estimated_t0, flows_reshaped, split: str):
-        if not self.visualize_examples:
+        if not self.hparams.train.viz:
             return
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]

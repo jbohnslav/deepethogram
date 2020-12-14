@@ -997,6 +997,9 @@ def get_weightfile_from_cfg(cfg: DictConfig, model_type: str) -> Union[str, None
 
     assert model_type in ['flow_generator', 'feature_extractor', 'end_to_end', 'sequence']
 
+    if not os.path.isdir(cfg.project.model_path):
+        cfg = convert_config_paths_to_absolute(cfg)
+
     trained_models = get_weights_from_model_path(cfg.project.model_path)
 
     architecture = cfg[model_type].arch

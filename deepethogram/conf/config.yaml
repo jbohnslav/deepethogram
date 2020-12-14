@@ -34,7 +34,6 @@ reload:
   # if True, will attempt to automatically load the most recent trained model
   latest: false
 # one of deg_f, deg_m, deg_s. see paper
-preset: null
 # use this field to set notes in both the saved configuration file and the run directory. e.g.
 # `train.dropout_p=0.5 notes=trying_lower_dropout`
 notes: null

@@ -6,4 +6,5 @@ defaults:
   - model/flow_generator
   - train
   - augs
+  - preset: deg_f
   - project/project_config

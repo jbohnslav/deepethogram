@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 import os
 import sys
@@ -7,14 +8,15 @@ import h5py
 import hydra
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
 from tqdm import tqdm
 
 import deepethogram.projects
 from deepethogram import utils, projects
-from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms_inference
-from deepethogram.data.datasets import SequentialIterator
+from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms_inference, get_gpu_transforms
+from deepethogram.data.datasets import SequentialIterator, SingleVideoDataset
 from deepethogram.feature_extractor.train import build_model_from_cfg as build_feature_extractor
 
 log = logging.getLogger(__name__)
@@ -80,11 +82,113 @@ def get_penultimate_layer(model: Type[nn.Module]):
     return children[-1]
 
 
-def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
+def print_debug_statement(images, logits, spatial_features, flow_features, probabilities):
+    log.info('logits shape: {}'.format(logits.shape))
+    log.info('spatial_features shape: {}'.format(spatial_features.shape))
+    log.info('flow_features shape: {}'.format(flow_features.shape))
+    log.info('spatial: min {} mean {} max {} shape {}'.format(spatial_features.min(),
+                                                              spatial_features.mean(),
+                                                              spatial_features.max(),
+                                                              spatial_features.shape))
+    log.info('flow   : min {} mean {} max {} shape {}'.format(flow_features.min(),
+                                                              flow_features.mean(),
+                                                              flow_features.max(),
+                                                              flow_features.shape))
+    # a common issue I've had is not properly z-scoring input channels. this will check for that
+    if len(images.shape) == 4:
+        N, C, H, W = images.shape
+        log.info('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
+        log.info('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
+        log.info('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
+        log.info('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
+    elif len(images.shape) == 5:
+        N, C, T, H, W = images.shape
+        log.info('channel min:  {}'.format(images[0].min(dim=2).values))
+        log.info('channel mean: {}'.format(images[0].mean(dim=2)))
+        log.info('channel max : {}'.format(images[0].max(dim=2).values))
+        log.info('channel std : {}'.format(images[0].std(dim=2)))
+
+def predict_single_video(videofile, model, activation_function,
+                         fusion: str,
+                         num_rgb: int, mean_by_channels: np.ndarray,
+                         device: str = 'cuda:0',
+                         cpu_transform=None, gpu_transform=None,
+                         should_print: bool = False, num_workers: int = 1, batch_size: int = 1):
+    log.info('extracting from movie {}'.format(videofile))
+    model.eval()
+    model.set_mode('inference')
+
+    if type(device) != torch.device:
+        device = torch.device(device)
+
+    if os.path.isdir(videofile):
+        use_deprecated_iterator = False
+    else:
+        use_deprecated_iterator = True
+
+    if use_deprecated_iterator:
+        dataloader = SequentialIterator(videofile, num_rgb, transform=cpu_transform,
+                                        device=device, stack_channels=False)
+    else:
+        dataset = SingleVideoDataset(videofile, mean_by_channels=mean_by_channels,
+                                     transform=cpu_transform, frames_per_clip=num_rgb)
+        dataloader = DataLoader(dataset, batch_size=batch_size, pin_memory=torch.cuda.is_available(),
+                                num_workers=num_workers, shuffle=False)
+    # our activation dictionary will automatically be updated after each forward pass
+    activation = unpack_penultimate_layer(model, fusion)
+
+    buffer = defaultdict(list)
+
+    has_printed = False
+    for batch in tqdm(dataloader, leave=False):
+        if isinstance(batch, dict):
+            images = batch['images']
+        elif isinstance(batch, torch.Tensor):
+            images = batch
+        else:
+            raise ValueError('unknown input type: {}'.format(type(batch)))
+
+        if images.device != device:
+            images = images.to(device)
+        with torch.no_grad():
+            # images = batch['images']
+            images = gpu_transform(images)
+            # import pdb; pdb.set_trace()
+
+            logits = model(images)
+            spatial_features = activation['spatial']
+            flow_features = activation['flow']
+
+            probabilities = activation_function(logits).detach().cpu()
+            logits = logits.detach().cpu()
+            spatial_features = spatial_features.detach().cpu()
+            flow_features = flow_features.detach().cpu()
+
+        if not has_printed and should_print:
+            print_debug_statement(images, logits, spatial_features, flow_features, probabilities)
+            has_printed = True
+
+        # buffer['images'].append(images)
+        buffer['probabilities'].append(probabilities)
+        buffer['logits'].append(logits)
+        buffer['spatial_features'].append(spatial_features)
+        buffer['flow_features'].append(flow_features)
+
+    for key, value in buffer.items():
+        buffer[key] = torch.cat(value).squeeze()
+    return buffer
+
+
+def extract(rgbs: list,
+            model,
+            final_activation: str,
+            thresholds: np.ndarray,
+            mean_by_channels,
             fusion: str,
             num_rgb: int, latent_name: str, class_names: list = ['background'],
             device: str = 'cuda:0',
-            cpu_transform=None, gpu_transform=None, ignore_error=True, overwrite=False, conv_2d:bool=False):
+            cpu_transform=None, gpu_transform=None, ignore_error=True, overwrite=False,
+            num_workers: int = 1, batch_size: int = 1):
     """ Use the model to extract spatial and flow feature vectors, and predictions, and save them to disk.
     Assumes you have a pretrained model, and K classes. Will go through each video in rgbs, run inference, extracting
     the 512-d spatial features, 512-d flow features, K-d probabilities to disk for each video frame.
@@ -140,6 +244,8 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
         activation_function = nn.Softmax(dim=1)
     elif final_activation == 'sigmoid':
         activation_function = nn.Sigmoid()
+    else:
+        raise ValueError('unknown final activation: {}'.format(final_activation))
 
     class_names = [n.encode("ascii", "ignore") for n in class_names]
 
@@ -147,113 +253,40 @@ def extract(rgbs: list, model, final_activation: str, thresholds: np.ndarray,
     # iterate over movie files
     for i in tqdm(range(len(rgbs))):
         rgb = rgbs[i]
-        log.info('Extracting from movie {}...'.format(rgb))
-        gen = SequentialIterator(rgb, num_rgb, transform=cpu_transform, device=device, stack_channels=False)
-
-        log.debug('Making two stream iterator with parameters: ')
-        log.debug('rgb: {}'.format(rgb))
-        log.debug('num_images: {}'.format(num_rgb))
 
         basename = os.path.splitext(rgb)[0]
         # make the outputfile have the same name as the video, with _outputs appended
         h5file = basename + '_outputs.h5'
         mode = 'r+' if os.path.isfile(h5file) else 'w'
-        # model.set_mode('inference')
-        # our activation dictionary will automatically be updated after each forward pass
-        activation = unpack_penultimate_layer(model, fusion)
 
         with h5py.File(h5file, mode) as f:
 
             if latent_name in list(f.keys()):
                 if overwrite:
-                    del (f[latent_name])
+                    del f[latent_name]
                 else:
                     log.warning('Latent {} already found in file {}, skipping...'.format(latent_name, h5file))
                     continue
             group = f.create_group(latent_name)
             # iterate over each frame of the movie
-            for i in tqdm(range(len(gen) - 1), leave=False):
-                # for i in tqdm(range(1000)):
-                with torch.no_grad():
-                    try:
-                        batch = next(gen)
-                        # star means that if batch is a tuple of images, flows, it will pass in as sequential
-                        # positional arguments
-                        if type(batch) == tuple:
-                            logits = model(*batch)
-                        else:
-                            # import pdb; pdb.set_trace()
-                            batch = gpu_transform(batch)
-                            logits = model(batch)
-                        spatial_features = activation['spatial']
-                        flow_features = activation['flow']
-                        # this debug information is extremely useful. If you get strange, large values for the min
-                        # or max, you should make sure that your input images are being properly normalized
-                        # for each image in your input sequence. You should also make sure that weights are being
-                        # reloaded properly
-                        # if not has_printed:
-                        if not has_printed:
+            outputs = predict_single_video(rgb, model, activation_function, fusion, num_rgb, mean_by_channels,
+                                           device, cpu_transform, gpu_transform, should_print=i == 0,
+                                           num_workers=num_workers, batch_size=batch_size)
 
-                            log.info('logits shape: {}'.format(logits.shape))
-                            log.info('spatial_features shape: {}'.format(spatial_features.shape))
-                            log.info('flow_features shape: {}'.format(flow_features.shape))
-                            log.info('spatial: min {} mean {} max {} shape {}'.format(spatial_features.min(),
-                                                                                      spatial_features.mean(),
-                                                                                      spatial_features.max(),
-                                                                                      spatial_features.shape))
-                            log.info('flow   : min {} mean {} max {} shape {}'.format(flow_features.min(),
-                                                                                      flow_features.mean(),
-                                                                                      flow_features.max(),
-                                                                                      flow_features.shape))
-                            # a common issue I've had is not properly z-scoring input channels. this will check for that
-                            if len(batch.shape) == 4:
-                                N, C, H, W = batch.shape
-                                log.debug('channel min:  {}'.format(batch[0].reshape(C, -1).min(dim=1).values))
-                                log.debug('channel mean: {}'.format(batch[0].reshape(C, -1).mean(dim=1)))
-                                log.debug('channel max : {}'.format(batch[0].reshape(C, -1).max(dim=1).values))
-                                log.debug('channel std : {}'.format(batch[0].reshape(C, -1).std(dim=1)))
-                            elif len(batch.shape) == 5:
-                                N, C, T, H, W = batch.shape
-                                log.debug('channel min:  {}'.format(batch[0].min(dim=2).values))
-                                log.debug('channel mean: {}'.format(batch[0].mean(dim=2)))
-                                log.debug('channel max : {}'.format(batch[0].max(dim=2).values))
-                                log.debug('channel std : {}'.format(batch[0].std(dim=2)))
-                            has_printed = True
-
-                    except KeyboardInterrupt:
-                        raise
-                    except Exception as e:
-                        log.exception('Error on video {}, frame: {}'.format(rgb, i))
-                        if ignore_error:
-                            log.warning('continuing...')
-                            break
-                        else:
-                            raise
-                    probabilities = activation_function(logits).detach().cpu().numpy().squeeze()
-                    logits = logits.detach().cpu().numpy().squeeze()
-                    spatial_features = spatial_features.detach().cpu().numpy().squeeze()
-                    flow_features = flow_features.detach().cpu().numpy().squeeze()
-
-                if i == 0:
-                    group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
-                    group.create_dataset('logits', (len(gen), logits.shape[0]), dtype=np.float32)
-                    group.create_dataset('P', (len(gen), logits.shape[0]), dtype=np.float32)
-                    group.create_dataset('spatial_features', (len(gen), spatial_features.shape[0]), dtype=np.float32)
-                    group.create_dataset('flow_features', (len(gen), flow_features.shape[0]), dtype=np.float32)
-                    dt = h5py.string_dtype()
-                    group.create_dataset('class_names', data=class_names, dtype=dt)
-                # these assignments are where it's actually saved to disk
-                group['P'][i, :] = probabilities
-                group['logits'][i, :] = logits
-                group['spatial_features'][i, :] = spatial_features
-                group['flow_features'][i, :] = flow_features
-                del (batch, logits, spatial_features, flow_features, probabilities)
-            gen.end()
+            # these assignments are where it's actually saved to disk
+            group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
+            group.create_dataset('logits', data=outputs['logits'], dtype=np.float32)
+            group.create_dataset('P', data=outputs['probabilities'], dtype=np.float32)
+            group.create_dataset('spatial_features', data=outputs['spatial_features'], dtype=np.float32)
+            group.create_dataset('flow_features',data=outputs['flow_features'], dtype=np.float32)
+            dt = h5py.string_dtype()
+            group.create_dataset('class_names', data=class_names, dtype=dt)
+            del outputs
 
 
 @hydra.main(config_path='../conf/feature_extractor_inference.yaml')
 def main(cfg: DictConfig):
-    import pdb; pdb.set_trace()
+
     log.info('args: {}'.format(' '.join(sys.argv)))
     # turn "models" in your project configuration to "full/path/to/models"
     cfg = projects.convert_config_paths_to_absolute(cfg)
@@ -288,7 +321,8 @@ def main(cfg: DictConfig):
     mode = '3d' if '3d' in cfg.feature_extractor.arch.lower() else '2d'
     # get the validation transforms. should have resizing, etc
     cpu_transform = get_cpu_transforms(cfg.augs)['val']
-    gpu_transform = get_gpu_transforms_inference(cfg.augs, mode)['val']
+    gpu_transform = get_gpu_transforms(cfg.augs, mode)['val']
+    log.info('gpu_transform: {}'.format(gpu_transform))
 
     rgb = []
     for record in records:
@@ -310,6 +344,7 @@ def main(cfg: DictConfig):
             model,
             final_activation=cfg.feature_extractor.final_activation,
             thresholds=thresholds,
+            mean_by_channels=cfg.augs.normalization.mean,
             fusion=cfg.feature_extractor.fusion,
             num_rgb=input_images,
             latent_name=latent_name,
@@ -319,7 +354,8 @@ def main(cfg: DictConfig):
             ignore_error=cfg.inference.ignore_error,
             overwrite=cfg.inference.overwrite,
             class_names=class_names,
-            conv_2d=mode == '2d')
+            num_workers=cfg.compute.num_workers,
+            batch_size=cfg.compute.batch_size)
 
     # update each record file in the subdirectory to add our new output files
     projects.write_all_records(cfg.project.data_path)

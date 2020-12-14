@@ -7,4 +7,5 @@ defaults:
   - model/feature_extractor
   - model/flow_generator
   - train
+  - preset: deg_f
   - project/project_config

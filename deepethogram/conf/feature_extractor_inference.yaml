@@ -10,6 +10,7 @@ defaults:
   - model/flow_generator
   - inference
   - augs
+  - preset: deg_f
   - project/project_config
 hydra:
   run:

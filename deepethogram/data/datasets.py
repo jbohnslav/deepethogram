@@ -26,6 +26,7 @@ from deepethogram.file_io import read_labels
 
 log = logging.getLogger(__name__)
 
+
 class SequentialIterator:
     """Optimized loader to read short clips of videos to disk only using sequential video reads.
 
@@ -82,9 +83,12 @@ class SequentialIterator:
         self.index = 0
         self.true_index = 0
         self.transform = transform
+
+        if device is not None:
+            if not isinstance(device, torch.device):
+                assert isinstance(device, str)
+                device = torch.device(device)
         self.device = device
-        if self.device is not None:
-            assert type(device) == torch.device
         self.stack_channels = stack_channels
         if batch_size > 1:
             raise NotImplemented
@@ -98,6 +102,7 @@ class SequentialIterator:
                 label = label.T
             self.label = label
         self.seed = np.random.randint(2147483647)
+        self.dtype = torch.uint8
 
     def process_one_frame(self, frame: np.ndarray) -> torch.Tensor:
         """Processes one frame, including augmentations"""
@@ -112,8 +117,8 @@ class SequentialIterator:
             raise ValueError('must set CPU transforms in SequentialIterator')
         if type(frame) != torch.Tensor:
             frame = torch.from_numpy(frame)
-        if frame.dtype != torch.float32:
-            frame = frame.float() / 255
+        # if frame.dtype != torch.float32:
+        #     frame = frame.float() / 255
         if self.device is not None:
             # move to GPU if necessary
             if frame.device != self.device:
@@ -122,7 +127,7 @@ class SequentialIterator:
 
     def zeros(self):
         """Convenience function for generating a zeros image"""
-        return torch.zeros((self.batch_size, self.c, self.h, self.w), dtype=torch.float32)
+        return torch.zeros((self.batch_size, self.c, self.h, self.w), dtype=self.dtype)
 
     def set_batch_image(self, frame, index_in_batch):
         """Puts the input frame into the current batch.
@@ -170,10 +175,11 @@ class SequentialIterator:
 
         i = 0
         if self.stack_channels:
-            batch = np.zeros((self.batch_size, self.num_images * self.c, self.h, self.w), dtype=np.float32)
+            batch = torch.zeros((self.batch_size, self.num_images * self.c, self.h, self.w), dtype=self.dtype)
         else:
-            batch = np.zeros((self.batch_size, self.c, self.num_images, self.h, self.w), dtype=np.float32)
-        batch = torch.from_numpy(batch).to(self.device)
+            batch = torch.zeros((self.batch_size, self.c, self.num_images, self.h, self.w), dtype=self.dtype)
+        batch = batch.to(self.device)
+        # batch = torch.from_numpy(batch).to(self.device)
         self.batch = batch
 
         num_start_images = self.num_images // 2
@@ -440,7 +446,211 @@ class MultiMovieIterator:
         return self
 
 
+class SingleVideoDataset(data.Dataset):
+    """PyTorch Dataset for loading a set of sequential frames and one-hot labels for Action Detection.
+
+    Features:
+        - Loads a set of sequential frames and sequential one-hot labels
+        - Adds zero frames at beginning or end so that every label has a corresponding clip
+        - Applies the same augmentations to every frame in the clip
+        - Automatically finds label files with similar names to the list of movies
+        - Stacks all channels together for input into a CNN
+
+    Example:
+        dataset = VideoDataset(['movie1.avi', 'movie2.avi'], frames_per_clip=11, reduce=False)
+        images, labels = dataset(np.random.randint(low=0, high=len(dataset))
+        print(images.shape)
+        # 33 x 256 x 256
+        print(labels.shape)
+        # assuming there are 5 classes in dataset
+        # ~5 x 11
+    """
+
+    def __init__(self, videofile: Union[str, os.PathLike], labelfile: Union[str, os.PathLike] = None,
+                 mean_by_channels: Union[list, np.ndarray] = [0, 0, 0],
+                 frames_per_clip: int = 1, transform=None,
+                 reduce: bool = True, conv_mode: str = '2d', keep_reader_open: bool = False):
+        """Initializes a VideoDataset object.
+
+        Args:
+            video_list: a list of strings or paths to movies
+            frames per clip: how many sequential images to load
+            transform: either None or a TorchVision.transforms object or opencv_transforms object
+            supervised: whether or not to return a label. False: for self-supervision
+            reduce: whether or not to change a set of one-hot labels to integers denoting the class that equals one.
+                Applicable for multiclass, not multi-label cases, using a softmax activation and NLLloss
+            conv_mode: if 2d, returns a tensor of shape C, H, W. Multiple frames are stacked in C dimension. if 3d,
+                returns a tensor of shape C, T, H, W
+        Returns:
+            VideoDataset object
+        """
+
+        self.videofile = videofile
+        self.labelfile = labelfile
+        self.mean_by_channels = self.parse_mean_by_channels(mean_by_channels)
+        self.frames_per_clip = frames_per_clip
+        self.transform = transform
+        self.reduce = reduce
+        self.conv_mode = conv_mode
+        self.keep_reader_open = keep_reader_open
+
+        self.supervised = self.labelfile is not None
+
+        assert os.path.isfile(videofile) or os.path.isdir(videofile)
+        assert self.conv_mode in ['2d', '3d']
+
+        # find labels given the filename of a video, load, save as an attribute for fast reading
+        if self.supervised:
+            assert os.path.isfile(labelfile)
+            # self.video_list, self.label_list = purge_unlabeled_videos(self.video_list, self.label_list)
+            labels, class_counts, num_labels, num_pos, num_neg = read_all_labels([self.labelfile])
+            self.labels = labels
+            self.class_counts = class_counts
+            self.num_labels = num_labels
+            self.num_pos = num_pos
+            self.num_neg = num_neg
+            log.debug('label shape: {}'.format(self.labels.shape))
+
+        metadata = {}
+        ret, width, height, framecount = get_video_metadata(self.videofile)
+        if ret:
+            metadata['name'] = videofile
+            metadata['width'] = width
+            metadata['height'] = height
+            metadata['framecount'] = framecount
+        else:
+            raise ValueError('error loading video: {}'.format(videofile))
+        self.metadata = metadata
+        self.N = self.metadata['framecount']
+        self._zeros_image = None
+
+    def get_zeros_image(self, c, h, w):
+        if self._zeros_image is None:
+            # ALWAYS ASSUME OUTPUT IS TRANSPOSED
+            self._zeros_image = np.zeros((c, h, w), dtype=np.uint8)
+            for i in range(3):
+                self._zeros_image[i, ...] = self.mean_by_channels[i]
+        return self._zeros_image
+
+    def parse_mean_by_channels(self, mean_by_channels):
+        if isinstance(mean_by_channels[0], (float, np.floating)):
+            return np.clip(np.array(mean_by_channels) * 255, 0, 255).astype(np.uint8)
+        elif isinstance(mean_by_channels[0], (int, np.integer)):
+            assert np.array_equal(np.clip(mean_by_channels, 0, 255), np.array(mean_by_channels))
+            return np.array(mean_by_channels).astype(np.uint8)
+        else:
+            raise ValueError('unexpected type for input channel mean: {}'.format(mean_by_channels))
+
+    def __len__(self):
+        return self.N
+
+    def prepend_with_zeros(self, stack, blank_start_frames):
+        if blank_start_frames == 0:
+            return stack
+        for i in range(blank_start_frames):
+            stack.insert(0, self.get_zeros_image(*stack[0].shape))
+        return stack
+
+    def append_with_zeros(self, stack, blank_end_frames):
+        if blank_end_frames == 0:
+            return stack
+        for i in range(blank_end_frames):
+            stack.append(self.get_zeros_image(*stack[0].shape))
+        return stack
+
+    def __getitem__(self, index: int):
+        """Used for reading frames and possibly labels from disk.
+
+        Args:
+            index: integer from 0 to number of total clips in dataset
+        Returns:
+            np.ndarray of shape (H,W,C), where C is 3* frames_per_clip
+                Could also be torch.Tensor of shape (C,H,W), depending on the augmentation applied
+        """
+
+        images = []
+        # if frames per clip is 11, dataset[0] would have 5 blank frames preceding, with the 6th-11th being real frames
+        blank_start_frames = max(self.frames_per_clip // 2 - index, 0)
+
+        framecount = self.metadata['framecount']
+        # cap = cv2.VideoCapture(self.movies[style][movie_index])
+        start_frame = index - self.frames_per_clip // 2 + blank_start_frames
+        blank_end_frames = max(index - framecount + self.frames_per_clip // 2 + 1, 0)
+        real_frames = self.frames_per_clip - blank_start_frames - blank_end_frames
+
+        seed = np.random.randint(2147483647)
+        with VideoReader(self.videofile, assume_writer_style=True) as reader:
+            for i in range(real_frames):
+                image = reader[i + start_frame]
+                if self.transform:
+                    random.seed(seed)
+                    image = self.transform(image)
+                    images.append(image)
+
+        images = self.prepend_with_zeros(images, blank_start_frames)
+        images = self.append_with_zeros(images, blank_end_frames)
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug('idx: {} st: {} blank_start: {} blank_end: {} real: {} total: {}'.format(index,
+                                                                                               start_frame,
+                                                                                               blank_start_frames,
+                                                                                               blank_end_frames,
+                                                                                               real_frames, framecount))
+
+        # images are now numpy arrays of shape 3, H, W
+        # stacking in the first dimension changes to 3, T, H, W, compatible with Conv3D
+        images = np.stack(images, axis=1)
+
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug('images shape: {}'.format(images.shape))
+        # print(images.shape)
+        outputs = {'images': images}
+        if self.supervised:
+            label = self.labels[index]
+            if self.reduce:
+                label = np.where(label)[0][0].astype(np.int64)
+            outputs['labels'] = label
+        return outputs
+
+
 class VideoDataset(data.Dataset):
+    """ Simple wrapper around SingleSequenceDataset for smoothly loading multiple sequences """
+
+    def __init__(self, videofiles: list, labelfiles: list, *args, **kwargs):
+        datasets = []
+        for i in range(len(videofiles)):
+            labelfile = None if labelfiles is None else labelfiles[i]
+            # for i, (videofile, labelfile) in enumerate(zip(videofiles, labelfiles)):
+            dataset = SingleVideoDataset(videofiles[i], labelfile, *args, **kwargs)
+            datasets.append(dataset)
+
+            if labelfiles is not None:
+                if i == 0:
+                    class_counts = dataset.class_counts
+                    num_pos = dataset.num_pos
+                    num_neg = dataset.num_neg
+                    num_labels = dataset.num_labels
+                else:
+                    class_counts += dataset.class_counts
+                    num_pos += dataset.num_pos
+                    num_neg += dataset.num_neg
+                    num_labels += dataset.num_labels
+
+        self.dataset = data.ConcatDataset(datasets)
+        if labelfiles is not None:
+            self.class_counts = class_counts
+            self.num_pos = num_pos
+            self.num_neg = num_neg
+            self.num_labels = num_labels
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index: int):
+        return self.dataset[index]
+
+
+class DeprecatedVideoDataset(data.Dataset):
     """PyTorch Dataset for loading a set of sequential frames and one-hot labels for Action Detection.
 
     Features:
@@ -621,7 +831,7 @@ class SingleSequenceDataset(data.Dataset):
                  h5_key: str, sequence_length: int = 60,
                  dimension=None, nonoverlapping: bool = True,
                  store_in_ram: bool = True, is_two_stream: bool = False, return_logits=False,
-                 reduce: bool=False):
+                 reduce: bool = False):
         assert os.path.isfile(h5file)
         self.h5file = h5file
         if labelfile is not None:
@@ -836,11 +1046,9 @@ class SingleSequenceDataset(data.Dataset):
         else:
             logits, values = self.load_sequence(start, end)
 
-
-
         if (len(indices) + pad_left + pad_right) != self.sequence_length:
-            import pdb; pdb.set_trace()
-
+            import pdb;
+            pdb.set_trace()
 
         if log.isEnabledFor(logging.DEBUG):
             print('start: {} end: {}'.format(start, end))
@@ -1391,10 +1599,11 @@ class KineticsDataset(data.Dataset):
 
 
 def get_video_datasets(datadir: Union[str, os.PathLike], xform: dict, is_two_stream: bool = False,
-                          reload_split: bool = True, splitfile: Union[str, os.PathLike] = None,
-                          train_val_test: Union[list, np.ndarray] = [0.8, 0.1, 0.1], weight_exp: float = 1.0,
-                          rgb_frames: int = 1, flow_frames: int = 10, supervised=True, reduce=False, flow_max: int = 5,
-                          flow_style: str = 'linear', valid_splits_only: bool = True, conv_mode: str = '2d'):
+                       reload_split: bool = True, splitfile: Union[str, os.PathLike] = None,
+                       train_val_test: Union[list, np.ndarray] = [0.8, 0.1, 0.1], weight_exp: float = 1.0,
+                       rgb_frames: int = 1, flow_frames: int = 10, supervised=True, reduce=False, flow_max: int = 5,
+                       flow_style: str = 'linear', valid_splits_only: bool = True, conv_mode: str = '2d',
+                       mean_by_channels: list = [0.5, 0.5, 0.5]):
     """ Gets dataloaders for video-based datasets.
 
     Parameters
@@ -1501,11 +1710,12 @@ def get_video_datasets(datadir: Union[str, os.PathLike], xform: dict, is_two_str
                                                )
         else:
             datasets[split] = VideoDataset(rgb,
+                                           labelfiles,
                                            frames_per_clip=rgb_frames,
-                                           label_list=labelfiles,
                                            reduce=reduce,
                                            transform=xform[split],
-                                           conv_mode=conv_mode)
+                                           conv_mode=conv_mode,
+                                           mean_by_channels=mean_by_channels)
     data_info = {'split': split_dictionary}
 
     if supervised:
@@ -1524,11 +1734,11 @@ def get_video_datasets(datadir: Union[str, os.PathLike], xform: dict, is_two_str
 
 
 def get_sequence_datasets(datadir: Union[str, os.PathLike], latent_name: str, sequence_length: int = 60,
-                             is_two_stream: bool = True, nonoverlapping: bool = True, splitfile: str = None,
-                             reload_split: bool = True, store_in_ram: bool = False, dimension: int = None,
-                             train_val_test: Union[list, np.ndarray] = [0.8, 0.2, 0.0], weight_exp: float = 1.0,
-                             supervised=True, reduce=False, valid_splits_only: bool = True,
-                             return_logits=False) -> Tuple[dict, dict]:
+                          is_two_stream: bool = True, nonoverlapping: bool = True, splitfile: str = None,
+                          reload_split: bool = True, store_in_ram: bool = False, dimension: int = None,
+                          train_val_test: Union[list, np.ndarray] = [0.8, 0.2, 0.0], weight_exp: float = 1.0,
+                          supervised=True, reduce=False, valid_splits_only: bool = True,
+                          return_logits=False) -> Tuple[dict, dict]:
     """ Gets dataloaders for sequence models assuming DeepEthogram file structure.
 
     Parameters
@@ -1634,12 +1844,10 @@ def get_sequence_datasets(datadir: Union[str, os.PathLike], latent_name: str, se
         else:
             labelfiles = None
 
-
         datasets[split] = SequenceDataset(outputfiles, labelfiles, latent_name, sequence_length,
                                           is_two_stream=is_two_stream, nonoverlapping=nonoverlapping,
                                           dimension=dimension,
                                           store_in_ram=store_in_ram, return_logits=return_logits, reduce=reduce)
-
 
     # figure out what our inputs to our model will be (D dimension)
     data_info = {'split': split_dictionary}
@@ -1694,7 +1902,6 @@ def get_datasets_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 
         log.info('getting dataloaders: {} convolution type detected'.format(mode))
         xform = get_cpu_transforms(cfg.augs)
 
-
         if cfg.project.name == 'kinetics':
             raise NotImplementedError
         else:
@@ -1703,17 +1910,18 @@ def get_datasets_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 
                 if cfg.feature_extractor.final_activation == 'softmax':
                     reduce = True
             datasets, info = get_video_datasets(datadir=cfg.project.data_path,
-                                          xform=xform,
-                                          is_two_stream=False,
-                                          reload_split=cfg.split.reload,
-                                          splitfile=cfg.split.file,
-                                          train_val_test=cfg.split.train_val_test,
-                                          weight_exp=cfg.train.loss_weight_exp,
-                                          rgb_frames=input_images,
-                                          supervised=supervised,
-                                          reduce=reduce,
-                                          valid_splits_only=True,
-                                          conv_mode=mode)
+                                                xform=xform,
+                                                is_two_stream=False,
+                                                reload_split=cfg.split.reload,
+                                                splitfile=cfg.split.file,
+                                                train_val_test=cfg.split.train_val_test,
+                                                weight_exp=cfg.train.loss_weight_exp,
+                                                rgb_frames=input_images,
+                                                supervised=supervised,
+                                                reduce=reduce,
+                                                valid_splits_only=True,
+                                                conv_mode=mode,
+                                                mean_by_channels=cfg.augs.normalization.mean)
 
     elif model_type == 'sequence':
         datasets, info = get_sequence_datasets(cfg.project.data_path, cfg.sequence.latent_name,
