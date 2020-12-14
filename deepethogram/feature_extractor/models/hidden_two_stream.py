@@ -73,7 +73,7 @@ class FlowOnlyClassifier(nn.Module):
         with torch.no_grad():
             flows = self.flow_generator(batch)
         # flows will return a tuple of flows at different resolutions. Even in eval mode. 0th flow should be
-        # at original image resolution
+        # at original image resolution (or 1/2)
         return self.flow_classifier(flows[0])
 
 

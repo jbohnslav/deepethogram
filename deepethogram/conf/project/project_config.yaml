@@ -39,4 +39,4 @@ split:
   file: null
   reload: true
 train:
-  loss_weight_exp: 1.0
+  loss_weight_exp: 0.5
