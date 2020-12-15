@@ -310,16 +310,29 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         fig = plt.figure(figsize=(14, 14))
         if hasattr(self.model, 'flow_generator'):
             # re-compute optic flows for this batch for visualization
+            batch_size = images.size(0)
+            # don't compute flows for very large batches. only need a few random ones for
+            # visualization purposes
+            if batch_size > 2:
+                inds = torch.randperm(batch_size)[:2]
+                images = images[inds]
+                probs = probs[inds]
+                labels = labels[inds]
+
             with torch.no_grad():
-                flows = self.model.flow_generator(images)
+                # only output the highest res flow
+                flows = self.model.flow_generator(images)[0]
                 inputs = self.gpu_transforms['denormalize'](images)
-            viz.visualize_hidden(inputs, flows, probs, labels, fig=fig)
+            viz.visualize_hidden(inputs.detach().cpu(), flows.detach().cpu(),
+                                 probs.detach().cpu(), labels.detach().cpu(), fig=fig)
             viz.save_figure(fig, 'batch_with_flows', True, viz_cnt, split)
+            del images, probs, labels, flows
         else:
             with torch.no_grad():
                 inputs = self.gpu_transforms['denormalize'](images)
             viz.visualize_batch_spatial(inputs, probs, labels, fig=fig)
             viz.save_figure(fig, 'batch_spatial', True, viz_cnt, split)
+        torch.cuda.empty_cache()
         # self.viz_cnt[split] += 1
 
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
