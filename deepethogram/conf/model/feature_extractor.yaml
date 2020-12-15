@@ -25,7 +25,7 @@ feature_extractor:
   # if true, trains feature extractors in a curriculum. first trains the spatial CNN, then the flow CNN, and finally
   # the two jointly end-to-end. If false, will be end-to-end from the start: faster, but with potentially lower
   # performance.
-  curriculum: true
+  curriculum: false
   # deprecated
   inputs: both
   # the amount of weight decay (L2 normalization) to use on the feature extractors.

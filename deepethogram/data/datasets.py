@@ -504,7 +504,7 @@ class SingleVideoDataset(data.Dataset):
 
 
 class VideoDataset(data.Dataset):
-    """ Simple wrapper around SingleSequenceDataset for smoothly loading multiple sequences """
+    """ Simple wrapper around SingleVideoDataset for smoothly loading multiple videos """
 
     def __init__(self, videofiles: list, labelfiles: list, *args, **kwargs):
         datasets = []
