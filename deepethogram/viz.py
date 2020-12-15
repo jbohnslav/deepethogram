@@ -179,14 +179,18 @@ def visualize_images_and_flows(downsampled_t0, flows_reshaped, sequence_length: 
 
     axes = fig.subplots(2, 1)
 
-    images = downsampled_t0[0].detach().cpu().numpy().astype(np.float32)
-    # N is actually N * T
-    N, C, H, W = images.shape
+    N, C, H, W = downsampled_t0[0].shape
     batch_size = N // sequence_length
     if batch_ind is None:
         batch_ind = np.random.choice(batch_size)
-    image_list = [images[i, ...].transpose(1, 2, 0) for i in range(batch_ind * sequence_length,
-                                                                   batch_ind * sequence_length + sequence_length)]
+
+    inds = range(batch_ind*sequence_length, batch_ind*sequence_length + sequence_length)
+    images = downsampled_t0[0][inds].detach().cpu().numpy().astype(np.float32)
+
+    # N is actually N * T
+    image_list = [i.transpose(1,2,0) for i in images]
+    # image_list = [images[i, ...].transpose(1, 2, 0) for i in range(batch_ind * sequence_length,
+    #                                                                batch_ind * sequence_length + sequence_length)]
     stack = stack_image_list(image_list)
     minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
     stack = (stack * 255).clip(min=0, max=255).astype(np.uint8)
@@ -198,10 +202,10 @@ def visualize_images_and_flows(downsampled_t0, flows_reshaped, sequence_length: 
     ax.axis('off')
 
     ax = axes[1]
-    flows = flows_reshaped[0].detach().cpu().numpy().astype(np.float32)
-
-    flow_list = [flows[i, ...].transpose(1, 2, 0).astype(np.float32) for i in range(batch_ind * sequence_length,
-                                                                                    batch_ind * sequence_length + sequence_length)]
+    flows = flows_reshaped[0][inds].detach().cpu().numpy().astype(np.float32)
+    flow_list = [i.transpose(1,2,0) for i in flows]
+    # flow_list = [flows[i, ...].transpose(1, 2, 0).astype(np.float32) for i in range(batch_ind * sequence_length,
+    #                                                                                 batch_ind * sequence_length + sequence_length)]
     stack = stack_image_list(flow_list)
     minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
     stack = flow_to_rgb_polar(stack, maxval=max_flow)
@@ -230,19 +234,22 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
     if fig is None:
         fig = plt.figure(figsize=(16, 12))
 
+    # N is actually N * T
+    N, C, H, W = downsampled_t0[0].shape
+    batch_size = N // sequence_length
+    if batch_ind is None:
+        batch_ind = np.random.choice(batch_size)
+    if sequence_ind is None:
+        sequence_ind = np.random.choice(sequence_length)
+
+    # inds = range(batch_ind * sequence_length, batch_ind * sequence_length + sequence_length)
+
     N_resolutions = len(downsampled_t0)
 
     axes = fig.subplots(4, N_resolutions)
 
     images = downsampled_t0[0].detach().cpu().numpy().astype(np.float32)
-    # N is actually N * T
-    N, C, H, W = images.shape
-    batch_size = N // sequence_length
-    if batch_ind is None:
-        batch_ind = np.random.choice(batch_size)
 
-    if sequence_ind is None:
-        sequence_ind = np.random.choice(sequence_length)
     index = batch_ind * sequence_length + sequence_ind
     t0 = [downsampled_t0[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in
           range(N_resolutions)]
@@ -364,7 +371,7 @@ def visualize_hidden(images, flows, predictions, labels, class_names: list = Non
     ax.axis('off')
 
     ax = axes[1]
-    flows = flows[0].detach().cpu().numpy()
+    flows = flows.detach().cpu().numpy()
     flow_list = tensor_to_list(flows, batch_ind, 2)
     stack = stack_image_list(flow_list)
     minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
@@ -492,42 +499,42 @@ def visualize_batch_sequence(sequence, outputs, labels, N_in_batch=None, fig=Non
     if fig is None:
         fig = plt.figure(figsize=(16, 12))
 
-    sequence = tensor_to_np(sequence)
-    outputs = tensor_to_np(outputs)
-    labels = tensor_to_np(labels)
-
-    # import pdb; pdb.set_trace()
-
     if N_in_batch is None:
         N_in_batch = np.random.choice(outputs.shape[0])
+
+    sequence = tensor_to_np(sequence[N_in_batch])
+    outputs = tensor_to_np(outputs[N_in_batch])
+    labels = tensor_to_np(labels[N_in_batch])
+
+    # import pdb; pdb.set_trace()
 
     axes = fig.subplots(4, 1)
 
     ax = axes[0]
-    seq = sequence[N_in_batch]
+    # seq = sequence[N_in_batch]
     aspect_ratio = outputs
 
-    tmp = outputs[N_in_batch]
+    # tmp = outputs[N_in_batch]
     # seq = cv2.resize(sequence[N_in_batch], (tmp.shape[1]*10,tmp.shape[0]*10), interpolation=cv2.INTER_NEAREST)
     # seq = cv2.imresize(sequence[N_in_batch], )
-    imshow_with_colorbar(seq, ax, fig, interpolation='nearest',
+    imshow_with_colorbar(sequence, ax, fig, interpolation='nearest',
                          symmetric=False, func='pcolor', cmap='viridis')
     ax.invert_yaxis()
     ax.set_ylabel('inputs')
 
     ax = axes[1]
-    imshow_with_colorbar(outputs[N_in_batch], ax, fig, interpolation='nearest', symmetric=False, cmap='Reds',
+    imshow_with_colorbar(outputs, ax, fig, interpolation='nearest', symmetric=False, cmap='Reds',
                          func='pcolor', clim=[0, 1])
     ax.invert_yaxis()
     ax.set_ylabel('P')
 
     ax = axes[2]
-    imshow_with_colorbar(labels[N_in_batch], ax, fig, interpolation='nearest', cmap='Reds', func='pcolor')
+    imshow_with_colorbar(labels, ax, fig, interpolation='nearest', cmap='Reds', func='pcolor')
     ax.invert_yaxis()
     ax.set_ylabel('Labels')
 
     ax = axes[3]
-    dumb_loss = np.abs(outputs[N_in_batch] - labels[N_in_batch])
+    dumb_loss = np.abs(outputs - labels)
     imshow_with_colorbar(dumb_loss, ax, fig, interpolation='nearest', cmap='Reds', func='pcolor', clim=[0, 1])
     ax.set_title('L1 between outputs and labels (not true loss)')
     ax.invert_yaxis()
