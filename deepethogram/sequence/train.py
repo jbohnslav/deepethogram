@@ -64,7 +64,9 @@ def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
                           num_workers=cfg.compute.num_workers)
     criterion = get_criterion(cfg.feature_extractor.final_activation, data_info)
     lightning_module = SequenceLightning(model, cfg, datasets, metrics, criterion)
-    trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
+    # change auto batch size parameters because large sequences can overflow RAM
+    trainer = get_trainer_from_cfg(cfg, lightning_module, stopper,
+                                   bs_start=16, bs_end=256)
     trainer.fit(lightning_module)
     return model
 
