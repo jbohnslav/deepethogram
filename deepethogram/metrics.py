@@ -8,7 +8,7 @@ from multiprocessing import Pool
 import h5py
 import numpy as np
 import torch
-from sklearn.metrics import f1_score, roc_auc_score, confusion_matrix, average_precision_score
+from sklearn.metrics import f1_score, roc_auc_score, confusion_matrix, average_precision_score, auc
 
 from deepethogram import utils
 
@@ -208,6 +208,7 @@ def binary_confusion_matrix_multiple_thresholds(probabilities, labels, threshold
 
     return binary_confusion_matrix(pred, lab)
 
+
 def confusion_multiple_thresholds_alias(inp):
     # alias so that binary_confusion_matrix_multiple_thresholds only needs one tuple as input
     return binary_confusion_matrix_multiple_thresholds(*inp)
@@ -236,7 +237,7 @@ def binary_confusion_matrix_parallel(probs_or_preds, labels, thresholds=None, ch
         if probs_or_preds.ndim == 2:
             cm = np.zeros((2, 2, probs_or_preds.shape[1]), dtype=int)
         elif probs_or_preds.ndim == 1:
-            cm = np.zeros((2,2), dtype=int)
+            cm = np.zeros((2, 2), dtype=int)
         else:
             raise ValueError('weird shape in probs_or_preds: {}'.format(probs_or_preds.shape))
         func = confusion_alias
@@ -293,6 +294,17 @@ def remove_invalid_values_predictions_and_labels(predictions: np.ndarray, labels
     return predictions, labels
 
 
+def auc_on_array(x, y):
+    if x.ndim < 2 or y.ndim < 2:
+        return np.nan
+    K = x.shape[1]
+    assert K == y.shape[1]
+    area_under_curve = np.zeros((K,), dtype=np.float32)
+    for i in range(K):
+        area_under_curve[i] = auc(x[:, i], y[:, i])
+    return area_under_curve
+
+
 def compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers: int = 4, cm=None):
     # if we've computed cms elsewhere
     if cm is None:
@@ -303,6 +315,8 @@ def compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers:
     info = compute_informedness(cm)
     f1 = compute_f1(p, r)
     fbeta_2 = compute_f1(p, r, beta=2.0)
+    auroc = auc_on_array(fp, tp)
+    mAP = auc_on_array(r, p)
     metrics_by_threshold = {
         'thresholds': thresholds,
         'accuracy': acc,
@@ -313,6 +327,8 @@ def compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers:
         'informedness': info,
         'tpr': tp,
         'fpr': fp,
+        'auroc': auroc,
+        'mAP': mAP,
         'confusion': cm
     }
     return metrics_by_threshold
@@ -320,7 +336,7 @@ def compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers:
 
 def fast_auc(y_true, y_prob):
     if y_true.ndim == 2:
-        return np.array([fast_auc(y_true[:,i], y_prob[:,i]) for i in range(y_true.shape[1])])
+        return np.array([fast_auc(y_true[:, i], y_prob[:, i]) for i in range(y_true.shape[1])])
     # https://www.kaggle.com/c/microsoft-malware-prediction/discussion/76013
     y_true = np.asarray(y_true)
     y_true = y_true[np.argsort(y_prob)]
@@ -328,14 +344,15 @@ def fast_auc(y_true, y_prob):
     n = len(y_true)
 
     nfalse = np.cumsum(1 - y_true)
-    auc = np.cumsum((y_true*nfalse))[-1]
+    auc = np.cumsum((y_true * nfalse))[-1]
     # print(auc)
     auc /= (nfalse[-1] * (n - nfalse[-1]))
     return auc
 
+
 # @profile
-def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, thresholds: np.ndarray,
-                                   num_workers: int = 4) -> Tuple[dict, dict]:
+def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, thresholds: np.ndarray = None,
+                        num_workers: int = 4) -> Tuple[dict, dict]:
     """ Given probabilities and labels, compute a bunch of metrics at each possible threshold value
 
     Also computes a number of metrics for which there is a single value for the input predictions / labels, something
@@ -359,10 +376,11 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     epoch_metrics: dict
         each value is only a single float for the entire prediction / label set.
     """
-    # this is a safety check-- num_workers > 4 can easily overfill RAM
-    # num_workers = min(num_workers, 4)
+    if thresholds is None:
+        # using 200 means that approximated mAP, AUROC is almost exactly the same as exact
+        thresholds = np.linspace(0,1,200)
     # log.info('num workers in evaluate thresholds: {}'.format(num_workers))
-    # log.info('probabilities shape: {}'.format(probabilities.shape))
+    log.debug('probabilities shape in metrics calc: {}'.format(probabilities.shape))
     metrics_by_threshold = {}
     if probabilities.ndim == 1:
         raise ValueError('To calc threshold, predictions must be probabilities, not classes')
@@ -375,7 +393,8 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     metrics_by_threshold = compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers)
 
     # optimum threshold: one that maximizes F1
-    optimum_thresholds = thresholds[np.argmax(metrics_by_threshold['f1'], axis=0)]
+    optimum_indices = np.argmax(metrics_by_threshold['f1'], axis=0)
+    optimum_thresholds = thresholds[optimum_indices]
 
     # optimum info: maximizes informedness
     optimum_thresholds_info = thresholds[np.argmax(metrics_by_threshold['informedness'], axis=0)]
@@ -395,34 +414,39 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     # TODO: make function that computes metrics from a stack of confusion matrices rather than this none None business
     overall_metrics = compute_metrics_by_threshold(None, None, thresholds=None,
                                                    cm=metrics_by_class['confusion'].sum(axis=2))
-
     epoch_metrics = {
         'accuracy_overall': overall_metrics['accuracy'],
         'accuracy_by_class': metrics_by_class['accuracy'],
         'f1_overall': overall_metrics['f1'],
         'f1_class_mean': metrics_by_class['f1'].mean(),
         'f1_by_class': metrics_by_class['f1'],
-        'binary_confusion': metrics_by_class['confusion'].transpose(2, 0, 1)
+        'binary_confusion': metrics_by_class['confusion'].transpose(2, 0, 1),
+        'auroc_by_class': metrics_by_threshold['auroc'],
+        'auroc_class_mean': metrics_by_threshold['auroc'].mean(),
+        'mAP_by_class': metrics_by_threshold['mAP'],
+        'mAP_class_mean': metrics_by_threshold['mAP'].mean(),
+        # to compute these, would need to make confusion matrices on flattened array, which is slow
+        'auroc_overall': np.nan,
+        'mAP_overall': np.nan
     }
-
     # it is too much of a pain to increase the speed on roc_auc_score and mAP
-    try:
-        epoch_metrics['auroc_overall'] = roc_auc_score(labels, probabilities, average='micro')
-        epoch_metrics['auroc_by_class'] = roc_auc_score(labels, probabilities, average=None)
-        # small perf improvement is not worth worrying about bugs
-        # epoch_metrics['auroc_overall'] = fast_auc(labels.flatten(), probabilities.flatten())
-        # epoch_metrics['auroc_by_class'] = fast_auc(labels, probabilities)
-        epoch_metrics['auroc_class_mean'] = epoch_metrics['auroc_by_class'].mean()
-    except ValueError:
-        # only one class in labels...
-        epoch_metrics['auroc_overall'] = np.nan
-        epoch_metrics['auroc_class_mean'] = np.nan
-        epoch_metrics['auroc_by_class'] = np.array([np.nan for _ in range(K)])
-
-    epoch_metrics['mAP_overall'] = average_precision_score(labels, probabilities, average='micro')
-    epoch_metrics['mAP_by_class'] = average_precision_score(labels, probabilities, average=None)
-    # this is a misnomer: mAP by class is just AP
-    epoch_metrics['mAP_class_mean'] = epoch_metrics['mAP_by_class'].mean()
+    # try:
+    #     epoch_metrics['auroc_overall'] = roc_auc_score(labels, probabilities, average='micro')
+    #     epoch_metrics['auroc_by_class'] = roc_auc_score(labels, probabilities, average=None)
+    #     # small perf improvement is not worth worrying about bugs
+    #     # epoch_metrics['auroc_overall'] = fast_auc(labels.flatten(), probabilities.flatten())
+    #     # epoch_metrics['auroc_by_class'] = fast_auc(labels, probabilities)
+    #     epoch_metrics['auroc_class_mean'] = epoch_metrics['auroc_by_class'].mean()
+    # except ValueError:
+    #     # only one class in labels...
+    #     epoch_metrics['auroc_overall'] = np.nan
+    #     epoch_metrics['auroc_class_mean'] = np.nan
+    #     epoch_metrics['auroc_by_class'] = np.array([np.nan for _ in range(K)])
+    #
+    # epoch_metrics['mAP_overall'] = average_precision_score(labels, probabilities, average='micro')
+    # epoch_metrics['mAP_by_class'] = average_precision_score(labels, probabilities, average=None)
+    # # this is a misnomer: mAP by class is just AP
+    # epoch_metrics['mAP_class_mean'] = epoch_metrics['mAP_by_class'].mean()
 
     return metrics_by_threshold, epoch_metrics
 
@@ -817,8 +841,8 @@ class Classification(Metrics):
         self.ignore_index = ignore_index
         self.evaluate_threshold = evaluate_threshold
 
-        if self.evaluate_threshold:
-            self.thresholds = np.linspace(0, 1, 101)
+        # if self.evaluate_threshold:
+        #     self.thresholds = np.linspace(0, 1, 101)
 
     def stack_sequence_data(self, array: np.ndarray) -> np.ndarray:
         # if probs or labels are one-hot N x K or indicator N, return
@@ -859,7 +883,7 @@ class Classification(Metrics):
         if self.evaluate_threshold:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                metrics_by_threshold, epoch_metrics = evaluate_thresholds(probs, labels, self.thresholds,
+                metrics_by_threshold, epoch_metrics = evaluate_thresholds(probs, labels, None,
                                                                           self.num_workers)
                 metrics['metrics_by_threshold'] = metrics_by_threshold
                 for key, value in epoch_metrics.items():
