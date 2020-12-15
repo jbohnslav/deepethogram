@@ -16,7 +16,7 @@ from tqdm import tqdm
 import deepethogram.projects
 from deepethogram import utils, projects
 from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms_inference, get_gpu_transforms
-from deepethogram.data.datasets import SequentialIterator, SingleVideoDataset
+from deepethogram.data.datasets import VideoIterable
 from deepethogram.feature_extractor.train import build_model_from_cfg as build_feature_extractor
 
 log = logging.getLogger(__name__)
@@ -108,39 +108,37 @@ def print_debug_statement(images, logits, spatial_features, flow_features, proba
         log.info('channel max : {}'.format(images[0].max(dim=2).values))
         log.info('channel std : {}'.format(images[0].std(dim=2)))
 
-def predict_single_video(videofile, model, activation_function,
-                         fusion: str,
-                         num_rgb: int, mean_by_channels: np.ndarray,
-                         device: str = 'cuda:0',
-                         cpu_transform=None, gpu_transform=None,
-                         should_print: bool = False, num_workers: int = 1, batch_size: int = 1):
-    log.info('extracting from movie {}'.format(videofile))
+
+def predict_single_video_iterable(videofile, model, final_activation: str, thresholds: np.ndarray,
+                                  fusion: str,
+                                  num_rgb: int, mean_by_channels: np.ndarray,
+                                  device: str = 'cuda:0',
+                                  cpu_transform=None, gpu_transform=None, conv_2d: bool = False,
+                                  should_print: bool = False, num_workers: int = 1, batch_size: int = 1,
+                                  use_deprecated_iterator: bool = True):
     model.eval()
     model.set_mode('inference')
+
+    if final_activation == 'softmax':
+        activation_function = nn.Softmax(dim=1)
+    elif final_activation == 'sigmoid':
+        activation_function = nn.Sigmoid()
+    else:
+        raise ValueError('unknown final activation: {}'.format(final_activation))
 
     if type(device) != torch.device:
         device = torch.device(device)
 
-    if os.path.isdir(videofile):
-        use_deprecated_iterator = False
-    else:
-        use_deprecated_iterator = True
+    dataset = VideoIterable(videofile, transform=cpu_transform, num_workers=num_workers)
+    dataloader = DataLoader(dataset, num_workers=num_workers, batch_size=batch_size)
+    video_frame_num = len(dataset)
 
-    if use_deprecated_iterator:
-        dataloader = SequentialIterator(videofile, num_rgb, transform=cpu_transform,
-                                        device=device, stack_channels=False)
-    else:
-        dataset = SingleVideoDataset(videofile, mean_by_channels=mean_by_channels,
-                                     transform=cpu_transform, frames_per_clip=num_rgb)
-        dataloader = DataLoader(dataset, batch_size=batch_size, pin_memory=torch.cuda.is_available(),
-                                num_workers=num_workers, shuffle=False)
-    # our activation dictionary will automatically be updated after each forward pass
     activation = unpack_penultimate_layer(model, fusion)
 
-    buffer = defaultdict(list)
+    buffer = {}
 
     has_printed = False
-    for batch in tqdm(dataloader, leave=False):
+    for i, batch in enumerate(tqdm(dataloader)):
         if isinstance(batch, dict):
             images = batch['images']
         elif isinstance(batch, torch.Tensor):
@@ -150,32 +148,61 @@ def predict_single_video(videofile, model, activation_function,
 
         if images.device != device:
             images = images.to(device)
-        with torch.no_grad():
-            # images = batch['images']
-            images = gpu_transform(images)
-            # import pdb; pdb.set_trace()
+        # images = batch['images']
+        images = gpu_transform(images)
 
-            logits = model(images)
-            spatial_features = activation['spatial']
-            flow_features = activation['flow']
+        logits = model(images)
+        spatial_features = activation['spatial']
+        flow_features = activation['flow']
 
-            probabilities = activation_function(logits).detach().cpu()
-            logits = logits.detach().cpu()
-            spatial_features = spatial_features.detach().cpu()
-            flow_features = flow_features.detach().cpu()
+        frame_numbers = batch['framenum'].detach().cpu()
 
         if not has_printed and should_print:
-            print_debug_statement(images, logits, spatial_features, flow_features, probabilities)
+            log.info('logits shape: {}'.format(logits.shape))
+            log.info('spatial_features shape: {}'.format(spatial_features.shape))
+            log.info('flow_features shape: {}'.format(flow_features.shape))
+            log.info('spatial: min {} mean {} max {} shape {}'.format(spatial_features.min(),
+                                                                      spatial_features.mean(),
+                                                                      spatial_features.max(),
+                                                                      spatial_features.shape))
+            log.info('flow   : min {} mean {} max {} shape {}'.format(flow_features.min(),
+                                                                      flow_features.mean(),
+                                                                      flow_features.max(),
+                                                                      flow_features.shape))
+            # a common issue I've had is not properly z-scoring input channels. this will check for that
+            if len(images.shape) == 4:
+                N, C, H, W = images.shape
+                log.debug('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
+                log.debug('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
+                log.debug('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
+                log.debug('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
+            elif len(images.shape) == 5:
+                N, C, T, H, W = images.shape
+                log.debug('channel min:  {}'.format(images[0].min(dim=2).values))
+                log.debug('channel mean: {}'.format(images[0].mean(dim=2)))
+                log.debug('channel max : {}'.format(images[0].max(dim=2).values))
+                log.debug('channel std : {}'.format(images[0].std(dim=2)))
             has_printed = True
 
-        # buffer['images'].append(images)
-        buffer['probabilities'].append(probabilities)
-        buffer['logits'].append(logits)
-        buffer['spatial_features'].append(spatial_features)
-        buffer['flow_features'].append(flow_features)
+        probabilities = activation_function(logits).detach().cpu()
+        logits = logits.detach().cpu()
+        spatial_features = spatial_features.detach().cpu()
+        flow_features = flow_features.detach().cpu()
+        if i == 0:
+            # print(f'~~~ N: {N} ~~~')
+            buffer['probabilities'] = torch.zeros((video_frame_num, probabilities.shape[1]),
+                                                  dtype=probabilities.dtype)
+            buffer['logits'] = torch.zeros((video_frame_num, logits.shape[1]),
+                                           dtype=logits.dtype)
+            buffer['spatial_features'] = torch.zeros((video_frame_num, spatial_features.shape[1]),
+                                                     dtype=spatial_features.dtype)
+            buffer['flow_features'] = torch.zeros((video_frame_num, flow_features.shape[1]),
+                                                  dtype=flow_features.dtype)
+        buffer['probabilities'][frame_numbers, :] = probabilities
+        buffer['logits'][frame_numbers] = logits
 
-    for key, value in buffer.items():
-        buffer[key] = torch.cat(value).squeeze()
+        buffer['spatial_features'][frame_numbers] = spatial_features
+        buffer['flow_features'][frame_numbers] = flow_features
     return buffer
 
 
@@ -238,14 +265,18 @@ def extract(rgbs: list,
         parameter.requires_grad = False
     model.eval()
 
-    has_printed = False
-
     if final_activation == 'softmax':
         activation_function = nn.Softmax(dim=1)
     elif final_activation == 'sigmoid':
         activation_function = nn.Sigmoid()
     else:
         raise ValueError('unknown final activation: {}'.format(final_activation))
+
+    # 16 is a decent trade off between CPU and GPU load on datasets I've tested
+    if batch_size == 'auto':
+        batch_size = 16
+    batch_size = min(batch_size, 16)
+    log.info('inference batch size: {}'.format(batch_size))
 
     class_names = [n.encode("ascii", "ignore") for n in class_names]
 
@@ -267,13 +298,15 @@ def extract(rgbs: list,
                 else:
                     log.warning('Latent {} already found in file {}, skipping...'.format(latent_name, h5file))
                     continue
-            group = f.create_group(latent_name)
             # iterate over each frame of the movie
             outputs = predict_single_video(rgb, model, activation_function, fusion, num_rgb, mean_by_channels,
                                            device, cpu_transform, gpu_transform, should_print=i == 0,
                                            num_workers=num_workers, batch_size=batch_size)
-
+            if i == 0:
+                for k,v in outputs.items():
+                    log.info('{}: {}'.format(k, v.shape))
             # these assignments are where it's actually saved to disk
+            group = f.create_group(latent_name)
             group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
             group.create_dataset('logits', data=outputs['logits'], dtype=np.float32)
             group.create_dataset('P', data=outputs['probabilities'], dtype=np.float32)

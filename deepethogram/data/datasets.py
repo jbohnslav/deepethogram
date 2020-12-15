@@ -1,4 +1,5 @@
 import bisect
+from collections import deque
 import logging
 import os
 import pprint
@@ -27,252 +28,141 @@ from deepethogram.file_io import read_labels
 log = logging.getLogger(__name__)
 
 
-class SequentialIterator:
-    """Optimized loader to read short clips of videos to disk only using sequential video reads.
+# https://pytorch.org/docs/stable/data.html
+class VideoIterable(data.IterableDataset):
+    def __init__(self, videofile, transform, sequence_length=11, num_workers: int = 0,
+                 mean_by_channels: Union[list, np.ndarray] = [0, 0, 0]):
+        super().__init__()
 
-    Use case: Your model needs ~11 frames concatenated together as input, and you want to do inference on an entire
-        video. Every batch only reads one frame. The newest frame is added to the last position in the stack.
-        The now 12th frame is removed from the stack.
-        Other dataloaders with this use case would re-load all 11 frames.
-    Features:
-        - Only uses sequential reads
-        - Only reads one frame per new batch
-        - Only moves one single frame to GPU per batch
-        - Option to return labels as well
-
-    Example:
-        iterator = SequentialIterator('movie.avi', num_images=11, device='cuda:0')
-        for batch in iterator:
-            outputs = model(batch)
-            # do something
-    """
-
-    def __init__(self, videofile, num_images: int, device, transform=None, stack_channels: bool = True,
-                 batch_size: int = 1, supervised: bool = False):
-        """Initializes a SequentialIterator object
-
-        Args:
-            videofile: path to a video file
-            num_images: how many sequential images to load. e.g. 11: resulting tensor will have 33 channels
-            device: torch.device object or string. string examples: 'cpu', 'cuda:0'
-            transform: either None or a TorchVision.transforms object or opencv_transforms object
-            stack_channels: if True, returns Tensor of shape (num_images*3, H, W). if False, returns Tensor of shape
-                (num_images, 3, H, W)
-            batch_size: 1. Other values not implemented
-            supervised: whether or not to return a label. False: for self-supervision
-        Returns:
-            SequentialIterator object
-        """
         assert os.path.isfile(videofile) or os.path.isdir(videofile)
-        # self.num_flows = num_flows
-        self.num_images = int(num_images)
-
-        self.reader = VideoReader(videofile)
-
-        # self.cap = cv2.VideoCapture(videofile)
-        # self.nframes = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.nframes = self.reader.nframes
-        if self.num_images == 1:
-            self.num_batches = self.nframes
-        elif (self.num_images % 2) == 0:
-            self.num_batches = self.nframes + self.num_images // 2
-        else:
-            self.num_batches = self.nframes + self.num_images // 2
-            # print(self.num_batches)
-
-        self.index = 0
-        self.true_index = 0
+        self.readers = {i: 0 for i in range(num_workers)}
+        self.videofile = videofile
+        # self.reader = VideoReader(videofile)
         self.transform = transform
 
-        if device is not None:
-            if not isinstance(device, torch.device):
-                assert isinstance(device, str)
-                device = torch.device(device)
-        self.device = device
-        self.stack_channels = stack_channels
-        if batch_size > 1:
-            raise NotImplemented
-        self.batch_size = batch_size
-        self.supervised = supervised
-        if self.supervised:
-            labelfile, label_type = find_labelfile(videofile)
-            label = read_labels(labelfile)
-            H, W = label.shape
-            if W > H:
-                label = label.T
-            self.label = label
-        self.seed = np.random.randint(2147483647)
-        self.dtype = torch.uint8
+        self.start = 0
+        self.sequence_length = sequence_length
+        with VideoReader(self.videofile) as reader:
+            self.N = len(reader)
 
-    def process_one_frame(self, frame: np.ndarray) -> torch.Tensor:
-        """Processes one frame, including augmentations"""
-        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        if self.transform is not None:
-            # augmentations
-            # set the random seed here so that if there's something like randomcropping (not advised!!) the same random
-            # crop is performed for every image in the dataset
-            random.seed(self.seed)
-            frame = self.transform(frame)
-        else:
-            raise ValueError('must set CPU transforms in SequentialIterator')
-        if type(frame) != torch.Tensor:
-            frame = torch.from_numpy(frame)
-        # if frame.dtype != torch.float32:
-        #     frame = frame.float() / 255
-        if self.device is not None:
-            # move to GPU if necessary
-            if frame.device != self.device:
-                frame = frame.to(self.device)
-        return frame
+        self.blank_start_frames = self.sequence_length // 2
+        self.cnt = 0
 
-    def zeros(self):
-        """Convenience function for generating a zeros image"""
-        return torch.zeros((self.batch_size, self.c, self.h, self.w), dtype=self.dtype)
+        self.mean_by_channels = self.parse_mean_by_channels(mean_by_channels)
+        # NOTE: not great practice, but I want each dataset to know when to stop
+        self.num_workers = num_workers
+        self.buffer = deque([], maxlen=self.sequence_length)
 
-    def set_batch_image(self, frame, index_in_batch):
-        """Puts the input frame into the current batch.
-
-        Args:
-            frame: torch Tensor of image data to be inserted into batch
-            index_in_batch: integer of which number in batch to put the image into. Must be > 0 and < self.num_images
-        """
-        assert (index_in_batch < self.num_images)
-        if type(frame) != torch.Tensor:
-            frame = torch.from_numpy(frame)
-        if frame.device != self.device:
-            frame = frame.to(self.device)
-        # channel first for torch
-        if frame.shape[0] != self.c:
-            frame = frame.permute(2, 0, 1)
-        # now frame should be something like 3,256,256
-        if self.stack_channels:
-            start = index_in_batch * self.c
-            end = index_in_batch * self.c + self.c
-            self.batch[0, start:end, ...] = frame
-        else:
-            self.batch[0, :, index_in_batch, ...] = frame
-
-    def initialize(self):
-        """Sets up batch on the first frame of the video"""
-        assert (self.index == 0)
-        # batch = np.zeros((self.num_images, self.h, self.w, 3), dtype=np.float32)
-        # do this so that we can get height, width after whatever transforms
-        # ret, frame = self.cap.read()
-        frame = next(self.reader)
-        if self.supervised:
-            label = self.label[self.index, :]
-        self.index += 1
-        frame = self.process_one_frame(frame)
-        # cover the case where you use transforms.ToTensor()
-        if frame.shape[0] > frame.shape[2]:
-            H, W, C = frame.shape
-        else:
-            C, H, W = frame.shape
-        # H,W,C = frame.shape
-        self.h = H
-        self.w = W
-        self.c = C
-
-        i = 0
-        if self.stack_channels:
-            batch = torch.zeros((self.batch_size, self.num_images * self.c, self.h, self.w), dtype=self.dtype)
-        else:
-            batch = torch.zeros((self.batch_size, self.c, self.num_images, self.h, self.w), dtype=self.dtype)
-        batch = batch.to(self.device)
-        # batch = torch.from_numpy(batch).to(self.device)
-        self.batch = batch
-
-        num_start_images = self.num_images // 2
-        self.set_batch_image(frame, num_start_images)
-        for i in range(num_start_images + 1, self.num_images):
-            # print(i)
-            frame = next(self.reader)
-            frame = self.process_one_frame(frame)
-            self.set_batch_image(frame, i)
-            self.index += 1
-
-        if self.supervised:
-            return self.batch, label
-        else:
-            return self.batch
-
-    def roll_and_append(self, frame: Union[torch.Tensor, np.ndarray]):
-        """Makes frame the final image in the batch, removes the first image.
-
-        Args:
-            frame: the video frame to be added to the end of the batch
-        Example:
-            # Current batch has images [0,1,2,3,4,5,6,7,8,9,10]
-            self.roll_and_append(frame_11)
-            # batch now has images [1,2,3,4,5,6,7,8,9,10,11]
-        """
-        if type(frame) != torch.Tensor:
-            frame = torch.from_numpy(frame)
-        if frame.device != self.device:
-            frame = frame.to(self.device)
-        # channel first for torch
-        if frame.ndim < 4:
-            frame = frame.unsqueeze(0)
-        if frame.shape[1] != self.c:
-            frame = frame.permute(0, 3, 1, 2)
-        if not self.stack_channels:
-            # N, C, H, W -> N, C, T=0, H, W
-            frame = frame.unsqueeze(2)
-
-        if self.stack_channels:
-            self.batch = torch.cat((self.batch[:, self.c:, ...], frame), dim=1)
-        else:
-            self.batch = torch.cat((self.batch[:, :, 1:, ...], frame), dim=2)
-
-    # Python 2 compatibility:
-    def next(self):
-        return self.__next__()
-
-    def __next__(self):
-        """Loads the next frame from self.reader, rolls the current batch, and appends the next frame to the batch"""
-        if self.index >= self.num_batches:
-            self.end()
-            raise StopIteration
-        if self.index == 0:
-            return (self.initialize())
-        batch = self.batch
-        if self.index < self.nframes:
-            frame = next(self.reader)
-            frame = self.process_one_frame(frame)
-        else:
-            frame = self.zeros()
-        self.roll_and_append(frame)
-        if self.supervised:
-            label = self.label[self.true_index, :]
-        self.true_index += 1
-        self.index += 1
-        if self.supervised:
-            return self.batch, label
-        else:
-            return self.batch
+        self.reset_counter = self.num_workers
+        self._zeros_image = None
+        self._image_shape = None
+        self.get_image_shape()
 
     def __len__(self):
-        return self.nframes
+        return self.N
+
+    def get_image_shape(self):
+        with VideoReader(self.videofile) as reader:
+            im = reader[0]
+        im = self.transform(im)
+        self._image_shape = im.shape
+
+    def get_zeros_image(self, ):
+        if self._zeros_image is None:
+            if self._image_shape is None:
+                raise ValueError('must set shape before getting zeros image')
+            # ALWAYS ASSUME OUTPUT IS TRANSPOSED
+            self._zeros_image = np.zeros(self._image_shape, dtype=np.uint8)
+            for i in range(3):
+                self._zeros_image[i, ...] = self.mean_by_channels[i]
+        return self._zeros_image
+
+    def parse_mean_by_channels(self, mean_by_channels):
+        if isinstance(mean_by_channels[0], (float, np.floating)):
+            return np.clip(np.array(mean_by_channels) * 255, 0, 255).astype(np.uint8)
+        elif isinstance(mean_by_channels[0], (int, np.integer)):
+            assert np.array_equal(np.clip(mean_by_channels, 0, 255), np.array(mean_by_channels))
+            return np.array(mean_by_channels).astype(np.uint8)
+        else:
+            raise ValueError('unexpected type for input channel mean: {}'.format(mean_by_channels))
+
+    def my_iter_func(self, start, end):
+        for i in range(start, end):
+            self.buffer.append(self.get_current_item())
+            yield {'images': np.stack(self.buffer, axis=1),
+                   'framenum': self.cnt - 1 - self.sequence_length // 2}
+
+    def get_current_item(self):
+        worker_info = data.get_worker_info()
+        worker_id = worker_info.id if worker_info is not None else 0
+        # blank_start_frames =
+        # print(self.cnt)
+        if self.cnt < 0:
+            im = self.get_zeros_image()
+        elif self.cnt >= self.N:
+            im = self.get_zeros_image()
+        else:
+            try:
+                im = self.readers[worker_id][self.cnt]
+            except Exception as e:
+                print(f'problem reading frame {self.cnt}')
+                raise
+            im = self.transform(im)
+        self.cnt += 1
+        return im
+
+    def fill_buffer_init(self, iter_start):
+        self.cnt = iter_start
+        # hack for the first one: don't quite fill it up
+        for i in range(iter_start, iter_start + self.sequence_length - 1):
+            self.buffer.append(self.get_current_item())
 
     def __iter__(self):
-        return self
+        worker_info = data.get_worker_info()
+        # print(worker_info)
+        iter_end = self.N - self.sequence_length // 2
+        if worker_info is None:
+            iter_start = - self.blank_start_frames
+            self.readers[0] = VideoReader(self.videofile)
+        else:
+            per_worker = self.N // self.num_workers
+            remaining = self.N % per_worker
+            nums = [per_worker for i in range(self.num_workers)]
+            nums = [nums[i] + 1 if i < remaining else nums[i] for i in range(self.num_workers)]
+            # print(nums)
+            nums.insert(0, 0)
+            starts = np.cumsum(nums[:-1])  # - self.blank_start_frames
+            starts = starts.tolist()
+            ends = starts[1:] + [iter_end]
+            starts[0] = -self.blank_start_frames
 
-    def totensor(self, batch):
-        """Converts a numpy image to a torch Tensor and moves it to self.device"""
-        tensor = torch.from_numpy(np.concatenate(batch.transpose(0, 3, 1, 2)).astype(np.float32)).unsqueeze(0)
-        # if self.pad is not None:
-        # tensor = F.pad(tensor, self.pad)
-        tensor = tensor.to(self.device)
-        return (tensor)
+            # print(starts, ends)
 
-    def end(self):
-        """Closes video file object"""
-        if hasattr(self, 'reader'):
-            self.reader.close()
+            iter_start = starts[worker_info.id]
+            iter_end = min(ends[worker_info.id], self.N)
+            # print(f'worker: {worker_info.id}, start: {iter_start} end: {iter_end}')
+            self.readers[worker_info.id] = VideoReader(self.videofile)
+        # FILL THE BUFFER TO START
+        # print('iter start: {}'.format(iter_start))
+        self.fill_buffer_init(iter_start)
+        return self.my_iter_func(iter_start, iter_end)
+
+    def close(self):
+        for k, v in self.readers.items():
+            if isinstance(v, int):
+                continue
+            try:
+                v.close()
+            except Exception as e:
+                print(f'error destroying reader {k}')
+            else:
+                print(f'destroyed {k}')
+
+    def __exit__(self):
+        self.close()
 
     def __del__(self):
-        """destructor"""
-        self.end()
+        self.close()
 
 
 class TwoStreamIterator:
@@ -835,7 +725,7 @@ class SingleSequenceDataset(data.Dataset):
         assert os.path.isfile(h5file)
         self.h5file = h5file
         if labelfile is not None:
-            assert (os.path.isfile(labelfile))
+            assert os.path.isfile(labelfile)
             self.supervised = True
         else:
             self.supervised = False
@@ -990,8 +880,10 @@ class SingleSequenceDataset(data.Dataset):
                                                                                                     self.h5file,
                                                                                                     list(f.keys())))
             if self.is_two_stream:
-                assert self.flow_key in f
-                assert self.image_key in f
+                assert self.flow_key in f, 'flow key {} not found in file {}'.format(self.flow_key,
+                                                                                     self.h5file)
+                assert self.image_key in f, 'image key {} not found in file {}'.format(self.image_key,
+                                                                                       self.h5file)
             if self.return_logits:
                 try:
                     logits = f[self.logit_key][:]
