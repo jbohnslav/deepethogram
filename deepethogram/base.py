@@ -1,4 +1,5 @@
 import logging
+import math
 from typing import Tuple
 
 import matplotlib.pyplot as plt
@@ -16,6 +17,7 @@ from deepethogram.schedulers import initialize_scheduler
 from deepethogram import viz
 
 log = logging.getLogger(__name__)
+
 
 class BaseLightningModule(pl.LightningModule):
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics: Metrics, visualization_func):
@@ -37,7 +39,7 @@ class BaseLightningModule(pl.LightningModule):
             raise NotImplementedError
         self.gpu_transforms: dict = gpu_transforms
 
-        self.optimizer = None # will be overridden in configure_optimizers
+        self.optimizer = None  # will be overridden in configure_optimizers
         self.hparams.weight_decay = None
         if 'feature_extractor' in self.hparams.keys():
             self.hparams.weight_decay = self.hparams.feature_extractor.weight_decay
@@ -111,14 +113,14 @@ class BaseLightningModule(pl.LightningModule):
 
 
 # @profile
-def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler:str=None) -> pl.Trainer:
+def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: str = None,
+                         bs_start: int=2, bs_end: int=2048) -> pl.Trainer:
     steps_per_epoch = cfg.train.steps_per_epoch
     for split in ['train', 'val', 'test']:
         steps_per_epoch[split] = steps_per_epoch[split] if steps_per_epoch[split] is not None else 1.0
 
     # reload_dataloaders_every_epoch = True: a bit slower, but enables validation dataloader to get the new, automatic
     # learning rate schedule.
-
 
     if cfg.compute.batch_size == 'auto' or cfg.train.lr == 'auto':
         trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
@@ -146,7 +148,10 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler:st
         # dramatically reduces RAM usage by this process
         lightning_module.hparams.compute.num_workers = min(tmp_workers, 1)
         if cfg.compute.batch_size == 'auto':
-            new_batch_size = tuner.scale_batch_size(lightning_module, mode='power', steps_per_trial=10)
+            max_trials = int(math.log2(bs_end)) - int(math.log2(bs_start))
+            log.info('max trials: {}'.format(max_trials))
+            new_batch_size = trainer.tuner.scale_batch_size(lightning_module, mode='power', steps_per_trial=20,
+                                                            init_val=bs_start, max_trials=max_trials)
 
             cfg.compute.batch_size = new_batch_size
             log.info('auto-tuned batch size: {}'.format(new_batch_size))
@@ -183,4 +188,3 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler:st
                          profiler=profiler)
 
     return trainer
-
