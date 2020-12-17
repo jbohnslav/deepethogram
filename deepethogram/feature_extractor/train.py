@@ -76,7 +76,7 @@ def train_from_cfg_lightning(cfg):
 
     model_parts = build_model_from_cfg(cfg, pos=data_info['pos'], neg=data_info['neg'])
     _, spatial_classifier, flow_classifier, fusion, model = model_parts
-    log.info('model: {}'.format(model))
+    log.debug('model: {}'.format(model))
 
     num_classes = len(cfg.project.class_names)
 
