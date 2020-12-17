@@ -2,6 +2,7 @@ from collections import defaultdict
 import logging
 import os
 import sys
+import time
 from typing import Type
 
 import h5py
@@ -20,6 +21,9 @@ from deepethogram.data.datasets import VideoIterable
 from deepethogram.feature_extractor.train import build_model_from_cfg as build_feature_extractor
 
 log = logging.getLogger(__name__)
+
+np.set_printoptions(suppress=True)
+torch.set_printoptions(sci_mode=False)
 
 
 def unpack_penultimate_layer(model: Type[nn.Module], fusion: str = 'average'):
@@ -180,6 +184,19 @@ def predict_single_video(videofile, model, activation_function: nn.Module,
     return buffer
 
 
+def check_if_should_run_inference(h5file, mode, latent_name, overwrite):
+    should_run = True
+    with h5py.File(h5file, mode) as f:
+
+        if latent_name in list(f.keys()):
+            if overwrite:
+                del f[latent_name]
+            else:
+                log.warning('Latent {} already found in file {}, skipping...'.format(latent_name, h5file))
+                should_run = False
+    return should_run
+
+
 def extract(rgbs: list,
             model,
             final_activation: str,
@@ -264,35 +281,44 @@ def extract(rgbs: list,
         h5file = basename + '_outputs.h5'
         mode = 'r+' if os.path.isfile(h5file) else 'w'
 
-        with h5py.File(h5file, mode) as f:
+        should_run = check_if_should_run_inference(h5file, mode, latent_name, overwrite)
+        if not should_run:
+            continue
 
-            if latent_name in list(f.keys()):
-                if overwrite:
-                    del f[latent_name]
-                else:
-                    log.warning('Latent {} already found in file {}, skipping...'.format(latent_name, h5file))
-                    continue
-            # iterate over each frame of the movie
-            outputs = predict_single_video(rgb, model, activation_function, fusion, num_rgb, mean_by_channels,
-                                           device, cpu_transform, gpu_transform, should_print=i == 0,
-                                           num_workers=num_workers, batch_size=batch_size)
-            if i == 0:
-                for k, v in outputs.items():
-                    log.info('{}: {}'.format(k, v.shape))
-                    if k == 'debug':
-                        log.info('All should be 1.0: min: {:.4f} mean {:.4f} max {:.4f}'.format(
-                            v.min(), v.mean(), v.max()
-                        ))
-            # these assignments are where it's actually saved to disk
-            group = f.create_group(latent_name)
-            group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
-            group.create_dataset('logits', data=outputs['logits'], dtype=np.float32)
-            group.create_dataset('P', data=outputs['probabilities'], dtype=np.float32)
-            group.create_dataset('spatial_features', data=outputs['spatial_features'], dtype=np.float32)
-            group.create_dataset('flow_features', data=outputs['flow_features'], dtype=np.float32)
-            dt = h5py.string_dtype()
-            group.create_dataset('class_names', data=class_names, dtype=dt)
-            del outputs
+        # iterate over each frame of the movie
+        outputs = predict_single_video(rgb, model, activation_function, fusion, num_rgb, mean_by_channels,
+                                       device, cpu_transform, gpu_transform, should_print=i == 0,
+                                       num_workers=num_workers, batch_size=batch_size)
+        if i == 0:
+            for k, v in outputs.items():
+                log.info('{}: {}'.format(k, v.shape))
+                if k == 'debug':
+                    log.info('All should be 1.0: min: {:.4f} mean {:.4f} max {:.4f}'.format(
+                        v.min(), v.mean(), v.max()
+                    ))
+
+        # if running inference from multiple processes, this will wait until the resource is available
+        has_worked = False
+        while not has_worked:
+            try:
+                f = h5py.File(h5file, 'r+')
+            except OSError as e:
+                log.warning('resource unavailable, waiting 30 seconds...')
+                time.sleep(30)
+            else:
+                has_worked = True
+
+        # these assignments are where it's actually saved to disk
+        group = f.create_group(latent_name)
+        group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
+        group.create_dataset('logits', data=outputs['logits'], dtype=np.float32)
+        group.create_dataset('P', data=outputs['probabilities'], dtype=np.float32)
+        group.create_dataset('spatial_features', data=outputs['spatial_features'], dtype=np.float32)
+        group.create_dataset('flow_features', data=outputs['flow_features'], dtype=np.float32)
+        dt = h5py.string_dtype()
+        group.create_dataset('class_names', data=class_names, dtype=dt)
+        del outputs
+        f.close()
 
 
 @hydra.main(config_path='../conf/feature_extractor_inference.yaml')
