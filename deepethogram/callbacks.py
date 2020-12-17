@@ -151,12 +151,12 @@ class FPSCallback(Callback):
         self.end_batch('speedtest', batch, pl_module)
 
 
-class SpeedtestCallback(Callback):
-    def __init__(self):
-        super().__init__()
-
-    def on_validation_end(self, trainer, pl_module):
-        trainer.test(pl_module)
+# class SpeedtestCallback(Callback):
+#     def __init__(self):
+#         super().__init__()
+#
+#     def on_validation_end(self, trainer, pl_module):
+#         trainer.test(pl_module)
 
 
 class MetricsCallback(Callback):
@@ -172,7 +172,7 @@ class MetricsCallback(Callback):
 
     def on_test_epoch_end(self, trainer, pl_module):
         pl_module.metrics.end_epoch('test')
-        pl_module.metrics.end_epoch('speedtest')
+        # pl_module.metrics.end_epoch('speedtest')
 
     def on_keyboard_interrupt(self, trainer, pl_module):
         pl_module.metrics.buffer.clear()
@@ -229,7 +229,7 @@ class StopperCallback(Callback):
         self.stopper = stopper
         # self.should_stop = False
 
-    def on_train_epoch_start(self, trainer, pl_module):
+    def on_train_epoch_end(self, trainer, pl_module, outputs):
         # do this when starting because we're sure that both validation and training have ended
         if pl_module.current_epoch == 0:
             return
@@ -246,6 +246,7 @@ class StopperCallback(Callback):
             raise ValueError('invalid stopping name: {}'.format(self.stopper.name))
 
         if should_stop:
-            log.info('Stopping criterion reached! Raising KeyboardInterrupt to quit')
-            # trainer.should_stop = True
-            raise KeyboardInterrupt
+            # log.info('Stopping criterion reached! Raising KeyboardInterrupt to quit')
+            log.info('Stopping criterion reached! setting trainer.should_stop=True')
+            trainer.should_stop = True
+            # raise KeyboardInterrupt
