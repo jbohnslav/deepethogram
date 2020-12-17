@@ -816,18 +816,18 @@ def plot_confusion_from_logger(logger_file, fig, class_names=None, epoch=None):
     plt.tight_layout()
 
 
-def make_precision_recall_figure(logger_file, fig=None):
+def make_precision_recall_figure(logger_file, fig=None, splits=['train', 'val']):
     """ Plots precision vs recall """
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     if fig is None:
         fig = plt.figure(figsize=(14, 7))
 
-    for i, split in enumerate(['train', 'val']):
+    for i, split in enumerate(splits):
         ap_by_class = load_logger_data(logger_file, 'mAP_by_class', split)
         precision = load_logger_data(logger_file, 'precision', split, is_threshold=True)
         recall = load_logger_data(logger_file, 'recall', split, is_threshold=True)
 
-        ax = fig.add_subplot(1, 2, i + 1)
+        ax = fig.add_subplot(1, len(splits), i + 1)
         # precision, recall = train_metrics['precision'], train_metrics['recall']
 
         K = precision.shape[1]
@@ -1026,18 +1026,18 @@ def make_thresholds_figure(logger_file, split, fig=None, class_names=None):
     return fig
 
 
-def make_roc_figure(logger_file, fig=None):
+def make_roc_figure(logger_file, fig=None, splits=['train', 'val']):
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     if fig is None:
         fig = plt.figure(figsize=(14, 7))
 
-    for i, split in enumerate(['train', 'val']):
+    for i, split in enumerate(splits):
 
         auroc_by_class = load_logger_data(logger_file, 'auroc_by_class', split)
         tpr = load_logger_data(logger_file, 'tpr', split, is_threshold=True)
         fpr = load_logger_data(logger_file, 'fpr', split, is_threshold=True)
 
-        ax = fig.add_subplot(1, 2, i + 1)
+        ax = fig.add_subplot(1, len(splits), i + 1)
 
         K = tpr.shape[1]
         for j in range(K):
@@ -1054,7 +1054,7 @@ def make_roc_figure(logger_file, fig=None):
     return fig
 
 
-def visualize_binary_confusion(logger_file, fig=None):
+def visualize_binary_confusion(logger_file, fig=None, splits=['train', 'val']):
     """ Visualizes binary confusion matrices """
     if fig is None:
         fig = plt.figure(figsize=(14, 14))
@@ -1066,7 +1066,7 @@ def visualize_binary_confusion(logger_file, fig=None):
         cms = cms[-1, ...]
     K = cms.shape[0]
 
-    num_rows = 4
+    num_rows = len(splits)*2
     num_cols = K
     ind = 1
 
@@ -1088,12 +1088,10 @@ def visualize_binary_confusion(logger_file, fig=None):
                 ax.set_xlabel('')
             ind += 1
 
-    plot_cms_in_row(cms, 'Train')
-    plot_cms_in_row(cms, 'Train\nNormalized', normalize=True)
-
-    cms = load_logger_data(logger_file, 'binary_confusion', 'val')
-    plot_cms_in_row(cms, 'Val')
-    plot_cms_in_row(cms, 'Val\nNormalized', normalize=True)
+    for split in splits:
+        cms = load_logger_data(logger_file, 'binary_confusion', split)
+        plot_cms_in_row(cms, split)
+        plot_cms_in_row(cms, f'{split}\nNormalized', normalize=True)
 
     plt.tight_layout()
     return fig
@@ -1122,6 +1120,25 @@ def visualize_logger_multilabel_classification(logger_file):
 
     fig = make_precision_recall_figure(logger_file)
     save_figure(fig, 'precision_recall', False, 6)
+
+    try:
+        splits = ['train', 'val', 'test']
+        fig = make_thresholds_figure(logger_file, 'test')
+        save_figure(fig, 'thresholds_this_epoch_test', False, 7)
+
+        fig = visualize_binary_confusion(logger_file, splits=splits)
+        save_figure(fig, 'binary_confusion_with_test', False, 8)
+
+        fig = make_roc_figure(logger_file, splits=splits)
+        save_figure(fig, 'ROC_with_test', False, 9)
+
+        fig = make_precision_recall_figure(logger_file, splits=['train', 'val', 'test'])
+        save_figure(fig, 'precision_recall_withtest', False, 10)
+
+    except Exception as e:
+        # no test set yet
+        log.debug('error in test set viz: {}'.format(e))
+        # pass
 
 
 def make_learning_curves_figure_opticalflow(logger_file, fig=None):
