@@ -1722,6 +1722,7 @@ def get_sequence_datasets(datadir: Union[str, os.PathLike], latent_name: str, se
 
     splits = ['train', 'val', 'test']
     datasets = {}
+    nonoverlapping = {'train': nonoverlapping, 'val': True, 'test': True}
     for split in splits:
         outputfiles = [records[i]['output'] for i in split_dictionary[split]]
 
@@ -1737,7 +1738,7 @@ def get_sequence_datasets(datadir: Union[str, os.PathLike], latent_name: str, se
             labelfiles = None
 
         datasets[split] = SequenceDataset(outputfiles, labelfiles, latent_name, sequence_length,
-                                          is_two_stream=is_two_stream, nonoverlapping=nonoverlapping,
+                                          is_two_stream=is_two_stream, nonoverlapping=nonoverlapping[split],
                                           dimension=dimension,
                                           store_in_ram=store_in_ram, return_logits=return_logits, reduce=reduce)
 
