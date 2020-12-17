@@ -855,7 +855,9 @@ def add_text_to_line(xs, ys, ax, color):
     if len(xs) == 1 or len(ys) == 1:
         return
     x, y = xs[-1], ys[-1]
-    x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
+    if np.isinf(x) or np.isnan(x) or np.isinf(y) or np.isnan(y):
+        return
+    # x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
     ax.text(x, y, '{:.4f}'.format(y), color=color)
 
 
@@ -944,7 +946,9 @@ def make_learning_curves_figure_multilabel_classification(logger_file, fig=None)
         data = get_data_from_file(f, 'mAP')
         plot_metric(data, 'Average Precision', ax, False, plot_args, color_inds)
 
-    plt.tight_layout()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        plt.tight_layout()
     return fig
 
 
