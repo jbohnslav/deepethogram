@@ -153,6 +153,7 @@ def train_from_cfg_lightning(cfg):
     # see above for horrible syntax explanation
     # lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
     trainer.fit(lightning_module)
+    trainer.test(model=lightning_module)
     # utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
 
 
@@ -299,6 +300,13 @@ class HiddenTwoStreamLightning(BaseLightningModule):
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
         probabilities = self.activation(outputs)
+        loss = self.criterion(outputs, batch['labels'])
+        self.metrics.buffer.append('test', {
+            'loss': loss.detach(),
+            'probs': probabilities.detach(),
+            'labels': batch['labels'].detach()
+        })
+
 
     def visualize_batch(self, images, probs, labels, split: str):
         if not self.hparams.train.viz:
