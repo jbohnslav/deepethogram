@@ -1076,11 +1076,15 @@ def load_default(conf_name: str) -> dict:
     return defaults
 
 def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5') -> None:
-    assert (os.path.isfile(config_file))
+    assert os.path.isfile(config_file)
     project_config = utils.load_yaml(config_file)
 
     records = get_records_from_datadir(os.path.join(project_config['project']['path'],
                                                     project_config['project']['data_path']))
-    for record in tqdm(records, desc='converting videos'):
+    for key, record in tqdm(records.items(), desc='converting videos'):
         videofile = record['rgb']
-        convert_video(videofile, movie_format)
+        try:
+            convert_video(videofile, movie_format=movie_format)
+        except ValueError as e:
+            print(e)
+
