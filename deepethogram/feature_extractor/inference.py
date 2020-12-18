@@ -64,19 +64,35 @@ def unpack_penultimate_layer(model: Type[nn.Module], fusion: str = 'average'):
 
         return hook
 
-    if fusion == 'average':
-        get_penultimate_layer(model.spatial_classifier).register_forward_hook(get_inputs('spatial'))
-        get_penultimate_layer(model.flow_classifier).register_forward_hook(get_inputs('flow'))
-    elif fusion == 'concatenate':
-        get_penultimate_layer(get_penultimate_layer(
-            model.spatial_classifier)).register_forward_hook(get_inputs('spatial'))
-        get_penultimate_layer(get_penultimate_layer(
-            model.flow_classifier)).register_forward_hook(get_inputs('flow'))
-    else:
-        raise NotImplementedError
+    final_spatial_linear = get_linear_layers(model.spatial_classifier)[-1]
+    final_spatial_linear.register_forward_hook(get_inputs('spatial'))
+    final_flow_linear = get_linear_layers(model.flow_classifier)[-1]
+    final_flow_linear.register_forward_hook(get_inputs('flow'))
+
+    # if fusion == 'average':
+    #     get_penultimate_layer(model.spatial_classifier).register_forward_hook(get_inputs('spatial'))
+    #     get_penultimate_layer(model.flow_classifier).register_forward_hook(get_inputs('flow'))
+    # elif fusion == 'concatenate':
+    #     get_penultimate_layer(get_penultimate_layer(
+    #         model.spatial_classifier)).register_forward_hook(get_inputs('spatial'))
+    #     get_penultimate_layer(get_penultimate_layer(
+    #         model.flow_classifier)).register_forward_hook(get_inputs('flow'))
+    # else:
+    #     raise NotImplementedError
     # list(model.spatial_classifier.children())[-1].register_forward_hook(get_inputs('spatial'))
     # list(model.flow_classifier.children())[-1].register_forward_hook(get_inputs('flow'))
     return activation
+
+
+def get_linear_layers(model: nn.Module):
+    linear_layers = []
+    children = model.children()
+    for child in children:
+        if isinstance(child, nn.Sequential):
+            linear_layers.append(get_linear_layers(child))
+        elif isinstance(child, nn.Linear):
+            linear_layers.append(child)
+    return linear_layers
 
 
 def get_penultimate_layer(model: Type[nn.Module]):
