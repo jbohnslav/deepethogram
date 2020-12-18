@@ -76,7 +76,7 @@ def train_from_cfg_lightning(cfg):
 
     model_parts = build_model_from_cfg(cfg, pos=data_info['pos'], neg=data_info['neg'])
     _, spatial_classifier, flow_classifier, fusion, model = model_parts
-    log.debug('model: {}'.format(model))
+    log.info('model: {}'.format(model))
 
     num_classes = len(cfg.project.class_names)
 
@@ -315,7 +315,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         viz_cnt = self.viz_cnt[split]
         if viz_cnt > 10:
             return
-        fig = plt.figure(figsize=(14, 14))
         if hasattr(self.model, 'flow_generator'):
             # re-compute optic flows for this batch for visualization
             batch_size = images.size(0)
@@ -331,15 +330,22 @@ class HiddenTwoStreamLightning(BaseLightningModule):
                 # only output the highest res flow
                 flows = self.model.flow_generator(images)[0]
                 inputs = self.gpu_transforms['denormalize'](images)
+            fig = plt.figure(figsize=(14, 14))
             viz.visualize_hidden(inputs.detach().cpu(), flows.detach().cpu(),
                                  probs.detach().cpu(), labels.detach().cpu(), fig=fig)
             viz.save_figure(fig, 'batch_with_flows', True, viz_cnt, split)
             del images, probs, labels, flows
         else:
+            fig = plt.figure(figsize=(14, 14))
             with torch.no_grad():
                 inputs = self.gpu_transforms['denormalize'](images)
             viz.visualize_batch_spatial(inputs, probs, labels, fig=fig)
             viz.save_figure(fig, 'batch_spatial', True, viz_cnt, split)
+        try:
+            # should've been closed in viz.save_figure. this is double checking
+            plt.close(fig)
+        except:
+            pass
         torch.cuda.empty_cache()
         # self.viz_cnt[split] += 1
 
