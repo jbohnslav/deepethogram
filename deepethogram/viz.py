@@ -1303,7 +1303,7 @@ def plot_ethogram(ethogram: np.ndarray, mapper, start_index: Union[int, float],
     new_ticks = [i + start_index for i in xticks]
     ax.set_xticklabels([str(int(i)) for i in new_ticks])
     ax.set_yticks(np.arange(0, len(classes)))
-    ax.set_yticklabels(classes, rotation=rotation)
+    ax.set_yticklabels(classes, rotation=rotation, fontdict={'fontsize': 12})
     ax.set_ylabel(ylabel)
     return im_h
 
@@ -1320,7 +1320,7 @@ def make_ethogram_movie(outfile: Union[str, bytes, os.PathLike],
     if mapper is None:
         mapper = Mapper()
 
-    fig = plt.figure(figsize=(6, 8))
+    fig = plt.figure(figsize=(10, 12))
     # camera = Camera(fig)
 
     # ethogram_keys = list(ethogram.keys())
@@ -1382,7 +1382,7 @@ def make_ethogram_movie(outfile: Union[str, bytes, os.PathLike],
     if outfile is None:
         out = anim.to_jshtml()
     else:
-        anim.save(outfile, fps=fps, extra_args=['-vcodec', 'libx264'])
+        anim.save(outfile, fps=fps)# , extra_args=['-vcodec', 'libx264'])
         out = None
     # have to use this ugly return syntax so that we can close the figure after saving
     plt.close(fig)
