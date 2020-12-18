@@ -111,7 +111,7 @@ def zscore_video(videofile: Union[str, os.PathLike], project_config: dict, strid
     Returns:
 
     """
-    assert os.path.isfile(videofile)
+    assert os.path.exists(videofile)
     assert projects.is_deg_file(videofile)
 
     image_stats = StatsRecorder()
