@@ -9,7 +9,7 @@ import cv2
 import h5py
 import matplotlib
 import numpy as np
-import tifffile as TIFF
+# import tifffile as TIFF
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.projections import get_projection_class
