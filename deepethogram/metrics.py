@@ -376,6 +376,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     epoch_metrics: dict
         each value is only a single float for the entire prediction / label set.
     """
+    log.info('evaluating thresholds. P: {} lab: {} n_workers: {}'.format(probabilities.shape, labels.shape, num_workers))
     if thresholds is None:
         # using 200 means that approximated mAP, AUROC is almost exactly the same as exact
         thresholds = np.linspace(0,1,200)
