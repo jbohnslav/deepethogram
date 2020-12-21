@@ -587,42 +587,6 @@ def get_models_from_module(module, get_function=False):
     return models
 
 
-# def get_latest_model(model_type: str, model_name: str, project_dir: Union[str, os.PathLike]):
-#     latest_models_file = os.path.join(project_dir, 'latest_models.yaml')
-#     root = os.path.dirname(os.path.abspath(__file__))
-#     if not os.path.isfile(latest_models_file):
-#         shutil.copy(os.path.join(root, 'defaults', 'latest_models.yaml'), latest_models_file)
-#     latest_models = load_yaml(latest_models_file)
-#     assert model_type in list(latest_models.keys())
-#     model_subtypes = latest_models[model_type]
-#     # print(model_type, model_name, latest_models)
-#     assert model_name in list(model_subtypes.keys())
-#     model_path = model_subtypes[model_name]
-#
-#     if model_path is not None:
-#         model_path = os.path.join(project_dir, 'models', model_path, 'checkpoint.pt')
-#         assert os.path.isfile(model_path)
-#     return model_path
-
-
-# def get_latest_model_and_name(project_dir: Union[str, os.PathLike], model_type: str) -> Tuple[str, str]:
-#     assert os.path.isdir(project_dir)
-#     latest_models_file = os.path.join(project_dir, 'latest_models.yaml')
-#     latest_models = load_yaml(latest_models_file)
-#     model_dict = latest_models[model_type]
-#     models = []
-#     for k, v in model_dict.items():
-#         if v is not None:
-#             models.append(k)
-#     if len(models) > 0:
-#         models.sort()
-#         model_name = models[-1]
-#     else:
-#         return None, None
-#     model_weight = model_dict[model_name]
-#     return model_name, model_weight
-
-
 def load_feature_extractor_components(model, checkpoint_file: Union[str, os.PathLike], component: str, device=None):
     """ Loads individual component from a hidden two-stream model checkpoint
 

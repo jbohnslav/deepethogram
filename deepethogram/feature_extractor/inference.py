@@ -123,10 +123,10 @@ def print_debug_statement(images, logits, spatial_features, flow_features, proba
         log.info('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
     elif len(images.shape) == 5:
         N, C, T, H, W = images.shape
-        log.info('channel min:  {}'.format(images[0].min(dim=2).values))
-        log.info('channel mean: {}'.format(images[0].mean(dim=2)))
-        log.info('channel max : {}'.format(images[0].max(dim=2).values))
-        log.info('channel std : {}'.format(images[0].std(dim=2)))
+        log.info('channel min:  {}'.format(images[0].min(dim=0).values))
+        log.info('channel mean: {}'.format(images[0].mean(dim=0)))
+        log.info('channel max : {}'.format(images[0].max(dim=0).values))
+        log.info('channel std : {}'.format(images[0].std(dim=0)))
 
 
 def predict_single_video(videofile, model, activation_function: nn.Module,
