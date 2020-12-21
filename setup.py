@@ -23,7 +23,7 @@ setuptools.setup(
     },
     python_requires='>=3.6',
     install_requires=['h5py',
-                      'hydra-core<1.0',
+                      'hydra-core>=1.0',
                       'kornia',
                       'matplotlib',
                       'numpy',
@@ -32,5 +32,7 @@ setuptools.setup(
                       'pandas',
                       'scikit-learn',
                       'scipy',
-                      'tqdm']
+                      'tqdm', 
+                      'vidio', 
+                      'pytorch_lightning']
 )
