@@ -391,7 +391,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     epoch_metrics: dict
         each value is only a single float for the entire prediction / label set.
     """
-    log.info('evaluating thresholds. P: {} lab: {} n_workers: {}'.format(probabilities.shape, labels.shape, num_workers))
+    # log.info('evaluating thresholds. P: {} lab: {} n_workers: {}'.format(probabilities.shape, labels.shape, num_workers))
     # log.info('SLURM in metrics file: {}'.format(slurm))
     if slurm and num_workers != 1:
         warnings.warn('using multiprocessing on slurm can cause issues. setting num_workers to 1')
