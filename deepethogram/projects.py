@@ -106,7 +106,13 @@ def add_video_to_project(project: dict, path_to_video: Union[str, os.PathLike], 
         path to the video file after moving to the DEG project data directory.
     """
     # assert (os.path.isdir(project_directory))
-    assert os.path.isfile(path_to_video), 'video not found! {}'.format(path_to_video)
+    if os.path.isdir(path_to_video):
+        copy_func = shutil.copytree
+    elif os.path.isfile(path_to_video):
+        copy_func = shutil.copy
+    else:
+        raise ValueError('video does not exist: {}'.format(path_to_video))
+
     assert mode in ['copy', 'symlink', 'move']
 
     # project = utils.load_yaml(os.path.join(project_directory, 'project_config.yaml'))
@@ -125,7 +131,7 @@ def add_video_to_project(project: dict, path_to_video: Union[str, os.PathLike], 
     os.makedirs(video_directory)
     new_path = os.path.join(video_directory, basename)
     if mode == 'copy':
-        shutil.copy(path_to_video, new_path)
+        copy_func(path_to_video, new_path)
     elif mode == 'symlink':
         os.symlink(path_to_video, new_path)
     elif mode == 'move':
@@ -204,13 +210,23 @@ def is_deg_file(filename: Union[str, os.PathLike]) -> bool:
     """Quickly assess if a file is part of a well-formatted subdirectory with a records.yaml"""
     if os.path.isdir(filename):
         basedir = filename
+        is_directory = True
     elif os.path.isfile(filename):
         basedir = os.path.dirname(filename)
+        is_directory = False
     else:
         raise ValueError('submit directory or file to is_deg_file, not {}'.format(filename))
 
     recordfile = os.path.join(basedir, 'record.yaml')
-    return os.path.isfile(recordfile)
+    record_exists = os.path.isfile(recordfile)
+
+    if is_directory:
+        # this is required in case the file passed is a directory full of images; e.g.
+        # project/DATA/animal0/images/00000.jpg
+        parent_record_exists = os.path.isfile(os.path.join(os.path.dirname(filename), 'record.yaml'))
+        return record_exists or parent_record_exists
+    else:
+        return record_exists
 
 
 def add_behavior_to_project(config_file: Union[str, os.PathLike], behavior_name: str):

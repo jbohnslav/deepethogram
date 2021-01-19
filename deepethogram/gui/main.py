@@ -883,11 +883,17 @@ class MainWindow(QMainWindow):
             raise ValueError('create or load a DEG project before loading video')
 
         options = QFileDialog.Options()
-        filestring = 'VideoReader files (*.h5 *.avi *.mp4)'
-        filename, _ = QFileDialog.getOpenFileName(self, "Click on video to open", data_dir,
+        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg)'
+        prompt = "Click on video to open. If a directory full of images, click any image"
+        filename, _ = QFileDialog.getOpenFileName(self, prompt, data_dir,
                                                   filestring, options=options)
         if len(filename) == 0 or not os.path.isfile(filename):
             raise ValueError('Could not open file: {}'.format(filename))
+        ext = os.path.splitext(filename)[1]
+
+        if ext in ['.png', '.jpg']:
+            filename = os.path.dirname(filename)
+            assert os.path.isdir(filename)
 
         self.initialize_video(filename)
         self.user_did_something()
@@ -900,13 +906,14 @@ class MainWindow(QMainWindow):
 
         # https://stackoverflow.com/questions/38252419/how-to-get-qfiledialog-to-select-and-return-multiple-folders
         options = QFileDialog.Options()
-        filestring = 'VideoReader files (*.h5 *.avi *.mp4)'
-        filenames, _ = QFileDialog.getOpenFileNames(self, "Click on videos to open", data_dir,
+        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg)'
+        prompt = "Click on video to open. If a directory full of images, click any image"
+        filenames, _ = QFileDialog.getOpenFileNames(self, prompt, data_dir,
                                                     filestring, options=options)
         if len(filenames) == 0:
             return
         for filename in filenames:
-            assert os.path.isfile(filename)
+            assert os.path.exists(filename)
 
         for filename in filenames:
             self.initialize_video(filename)
