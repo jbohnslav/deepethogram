@@ -499,7 +499,9 @@ class VideoWriter:
         assert movie_format in ['opencv', 'hdf5', 'ffmpeg', 'directory']
         self.filename = filename
         if movie_format == 'directory':
-            assert (filetype in ['.bmp', '.jpg', '.png', '.jpeg', '.tiff', '.tif'])
+            assert filetype in ['.bmp', '.jpg', '.png', '.jpeg', '.tiff', '.tif']
+            # make sure we don't have any endings
+            self.filename = os.path.splitext(self.filename)[0]
             # save it as "codec" so that initialization and write funcs have this info
             self.codec = filetype
         else:
@@ -507,6 +509,9 @@ class VideoWriter:
             if movie_format == 'opencv' or movie_format == 'ffmpeg':
                 assert (ext in ['.avi', '.mp4'])
             self.codec = codec
+        self.verbose = verbose
+        if os.path.exists(self.filename):
+            raise ValueError('File already exists! {}'.format(self.filename))
         self.height = height
         self.width = width
 
@@ -517,7 +522,7 @@ class VideoWriter:
 
         self.colorspace = colorspace
         assert (self.colorspace in ['BGR', 'RGB', 'GRAY'])
-        self.verbose = verbose
+
         self.asynchronous = asynchronous
 
         if movie_format == 'hdf5':

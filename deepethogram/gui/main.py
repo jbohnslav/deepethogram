@@ -18,9 +18,9 @@ from omegaconf import DictConfig
 from deepethogram import projects, utils
 from deepethogram.file_io import VideoReader
 from deepethogram.postprocessing import get_postprocessor_from_cfg
-from .custom_widgets import UnclickButtonOnPipeCompletion, SubprocessChainer
-from .mainwindow import Ui_MainWindow
-from .menus_and_popups import CreateProject, simple_popup_question, ShouldRunInference, overwrite_or_not
+from deepethogram.gui.custom_widgets import UnclickButtonOnPipeCompletion, SubprocessChainer
+from deepethogram.gui.mainwindow import Ui_MainWindow
+from deepethogram.gui.menus_and_popups import CreateProject, simple_popup_question, ShouldRunInference, overwrite_or_not
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         open_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence('Ctrl+O'), self)
         open_shortcut.activated.connect(self.load_project)
         self.ui.finalize_labels.clicked.connect(self.finalize)
+        self.ui.exportPredictions.clicked.connect(self.export_predictions)
         self.saved = True
         self.num_label_initializations = 0
 
@@ -824,6 +825,7 @@ class MainWindow(QMainWindow):
 
         self.initialize_prediction(prediction_array=probabilities, opacity=opacity)
         self.ui.importPredictions.setEnabled(True)
+        self.ui.exportPredictions.setEnabled(True)
         log.info('CHANGING LATENT NAME TO : {}'.format(latent_name))
         self.latent_name = latent_name
 
@@ -838,6 +840,17 @@ class MainWindow(QMainWindow):
             self.ui.predictionsCombo.setCurrentText(latent_name)
         self.update()
         self.user_did_something()
+
+    def export_predictions(self):
+        array = self.estimated_labels
+        np.set_printoptions(suppress=True)
+        df = pd.DataFrame(data=array, columns=self.project_config['project']['class_names'])
+        print(df)
+        print(df.sum(axis=0))
+        fname, _ = os.path.splitext(self.videofile)
+        prediction_fname = fname + '_predictions.csv'
+        df.to_csv(prediction_fname)
+
 
     def change_predictions(self, new_text):
         log.debug('change predictions called with text: {}'.format(new_text))
