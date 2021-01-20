@@ -51,7 +51,7 @@ def initialize_project(directory: Union[str, os.PathLike], project_name: str, be
         assert behaviors[0] == 'background'
 
     root = os.path.dirname(os.path.abspath(__file__))
-    project_config = utils.load_yaml(os.path.join(root, 'conf', 'project', 'project_config.yaml'))
+    project_config = utils.load_yaml(os.path.join(root, 'conf', 'project', 'project_config_default.yaml'))
     project_name = project_name.replace(' ', '_')
 
     project_config['project']['name'] = project_name
@@ -108,7 +108,7 @@ def add_video_to_project(project: dict, path_to_video: Union[str, os.PathLike], 
         path to the video file after moving to the DEG project data directory.
     """
     # assert (os.path.isdir(project_directory))
-    assert os.path.isfile(path_to_video), 'video not found! {}'.format(path_to_video)
+    assert os.path.exists(path_to_video), 'video not found! {}'.format(path_to_video)
     assert mode in ['copy', 'symlink', 'move']
 
     # project = utils.load_yaml(os.path.join(project_directory, 'project_config.yaml'))
@@ -116,6 +116,12 @@ def add_video_to_project(project: dict, path_to_video: Union[str, os.PathLike], 
     log.debug('configuration file when adding video: {}'.format(project))
     datadir = os.path.join(project['project']['path'], project['project']['data_path'])
     assert os.path.isdir(datadir), 'data path not found: {}'.format(datadir)
+
+    # for speed during training, videos can be saved as directories of PNG / JPEG files.
+    if os.path.isdir(path_to_video):
+        video_is_directory = True
+    else:
+        video_is_directory = False
 
     basename = os.path.basename(path_to_video)
     vidname = os.path.splitext(basename)[0]
@@ -127,11 +133,16 @@ def add_video_to_project(project: dict, path_to_video: Union[str, os.PathLike], 
     os.makedirs(video_directory)
     new_path = os.path.join(video_directory, basename)
     if mode == 'copy':
-        shutil.copy(path_to_video, new_path)
+        if video_is_directory:
+            shutil.copytree(path_to_video, new_path)
+        else:
+            shutil.copy(path_to_video, new_path)
     elif mode == 'symlink':
         os.symlink(path_to_video, new_path)
     elif mode == 'move':
         shutil.move(path_to_video, new_path)
+    else:
+        raise ValueError('invalid argument to mode: {}'.format(mode))
 
     record = parse_subdir(video_directory)
     log.debug('New record after adding: {}'.format(record))
@@ -204,9 +215,7 @@ def remove_video_from_project(config_file, video_file=None, record_directory=Non
 
 def is_deg_file(filename: Union[str, os.PathLike]) -> bool:
     """Quickly assess if a file is part of a well-formatted subdirectory with a records.yaml"""
-    if os.path.isdir(filename):
-        basedir = filename
-    elif os.path.isfile(filename):
+    if os.path.exists(filename):
         basedir = os.path.dirname(filename)
     else:
         raise ValueError('submit directory or file to is_deg_file, not {}'.format(filename))

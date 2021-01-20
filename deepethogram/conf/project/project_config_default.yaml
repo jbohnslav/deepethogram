@@ -5,6 +5,9 @@ augs:
   contrast: 0.1
   crop_size: null
   degrees: 10
+  hue: 0.1
+  saturation: 0.1
+  grayscale: 0.5
   normalization:
     N: 0
     mean:

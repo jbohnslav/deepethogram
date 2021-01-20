@@ -159,7 +159,7 @@ def compute_background(predictions: np.ndarray) -> np.ndarray:
     """
     assert len(predictions.shape) == 2, 'predictions must be a TxK matrix: not {}'.format(predictions.shape)
 
-    predictions[:, 0] = np.logical_not(np.any(predictions[:, 1:], axis=1)).astype(int)
+    predictions[:, 0] = np.logical_not(np.any(predictions[:, 1:], axis=1)).astype(np.uint8)
     return predictions
 
 

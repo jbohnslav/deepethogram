@@ -17,7 +17,6 @@ sequence:
   num_layers: 1
    # for RNNs or CNNs. For CNNs, only 1 hidden layer by default.
   hidden_size: 64
-  # values less than one will down-weight the loss on the background class. useful for very imbalanced datasets
   # if true, only loads data in non-overlapping chunks of length `filter_length`. E.g., the first batch of your dataset
   # would be frames 0-180, then 181-360, etc. If false, the first batch would be 0-180, the second would be 1-181, etc.
   # Setting to True will dramatically speed up training
@@ -53,4 +52,4 @@ sequence:
   # if False, go straight from N x D x T to N x num_classes x T
   nonlinear_classification: False
   # use a batch normalization layer on the outputs
-  final_bn: False
+  final_bn: true

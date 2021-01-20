@@ -2,6 +2,7 @@ from collections import defaultdict
 import logging
 import os
 import sys
+import time
 from typing import Type
 
 import h5py
@@ -20,6 +21,9 @@ from deepethogram.data.datasets import VideoIterable
 from deepethogram.feature_extractor.train import build_model_from_cfg as build_feature_extractor
 
 log = logging.getLogger(__name__)
+
+np.set_printoptions(suppress=True)
+torch.set_printoptions(sci_mode=False)
 
 
 def unpack_penultimate_layer(model: Type[nn.Module], fusion: str = 'average'):
@@ -60,19 +64,35 @@ def unpack_penultimate_layer(model: Type[nn.Module], fusion: str = 'average'):
 
         return hook
 
-    if fusion == 'average':
-        get_penultimate_layer(model.spatial_classifier).register_forward_hook(get_inputs('spatial'))
-        get_penultimate_layer(model.flow_classifier).register_forward_hook(get_inputs('flow'))
-    elif fusion == 'concatenate':
-        get_penultimate_layer(get_penultimate_layer(
-            model.spatial_classifier)).register_forward_hook(get_inputs('spatial'))
-        get_penultimate_layer(get_penultimate_layer(
-            model.flow_classifier)).register_forward_hook(get_inputs('flow'))
-    else:
-        raise NotImplementedError
+    final_spatial_linear = get_linear_layers(model.spatial_classifier)[-1]
+    final_spatial_linear.register_forward_hook(get_inputs('spatial'))
+    final_flow_linear = get_linear_layers(model.flow_classifier)[-1]
+    final_flow_linear.register_forward_hook(get_inputs('flow'))
+
+    # if fusion == 'average':
+    #     get_penultimate_layer(model.spatial_classifier).register_forward_hook(get_inputs('spatial'))
+    #     get_penultimate_layer(model.flow_classifier).register_forward_hook(get_inputs('flow'))
+    # elif fusion == 'concatenate':
+    #     get_penultimate_layer(get_penultimate_layer(
+    #         model.spatial_classifier)).register_forward_hook(get_inputs('spatial'))
+    #     get_penultimate_layer(get_penultimate_layer(
+    #         model.flow_classifier)).register_forward_hook(get_inputs('flow'))
+    # else:
+    #     raise NotImplementedError
     # list(model.spatial_classifier.children())[-1].register_forward_hook(get_inputs('spatial'))
     # list(model.flow_classifier.children())[-1].register_forward_hook(get_inputs('flow'))
     return activation
+
+
+def get_linear_layers(model: nn.Module):
+    linear_layers = []
+    children = model.children()
+    for child in children:
+        if isinstance(child, nn.Sequential):
+            linear_layers.append(get_linear_layers(child))
+        elif isinstance(child, nn.Linear):
+            linear_layers.append(child)
+    return linear_layers
 
 
 def get_penultimate_layer(model: Type[nn.Module]):
@@ -97,39 +117,31 @@ def print_debug_statement(images, logits, spatial_features, flow_features, proba
     # a common issue I've had is not properly z-scoring input channels. this will check for that
     if len(images.shape) == 4:
         N, C, H, W = images.shape
-        log.info('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
-        log.info('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
-        log.info('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
-        log.info('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
-    elif len(images.shape) == 5:
+    elif images.ndim == 5:
         N, C, T, H, W = images.shape
-        log.info('channel min:  {}'.format(images[0].min(dim=2).values))
-        log.info('channel mean: {}'.format(images[0].mean(dim=2)))
-        log.info('channel max : {}'.format(images[0].max(dim=2).values))
-        log.info('channel std : {}'.format(images[0].std(dim=2)))
+    else:
+        raise ValueError('images of unknown shape: {}').format(images.shape)
+  
+    log.info('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
+    log.info('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
+    log.info('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
+    log.info('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
 
 
-def predict_single_video_iterable(videofile, model, final_activation: str, thresholds: np.ndarray,
-                                  fusion: str,
-                                  num_rgb: int, mean_by_channels: np.ndarray,
-                                  device: str = 'cuda:0',
-                                  cpu_transform=None, gpu_transform=None, conv_2d: bool = False,
-                                  should_print: bool = False, num_workers: int = 1, batch_size: int = 1,
-                                  use_deprecated_iterator: bool = True):
+def predict_single_video(videofile, model, activation_function: nn.Module,
+                         fusion: str,
+                         num_rgb: int, mean_by_channels: np.ndarray,
+                         device: str = 'cuda:0',
+                         cpu_transform=None, gpu_transform=None,
+                         should_print: bool = False, num_workers: int = 1, batch_size: int = 1):
     model.eval()
     model.set_mode('inference')
-
-    if final_activation == 'softmax':
-        activation_function = nn.Softmax(dim=1)
-    elif final_activation == 'sigmoid':
-        activation_function = nn.Sigmoid()
-    else:
-        raise ValueError('unknown final activation: {}'.format(final_activation))
 
     if type(device) != torch.device:
         device = torch.device(device)
 
-    dataset = VideoIterable(videofile, transform=cpu_transform, num_workers=num_workers)
+    dataset = VideoIterable(videofile, transform=cpu_transform, num_workers=num_workers, sequence_length=num_rgb,
+                            mean_by_channels=mean_by_channels)
     dataloader = DataLoader(dataset, num_workers=num_workers, batch_size=batch_size)
     video_frame_num = len(dataset)
 
@@ -138,7 +150,7 @@ def predict_single_video_iterable(videofile, model, final_activation: str, thres
     buffer = {}
 
     has_printed = False
-    for i, batch in enumerate(tqdm(dataloader)):
+    for i, batch in enumerate(tqdm(dataloader, leave=False)):
         if isinstance(batch, dict):
             images = batch['images']
         elif isinstance(batch, torch.Tensor):
@@ -154,40 +166,19 @@ def predict_single_video_iterable(videofile, model, final_activation: str, thres
         logits = model(images)
         spatial_features = activation['spatial']
         flow_features = activation['flow']
-
+        # because we are using iterable datasets, each batch will be a consecutive chunk of frames from one worker
+        # but they might be from totally different chunks of the video. therefore, we return the frame numbers,
+        # and use this to store into our buffer in the right location
         frame_numbers = batch['framenum'].detach().cpu()
-
-        if not has_printed and should_print:
-            log.info('logits shape: {}'.format(logits.shape))
-            log.info('spatial_features shape: {}'.format(spatial_features.shape))
-            log.info('flow_features shape: {}'.format(flow_features.shape))
-            log.info('spatial: min {} mean {} max {} shape {}'.format(spatial_features.min(),
-                                                                      spatial_features.mean(),
-                                                                      spatial_features.max(),
-                                                                      spatial_features.shape))
-            log.info('flow   : min {} mean {} max {} shape {}'.format(flow_features.min(),
-                                                                      flow_features.mean(),
-                                                                      flow_features.max(),
-                                                                      flow_features.shape))
-            # a common issue I've had is not properly z-scoring input channels. this will check for that
-            if len(images.shape) == 4:
-                N, C, H, W = images.shape
-                log.debug('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
-                log.debug('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
-                log.debug('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
-                log.debug('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
-            elif len(images.shape) == 5:
-                N, C, T, H, W = images.shape
-                log.debug('channel min:  {}'.format(images[0].min(dim=2).values))
-                log.debug('channel mean: {}'.format(images[0].mean(dim=2)))
-                log.debug('channel max : {}'.format(images[0].max(dim=2).values))
-                log.debug('channel std : {}'.format(images[0].std(dim=2)))
-            has_printed = True
 
         probabilities = activation_function(logits).detach().cpu()
         logits = logits.detach().cpu()
         spatial_features = spatial_features.detach().cpu()
         flow_features = flow_features.detach().cpu()
+
+        if not has_printed and should_print:
+            print_debug_statement(images, logits, spatial_features, flow_features, probabilities)
+            has_printed = True
         if i == 0:
             # print(f'~~~ N: {N} ~~~')
             buffer['probabilities'] = torch.zeros((video_frame_num, probabilities.shape[1]),
@@ -198,12 +189,27 @@ def predict_single_video_iterable(videofile, model, final_activation: str, thres
                                                      dtype=spatial_features.dtype)
             buffer['flow_features'] = torch.zeros((video_frame_num, flow_features.shape[1]),
                                                   dtype=flow_features.dtype)
+            buffer['debug'] = torch.zeros((video_frame_num,)).float()
         buffer['probabilities'][frame_numbers, :] = probabilities
         buffer['logits'][frame_numbers] = logits
 
         buffer['spatial_features'][frame_numbers] = spatial_features
         buffer['flow_features'][frame_numbers] = flow_features
+        buffer['debug'][frame_numbers] += 1
     return buffer
+
+
+def check_if_should_run_inference(h5file, mode, latent_name, overwrite):
+    should_run = True
+    with h5py.File(h5file, mode) as f:
+
+        if latent_name in list(f.keys()):
+            if overwrite:
+                del f[latent_name]
+            else:
+                log.warning('Latent {} already found in file {}, skipping...'.format(latent_name, h5file))
+                should_run = False
+    return should_run
 
 
 def extract(rgbs: list,
@@ -290,36 +296,48 @@ def extract(rgbs: list,
         h5file = basename + '_outputs.h5'
         mode = 'r+' if os.path.isfile(h5file) else 'w'
 
-        with h5py.File(h5file, mode) as f:
+        should_run = check_if_should_run_inference(h5file, mode, latent_name, overwrite)
+        if not should_run:
+            continue
 
-            if latent_name in list(f.keys()):
-                if overwrite:
-                    del f[latent_name]
-                else:
-                    log.warning('Latent {} already found in file {}, skipping...'.format(latent_name, h5file))
-                    continue
-            # iterate over each frame of the movie
-            outputs = predict_single_video(rgb, model, activation_function, fusion, num_rgb, mean_by_channels,
-                                           device, cpu_transform, gpu_transform, should_print=i == 0,
-                                           num_workers=num_workers, batch_size=batch_size)
-            if i == 0:
-                for k,v in outputs.items():
-                    log.info('{}: {}'.format(k, v.shape))
-            # these assignments are where it's actually saved to disk
-            group = f.create_group(latent_name)
-            group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
-            group.create_dataset('logits', data=outputs['logits'], dtype=np.float32)
-            group.create_dataset('P', data=outputs['probabilities'], dtype=np.float32)
-            group.create_dataset('spatial_features', data=outputs['spatial_features'], dtype=np.float32)
-            group.create_dataset('flow_features',data=outputs['flow_features'], dtype=np.float32)
-            dt = h5py.string_dtype()
-            group.create_dataset('class_names', data=class_names, dtype=dt)
-            del outputs
+        # iterate over each frame of the movie
+        outputs = predict_single_video(rgb, model, activation_function, fusion, num_rgb, mean_by_channels,
+                                       device, cpu_transform, gpu_transform, should_print=i == 0,
+                                       num_workers=num_workers, batch_size=batch_size)
+        if i == 0:
+            for k, v in outputs.items():
+                log.info('{}: {}'.format(k, v.shape))
+                if k == 'debug':
+                    log.info('All should be 1.0: min: {:.4f} mean {:.4f} max {:.4f}'.format(
+                        v.min(), v.mean(), v.max()
+                    ))
+
+        # if running inference from multiple processes, this will wait until the resource is available
+        has_worked = False
+        while not has_worked:
+            try:
+                f = h5py.File(h5file, 'r+')
+            except OSError as e:
+                log.warning('resource unavailable, waiting 30 seconds...')
+                time.sleep(30)
+            else:
+                has_worked = True
+
+        # these assignments are where it's actually saved to disk
+        group = f.create_group(latent_name)
+        group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
+        group.create_dataset('logits', data=outputs['logits'], dtype=np.float32)
+        group.create_dataset('P', data=outputs['probabilities'], dtype=np.float32)
+        group.create_dataset('spatial_features', data=outputs['spatial_features'], dtype=np.float32)
+        group.create_dataset('flow_features', data=outputs['flow_features'], dtype=np.float32)
+        dt = h5py.string_dtype()
+        group.create_dataset('class_names', data=class_names, dtype=dt)
+        del outputs
+        f.close()
 
 
 @hydra.main(config_path='../conf/feature_extractor_inference.yaml')
 def main(cfg: DictConfig):
-
     log.info('args: {}'.format(' '.join(sys.argv)))
     # turn "models" in your project configuration to "full/path/to/models"
     cfg = projects.convert_config_paths_to_absolute(cfg)

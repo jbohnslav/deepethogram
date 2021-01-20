@@ -153,6 +153,7 @@ def train_from_cfg_lightning(cfg):
     # see above for horrible syntax explanation
     # lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
     trainer.fit(lightning_module)
+    trainer.test(model=lightning_module)
     # utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
 
 
@@ -299,6 +300,13 @@ class HiddenTwoStreamLightning(BaseLightningModule):
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
         probabilities = self.activation(outputs)
+        loss = self.criterion(outputs, batch['labels'])
+        self.metrics.buffer.append('test', {
+            'loss': loss.detach(),
+            'probs': probabilities.detach(),
+            'labels': batch['labels'].detach()
+        })
+
 
     def visualize_batch(self, images, probs, labels, split: str):
         if not self.hparams.train.viz:
@@ -307,7 +315,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         viz_cnt = self.viz_cnt[split]
         if viz_cnt > 10:
             return
-        fig = plt.figure(figsize=(14, 14))
         if hasattr(self.model, 'flow_generator'):
             # re-compute optic flows for this batch for visualization
             batch_size = images.size(0)
@@ -323,15 +330,22 @@ class HiddenTwoStreamLightning(BaseLightningModule):
                 # only output the highest res flow
                 flows = self.model.flow_generator(images)[0]
                 inputs = self.gpu_transforms['denormalize'](images)
+            fig = plt.figure(figsize=(14, 14))
             viz.visualize_hidden(inputs.detach().cpu(), flows.detach().cpu(),
                                  probs.detach().cpu(), labels.detach().cpu(), fig=fig)
             viz.save_figure(fig, 'batch_with_flows', True, viz_cnt, split)
             del images, probs, labels, flows
         else:
+            fig = plt.figure(figsize=(14, 14))
             with torch.no_grad():
                 inputs = self.gpu_transforms['denormalize'](images)
             viz.visualize_batch_spatial(inputs, probs, labels, fig=fig)
             viz.save_figure(fig, 'batch_spatial', True, viz_cnt, split)
+        try:
+            # should've been closed in viz.save_figure. this is double checking
+            plt.close(fig)
+        except:
+            pass
         torch.cuda.empty_cache()
         # self.viz_cnt[split] += 1
 

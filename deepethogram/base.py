@@ -10,7 +10,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from deepethogram.data.augs import get_gpu_transforms, get_empty_gpu_transforms
-from deepethogram.callbacks import FPSCallback, DebugCallback, SpeedtestCallback, MetricsCallback, \
+from deepethogram.callbacks import FPSCallback, DebugCallback, MetricsCallback, \
     ExampleImagesCallback, CheckpointCallback, StopperCallback
 from deepethogram.metrics import Metrics, EmptyMetrics
 from deepethogram.schedulers import initialize_scheduler
@@ -58,13 +58,17 @@ class BaseLightningModule(pl.LightningModule):
             # all models shall define a visualization function that points to the metrics file on disk
             self.visualization_func(self.metrics.fname)
 
+    def on_test_epoch_end(self):
+        self.visualization_func(self.metrics.fname)
+
     def get_dataloader(self, split: str):
         # for use with auto-batch-sizing. Lightning doesn't expect batch size to be nested, it expects it to be
         # top-level in self.hparams
         batch_size = self.hparams.compute.batch_size if self.hparams.compute.batch_size != 'auto' else \
             self.hparams.batch_size
+        shuffles = {'train': True, 'val': True, 'test': False}
         dataloader = DataLoader(self.datasets[split], batch_size=batch_size,
-                                shuffle=True, num_workers=self.hparams.compute.num_workers,
+                                shuffle=shuffles[split], num_workers=self.hparams.compute.num_workers,
                                 pin_memory=torch.cuda.is_available(), drop_last=False)
         return dataloader
 
@@ -75,12 +79,10 @@ class BaseLightningModule(pl.LightningModule):
         return self.get_dataloader('val')
 
     def test_dataloader(self):
-        # We only use the test dataset to benchmark inference speed. Sometimes loss functions can be very expensive,
-        # e.g. for optical flow, so we want to know how fast it is with only the forward pass and no gradients
         if 'test' in self.datasets.keys() and self.datasets['test'] is not None:
             return self.get_dataloader('test')
         else:
-            return self.get_dataloader('val')
+            raise ValueError('no test set!')
 
     def training_step(self, batch: dict, batch_idx: int):
         raise NotImplementedError
@@ -186,5 +188,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                                     StopperCallback(stopper)],
                          reload_dataloaders_every_epoch=True,
                          profiler=profiler)
-
+    # import signal
+    # signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    # log.info('trainer is_slurm_managing_tasks: {}'.format(trainer.is_slurm_managing_tasks))
     return trainer

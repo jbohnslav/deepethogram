@@ -9,7 +9,7 @@ feature_extractor:
   # deprecated: used to over-sample rare classes
   sampler: null
   # use batchnorm in the final layer, just before sigmoid / softmax
-  final_bn: false
+  final_bn: true
   # deprecated: how much to over-sample
   sampling_ratio: null
   # The activation function on the final layer. options include sigmoid, softmax. Use softmax for mutually-exclusive
@@ -25,7 +25,7 @@ feature_extractor:
   # if true, trains feature extractors in a curriculum. first trains the spatial CNN, then the flow CNN, and finally
   # the two jointly end-to-end. If false, will be end-to-end from the start: faster, but with potentially lower
   # performance.
-  curriculum: true
+  curriculum: false
   # deprecated
   inputs: both
   # the amount of weight decay (L2 normalization) to use on the feature extractors.
