@@ -723,7 +723,16 @@ def plot_confusion_matrix(cm, classes, ax, fig,
     thresh = cm.max() / 2.
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
         j, i = remove_nan_or_inf(j), remove_nan_or_inf(i)
-        ax.text(j, i, format(cm[i, j], fmt),
+        element = cm[i,j]
+        if element < 1e-2:
+            element = 0
+            fmt = 'd'
+        else:
+            fmt = '.2f' if normalize else 'd'
+        text = format(element, fmt)
+        if text.startswith('0.'):
+            text = text[1:]
+        ax.text(j, i, text,
                 horizontalalignment="center",
                 color="white" if cm[i, j] > thresh else "black")
     ax.set_xlim([-0.5, len(classes) - 0.5])
