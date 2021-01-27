@@ -25,6 +25,7 @@ In brief:
 * Install PySide2: `conda install -c conda-forge pyside2==5.13.2` 
 * `pip install deepethogram`
 
+
 ## Licensing
 Copyright (c) 2020 - President and Fellows of Harvard College. All rights reserved.
 
@@ -63,5 +64,14 @@ Recommended GPUs: `RTX 3090`, `RTX 3080`, `Titan RTX`, `2080 Ti`, `2080 super`, 
 Some older ones might also be fine, like a `1080` or even `1070 Ti`/ `1070`. 
 
 ## Changelog
-* 0.0.1.post1: bug fixes and video conversion scripts added
-* 0.0.1: initial version
+#### 0.0.2
+* fixed divide by zero bug
+* fixed bias initialization
+* fixed issue where HDF5 files could have byte keys instead of strings
+* fixed various capitalization issues
+* fixed video conversion bugs
+* added better support for videos encoded as PNG directories
+#### 0.0.1.post1
+* bug fixes and video conversion scripts added
+#### 0.0.1
+* initial commit
