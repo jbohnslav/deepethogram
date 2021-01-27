@@ -1,6 +1,6 @@
 # @package _global_
 sequence:
-  # the architecture for the sequence model. choices=['linear', 'conv_nonlinear', 'rnn', 'tgm', 'tgmj']
+  # the architecture for the sequence model. choices=['linear', 'conv_nonlinear', 'rnn', 'tgm', 'tgmj', 'mlp']
   # if RNN, the actual architecture will be rnn_style below
   arch: tgmj
   #  # the INPUTS to the sequence model will be in HDF5 groups with the below name. If None: will default to the
@@ -53,3 +53,5 @@ sequence:
   nonlinear_classification: False
   # use a batch normalization layer on the outputs
   final_bn: true
+  # what kinds of inputs to use for the sequence model. choices: ['features', 'keypoints']
+  input_type: features
