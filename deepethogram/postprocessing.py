@@ -1,8 +1,40 @@
+import logging
 from typing import Type, Tuple
 
 import numpy as np
 from omegaconf import DictConfig
 
+log = logging.getLogger(__name__)
+
+def remove_low_thresholds(thresholds: np.ndarray, minimum: float=0.02, f1s: np.ndarray=None) -> np.ndarray:
+    """ Replaces thresholds below a certain value with 0.5
+    
+    If the model completely fails, the optimum threshold might be something erreoneous, such as 
+    0.00001. This makes all predictions==1. 
+
+    Parameters
+    ----------
+    thresholds : np.ndarray
+        Shape (n_behaviors). Probabilities over this value will be set to 1
+    minimum : float, optional
+        Thresholds less than this value will be set to 0.5, by default 0.02
+    f1s: np.ndarray, optional
+        If submitted, f1s < value will also be set to 0. This again catches erroneous false-positives.
+    Returns
+    -------
+    np.ndarray
+        Thresholds with low values replaced by 0.5
+    """
+    if np.sum(thresholds < minimum) > 0:
+        indices = np.where(thresholds < minimum)[0]
+        log.debug('thresholds {} too low, setting to 0.5'.format(thresholds[indices]))
+    if f1s is not None:
+        if np.sum(f1s < minimum) > 0:
+            indices = np.where(f1s < minimum)[0]
+            log.debug('thresholds {} too low, setting to 0.5'.format(thresholds[indices]))
+        thresholds[f1s < minimum] = 0.5
+    thresholds[thresholds < minimum] = 0.5
+    return thresholds
 
 def get_onsets_offsets(binary: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """ Gets the onset and offset indices of a binary array.
@@ -168,7 +200,7 @@ class Postprocessor:
     def __init__(self, thresholds: np.ndarray):
         assert len(thresholds.shape) == 1, 'thresholds must be 1D array, not {}'.format(thresholds.shape)
         # edge case with poor thresholds, causes all predictions to be ==1
-        thresholds[thresholds < 1e-4] = 0.5
+        thresholds = remove_low_thresholds(thresholds)
         self.thresholds = thresholds
 
     def threshold(self, probabilities: np.ndarray) -> np.ndarray:
