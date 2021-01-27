@@ -188,5 +188,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                                     StopperCallback(stopper)],
                          reload_dataloaders_every_epoch=True,
                          profiler=profiler)
-
+    # import signal
+    # signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    # log.info('trainer is_slurm_managing_tasks: {}'.format(trainer.is_slurm_managing_tasks))
     return trainer

@@ -117,16 +117,15 @@ def print_debug_statement(images, logits, spatial_features, flow_features, proba
     # a common issue I've had is not properly z-scoring input channels. this will check for that
     if len(images.shape) == 4:
         N, C, H, W = images.shape
-        log.info('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
-        log.info('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
-        log.info('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
-        log.info('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
-    elif len(images.shape) == 5:
+    elif images.ndim == 5:
         N, C, T, H, W = images.shape
-        log.info('channel min:  {}'.format(images[0].min(dim=0).values))
-        log.info('channel mean: {}'.format(images[0].mean(dim=0)))
-        log.info('channel max : {}'.format(images[0].max(dim=0).values))
-        log.info('channel std : {}'.format(images[0].std(dim=0)))
+    else:
+        raise ValueError('images of unknown shape: {}').format(images.shape)
+  
+    log.info('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
+    log.info('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
+    log.info('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
+    log.info('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
 
 
 def predict_single_video(videofile, model, activation_function: nn.Module,

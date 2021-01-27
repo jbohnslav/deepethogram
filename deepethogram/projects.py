@@ -497,6 +497,22 @@ def find_outputfiles(root: Union[str, bytes, os.PathLike]) -> list:
     return files
 
 
+def find_keypointfiles(root: Union[str, bytes, os.PathLike]) -> list:
+    """ Finds .csv files of DeepLabCut outputs in the data directories
+
+    Args:
+        root: (str, pathlike): deepethogram data directory
+
+    Returns:
+        list of dlcfiles. should only have one element
+    """
+    # TODO: support SLEAP, DLC hdf5 files
+    files = get_subfiles(root, return_type='file')
+    files = [i for i in files if 'dlc' in os.path.basename(i).lower() and os.path.splitext(i)[1] == '.csv']
+    return files
+
+
+
 def find_statsfiles(root: Union[str, bytes, os.PathLike]) -> list:
     """ Finds normalization statistics in deepethogram data directory
 
@@ -597,7 +613,8 @@ def parse_subdir(root: Union[str, bytes, os.PathLike],
         'flow': find_flowfiles,
         'label': find_labelfiles,
         'output': find_outputfiles,
-        'stats': find_statsfiles
+        'stats': find_statsfiles,
+        'keypoint': find_keypointfiles
     }
 
     record = {}
@@ -673,7 +690,7 @@ def get_record_from_subdir(subdir: Union[str, os.PathLike]) -> dict:
     record = parse_subdir(subdir)
 
     parsed_record = {}
-    for key in ['flow', 'label', 'output', 'rgb']:
+    for key in ['flow', 'label', 'output', 'rgb', 'keypoint']:
         if key in list(record.keys()):
             this_entry = record[key]['default']
 

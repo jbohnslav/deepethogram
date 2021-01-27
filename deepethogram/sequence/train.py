@@ -17,6 +17,7 @@ from deepethogram import utils, projects, viz
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.feature_extractor.train import get_metrics, get_stopper, get_criterion
 from deepethogram.schedulers import initialize_scheduler
+from deepethogram.sequence.models.mlp import MLP
 from deepethogram.sequence.models.sequence import Linear, Conv_Nonlinear, RNN
 from deepethogram.sequence.models.tgm import TGM, TGMJ
 
@@ -69,49 +70,6 @@ def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
                                    bs_start=16, bs_end=256)
     trainer.fit(lightning_module)
     return model
-
-# def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
-#     rundir = os.getcwd()  # done by hydra
-#
-#     device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
-#     if device != 'cpu': torch.cuda.set_device(device)
-#     log.info('Training sequence model...')
-#
-#
-#     # dataloaders = get_dataloaders_from_cfg(cfg, model_type='sequence')
-#     # utils.save_dict_to_yaml(dataloaders['split'], os.path.join(rundir, 'split.yaml'))
-#     log.debug('Num training batches {}, num val: {}'.format(len(dataloaders['train']), len(dataloaders['val'])))
-#     model = build_model_from_cfg(cfg, dataloaders['num_features'], dataloaders['num_classes'],
-#                                  pos=dataloaders['pos'],
-#                                  neg=dataloaders['neg'])
-#     weights = projects.get_weightfile_from_cfg(cfg, model_type='sequence')
-#     if weights is not None:
-#         model = utils.load_weights(model, weights)
-#     model = model.to(device)
-#     log.info('Total trainable params: {:,}'.format(utils.get_num_parameters(model)))
-#     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.train.lr)
-#     torch.save(model, os.path.join(rundir, cfg.sequence.arch + '_definition.pt'))
-#
-#     stopper = get_stopper(cfg)
-#     scheduler = initialize_scheduler(optimizer, cfg, mode='max', reduction_factor=cfg.train.reduction_factor)
-#     metrics = get_metrics(rundir, num_classes=len(cfg.project.class_names),
-#                           num_parameters=utils.get_num_parameters(model), key_metric='f1')
-#     criterion = get_criterion(cfg.feature_extractor.final_activation, dataloaders, device)
-#     steps_per_epoch = dict(cfg.train.steps_per_epoch)
-#
-#     model = train(model,
-#                   dataloaders,
-#                   criterion,
-#                   optimizer,
-#                   gpu_transforms,
-#                   metrics,
-#                   scheduler,
-#                   rundir,
-#                   stopper,
-#                   device,
-#                   steps_per_epoch,
-#                   final_activation=cfg.feature_extractor.final_activation,
-#                   sequence=True)
 
 
 class SequenceLightning(BaseLightningModule):
@@ -174,40 +132,15 @@ class SequenceLightning(BaseLightningModule):
         fig = plt.figure(figsize=(14, 14))
         viz.visualize_batch_sequence(features, predictions, labels, fig=fig)
         viz.save_figure(fig, 'batch', True, viz_cnt, split)
+        # this should happen in the save figure function, but for some reason it doesn't
+        plt.close(fig)
+        plt.close('all')
+        del fig
 
 
     def forward(self, batch: dict, mode: str) -> torch.Tensor:
         outputs = self.model(batch['features'])
         return outputs
-
-    # def log_image_statistics(self, images):
-    #     if not self.has_logged_channels and log.isEnabledFor(logging.DEBUG):
-    #         if len(images.shape) == 4:
-    #             N, C, H, W = images.shape
-    #             log.debug('inputs shape: NCHW: {} {} {} {}'.format(N, C, H, W))
-    #             log.debug('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
-    #             log.debug('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
-    #             log.debug('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
-    #             log.debug('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
-    #         elif len(images.shape) == 5:
-    #             N, C, T, H, W = images.shape
-    #             log.debug('inputs shape: NCTHW: {} {} {} {} {}'.format(N, C, T, H, W))
-    #             log.debug('channel min:  {}'.format(images[0].min(dim=2).values))
-    #             log.debug('channel mean: {}'.format(images[0].mean(dim=2)))
-    #             log.debug('channel max : {}'.format(images[0].max(dim=2).values))
-    #             log.debug('channel std : {}'.format(images[0].std(dim=2)))
-    #         self.has_logged_channels = True
-    #
-    # def log_model_statistics(self, images, outputs, labels):
-    #     # will print out shape and min, mean, max, std along image channels
-    #     # we use the isEnabledFor flag so that this doesnt slow down training in the non-debug case
-    #     log.debug('outputs: {}'.format(outputs))
-    #     log.debug('labels: {}'.format(labels))
-    #     log.debug('outputs: {}'.format(outputs.shape))
-    #     log.debug('labels: {}'.format(labels.shape))
-    #     log.debug('label max: {}'.format(labels.max()))
-    #     log.debug('label min: {}'.format(labels.min()))
-
 
 
 def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, neg: np.ndarray = None,
@@ -270,6 +203,9 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
                      num_features=seq.num_features, pos=pos, neg=neg, use_fe_logits=False,
                      nonlinear_classification=seq.nonlinear_classification,
                      final_bn=seq.final_bn)
+    elif seq.arch == 'mlp':
+        model = MLP(num_features, num_classes, dropout_p=seq.dropout_p,
+                    pos=pos, neg=neg)
     else:
         raise ValueError('arch not found: {}'.format(seq.arch))
     # print(model)
@@ -277,5 +213,7 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
 
 
 if __name__ == '__main__':
+    # I hate that hydra overrides errors
+    os.environ['HYDRA_FULL_ERROR'] = "1"
     sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
     main()

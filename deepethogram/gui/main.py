@@ -244,12 +244,12 @@ class MainWindow(QMainWindow):
         nframes = self.n_timepoints
 
         with VideoReader(self.videofile) as reader:
-            if reader.filetype == 'video':
-                fps = reader.file_object.get(cv2.CAP_PROP_FPS)
+            try:
+                fps = reader.fps
                 duration = nframes / fps
                 fps = '{:.2f}'.format(fps)
                 duration = '{:.2f}'.format(duration)
-            else:
+            except:
                 fps = 'N/A'
                 duration = 'N/A'
         num_labeled = self.ui.labels.label.changed.sum()

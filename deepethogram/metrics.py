@@ -17,6 +17,13 @@ log = logging.getLogger(__name__)
 # small epsilon to prevent divide by zero
 EPS = 1e-7
 
+# using multiprocessing on slurm causes a termination signal
+try:
+    slurm_job_id = os.environ['SLURM_JOB_ID']
+    slurm = True
+except:
+    slurm = False
+
 
 def index_to_onehot(index: np.ndarray, n_classes: int) -> np.ndarray:
     """ Convert an array if indices to one-hot vectors.
@@ -221,6 +228,9 @@ def confusion_alias(inp):
 def binary_confusion_matrix_parallel(probs_or_preds, labels, thresholds=None, chunk_size: int = 100,
                                      num_workers: int = 4, parallel_chunk: int = 100):
     # log.info('num workers binary confusion parallel: {}'.format(num_workers))
+    if slurm:
+        parallel_chunk = 1
+        num_workers = 1
     N = probs_or_preds.shape[0]
 
     starts = np.arange(0, N, chunk_size)
@@ -241,10 +251,15 @@ def binary_confusion_matrix_parallel(probs_or_preds, labels, thresholds=None, ch
         else:
             raise ValueError('weird shape in probs_or_preds: {}'.format(probs_or_preds.shape))
         func = confusion_alias
-
-    with Pool(num_workers) as pool:
-        for res in pool.imap_unordered(func, iterator, parallel_chunk):
-            cm += res
+    # log.info('parallel start')
+    if num_workers > 1:
+        with Pool(num_workers) as pool:
+            for res in pool.imap_unordered(func, iterator, parallel_chunk):
+                cm += res
+    else:
+        for args in iterator:
+            cm += func(args)
+    # log.info('parallel end')
     return cm
 
 
@@ -376,11 +391,17 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     epoch_metrics: dict
         each value is only a single float for the entire prediction / label set.
     """
+    # log.info('evaluating thresholds. P: {} lab: {} n_workers: {}'.format(probabilities.shape, labels.shape, num_workers))
+    # log.info('SLURM in metrics file: {}'.format(slurm))
+    if slurm and num_workers != 1:
+        warnings.warn('using multiprocessing on slurm can cause issues. setting num_workers to 1')
+        num_workers = 1
+
     if thresholds is None:
         # using 200 means that approximated mAP, AUROC is almost exactly the same as exact
         thresholds = np.linspace(0,1,200)
     # log.info('num workers in evaluate thresholds: {}'.format(num_workers))
-    log.debug('probabilities shape in metrics calc: {}'.format(probabilities.shape))
+    # log.debug('probabilities shape in metrics calc: {}'.format(probabilities.shape))
     metrics_by_threshold = {}
     if probabilities.ndim == 1:
         raise ValueError('To calc threshold, predictions must be probabilities, not classes')
@@ -389,9 +410,10 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
         labels = index_to_onehot(labels, K)
 
     probabilities, labels = remove_invalid_values_predictions_and_labels(probabilities, labels)
-
+    # log.info('first metrics call')
     metrics_by_threshold = compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers)
-
+    # log.info('first metrics call finished')
+    # log.info('finished computing binary confusion matrices')
     # optimum threshold: one that maximizes F1
     optimum_indices = np.argmax(metrics_by_threshold['f1'], axis=0)
     optimum_thresholds = thresholds[optimum_indices]
@@ -406,14 +428,19 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     predictions = probabilities > optimum_thresholds
     # ALWAYS REPORT THE PERFORMANCE WITH "VALID" BACKGROUND
     predictions[:, 0] = np.logical_not(np.any(predictions[:, 1:], axis=1))
-
+    
+    # log.info('computing metric thresholds again')
     # re-use our confusion matrix calculation. returns N x N x K values
-    metrics_by_class = compute_metrics_by_threshold(predictions, labels, thresholds=None)
+    # log.info('second metircs call')
+    metrics_by_class = compute_metrics_by_threshold(predictions, labels, None, num_workers)
+    # log.info('second metrics call ended')
 
     # summing over classes is the same as flattening the array. ugly syntax
     # TODO: make function that computes metrics from a stack of confusion matrices rather than this none None business
-    overall_metrics = compute_metrics_by_threshold(None, None, thresholds=None,
+    # log.info('third metrics call')
+    overall_metrics = compute_metrics_by_threshold(None, None, thresholds=None, num_workers=num_workers,
                                                    cm=metrics_by_class['confusion'].sum(axis=2))
+    # log.info('third metrics call ended')
     epoch_metrics = {
         'accuracy_overall': overall_metrics['accuracy'],
         'accuracy_by_class': metrics_by_class['accuracy'],
@@ -447,7 +474,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     # epoch_metrics['mAP_by_class'] = average_precision_score(labels, probabilities, average=None)
     # # this is a misnomer: mAP by class is just AP
     # epoch_metrics['mAP_class_mean'] = epoch_metrics['mAP_by_class'].mean()
-
+    # log.info('returning metrics')
     return metrics_by_threshold, epoch_metrics
 
 

@@ -9,7 +9,7 @@ import cv2
 import h5py
 import matplotlib
 import numpy as np
-import tifffile as TIFF
+# import tifffile as TIFF
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.projections import get_projection_class
@@ -72,7 +72,10 @@ def imshow_with_colorbar(image: np.ndarray,
     .. [2]: https://matplotlib.org/3.3.0/api/_as_gen/matplotlib.pyplot.imshow.html
     """
     assert isinstance(ax_handle, matplotlib.axes.SubplotBase)
-
+    # if we get a vector, change into a row
+    if image.ndim == 1:
+        image = image[np.newaxis, :]
+    
     if symmetric:
         cmap = 'bwr'
     divider = make_axes_locatable(ax_handle)
@@ -693,7 +696,7 @@ def thresholds_by_epoch_figure(epoch_summaries, class_names=None, fig=None):
 def plot_confusion_matrix(cm, classes, ax, fig,
                           normalize=False,
                           title='Confusion matrix',
-                          cmap='Blues', colorbar=True):
+                          cmap='Blues', colorbar=True, fontsize=None):
     """
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
@@ -707,7 +710,8 @@ def plot_confusion_matrix(cm, classes, ax, fig,
 
     # print(cm)
     if colorbar:
-        imshow_with_colorbar(cm, ax, fig, interpolation='nearest', cmap=cmap)
+        cbar = imshow_with_colorbar(cm, ax, fig, interpolation='nearest', cmap=cmap)
+
     else:
         ax.imshow(cm, cmap=cmap)
     # ax.set_title(title)
@@ -723,9 +727,19 @@ def plot_confusion_matrix(cm, classes, ax, fig,
     thresh = cm.max() / 2.
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
         j, i = remove_nan_or_inf(j), remove_nan_or_inf(i)
-        ax.text(j, i, format(cm[i, j], fmt),
+        element = cm[i,j]
+        if element < 1e-2:
+            element = 0
+            fmt = 'd'
+        else:
+            fmt = '.2f' if normalize else 'd'
+        text = format(element, fmt)
+        if text.startswith('0.'):
+            text = text[1:]
+        ax.text(j, i, text,
                 horizontalalignment="center",
-                color="white" if cm[i, j] > thresh else "black")
+                color="white" if cm[i, j] > thresh else "black",
+                fontsize=fontsize)
     ax.set_xlim([-0.5, len(classes) - 0.5])
     ax.set_ylim([len(classes) - 0.5, -0.5])
     plt.tight_layout()
