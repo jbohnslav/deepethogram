@@ -115,10 +115,8 @@ def add_video_to_project(project: dict,
         path to the video file after moving to the DEG project data directory.
     """
     # assert (os.path.isdir(project_directory))
-<<<<<<< HEAD
     assert os.path.exists(path_to_video), 'video not found! {}'.format(
         path_to_video)
-=======
     if os.path.isdir(path_to_video):
         copy_func = shutil.copytree
     elif os.path.isfile(path_to_video):
@@ -126,7 +124,6 @@ def add_video_to_project(project: dict,
     else:
         raise ValueError('video does not exist: {}'.format(path_to_video))
 
->>>>>>> 5dfeae5694f0c0b797923983e44ad8f64b46e76a
     assert mode in ['copy', 'symlink', 'move']
 
     # project = utils.load_yaml(os.path.join(project_directory, 'project_config.yaml'))
@@ -152,14 +149,10 @@ def add_video_to_project(project: dict,
     os.makedirs(video_directory)
     new_path = os.path.join(video_directory, basename)
     if mode == 'copy':
-<<<<<<< HEAD
         if video_is_directory:
             shutil.copytree(path_to_video, new_path)
         else:
             shutil.copy(path_to_video, new_path)
-=======
-        copy_func(path_to_video, new_path)
->>>>>>> 5dfeae5694f0c0b797923983e44ad8f64b46e76a
     elif mode == 'symlink':
         os.symlink(path_to_video, new_path)
     elif mode == 'move':
@@ -247,14 +240,10 @@ def remove_video_from_project(config_file,
 
 def is_deg_file(filename: Union[str, os.PathLike]) -> bool:
     """Quickly assess if a file is part of a well-formatted subdirectory with a records.yaml"""
-<<<<<<< HEAD
-    if os.path.exists(filename):
-=======
     if os.path.isdir(filename):
         basedir = filename
         is_directory = True
     elif os.path.isfile(filename):
->>>>>>> 5dfeae5694f0c0b797923983e44ad8f64b46e76a
         basedir = os.path.dirname(filename)
         is_directory = False
     else:
@@ -421,14 +410,7 @@ def find_labelfiles(root: Union[str, bytes, os.PathLike]) -> list:
         files: list of score or label files
     """
     files = get_subfiles(root, return_type='file')
-<<<<<<< HEAD
-    files = [
-        i for i in files
-        if 'label' in os.path.basename(i) or 'score' in os.path.basename(i)
-    ]
-=======
     files = [i for i in files if 'label' in os.path.basename(i).lower() or 'score' in os.path.basename(i).lower()]
->>>>>>> 5dfeae5694f0c0b797923983e44ad8f64b46e76a
     return files
 
 
@@ -486,14 +468,7 @@ def find_outputfiles(root: Union[str, bytes, os.PathLike]) -> list:
         list of outputfiles. should only have one element
     """
     files = get_subfiles(root, return_type='file')
-<<<<<<< HEAD
-    files = [
-        i for i in files
-        if 'output' in os.path.basename(i) and os.path.splitext(i)[1] == '.h5'
-    ]
-=======
     files = [i for i in files if 'output' in os.path.basename(i).lower() and os.path.splitext(i)[1].lower() == '.h5']
->>>>>>> 5dfeae5694f0c0b797923983e44ad8f64b46e76a
     return files
 
 
