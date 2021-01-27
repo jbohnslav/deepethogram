@@ -47,16 +47,16 @@ class Conv_Nonlinear(nn.Module):
 
 
 class RNN(nn.Module):
-    def __init__(self, num_features, num_classes, style='LSTM', hidden_size=64,
+    def __init__(self, num_features, num_classes, style='lstm', hidden_size=64,
                  num_layers=1, dropout=0.0, output_dropout=0.0, bidirectional=False):
         super().__init__()
 
-        assert (style in ['RNN', 'LSTM', 'GRU'])
-        if style == 'RNN':
+        assert style in ['rnn', 'lstm', 'gru']
+        if style == 'rnn':
             func = nn.RNN
-        elif style == 'LSTM':
+        elif style == 'lstm':
             func = nn.LSTM
-        elif style == 'GRU':
+        elif style == 'gru':
             func = nn.GRU
 
         self.rnn = func(num_features, hidden_size, num_layers=num_layers,
