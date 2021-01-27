@@ -1018,7 +1018,9 @@ def get_weightfile_from_cfg(cfg: DictConfig, model_type: str) -> Union[str, None
             return cfg[model_type].weights
         elif cfg.reload.latest or cfg[model_type].weights == 'latest':
             # print(trained_models)
-            assert len(trained_models[model_type][architecture]) > 0
+            if len(trained_models[model_type][architecture]) == 0:
+                log.warning('Trying to load *latest* weights, but found none! Using random initialization!')
+                return
             log.debug('trained models found: {}'.format(trained_models[model_type][architecture]))
             log.info('loading LATEST weights: {}'.format(trained_models[model_type][architecture][-1]))
             return trained_models[model_type][architecture][-1]
@@ -1103,4 +1105,3 @@ def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5'
             convert_video(videofile, movie_format=movie_format)
         except ValueError as e:
             print(e)
-
