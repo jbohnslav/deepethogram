@@ -1,11 +1,10 @@
 
-# (deg) C:\Users\jbohn\Documents\python\deepethogram_refactor\deepethogram\gui>python C:\ProgramData\Anaconda3\envs\deg\Library\bin\pyside2-uic mainwindow.ui
 # -*- coding: utf-8 -*-
 
 # Form implementation generated from reading ui file 'mainwindow.ui',
 # licensing of 'mainwindow.ui' applies.
 #
-# Created: Mon Apr 13 16:06:37 2020
+# Created: Thu Dec 17 11:14:12 2020
 #      by: pyside2-uic  running on PySide2 5.13.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -34,6 +33,7 @@ class Ui_MainWindow(object):
         self.name_constant.setObjectName("name_constant")
         self.formLayout.setWidget(0, QtWidgets.QFormLayout.LabelRole, self.name_constant)
         self.nameLabel = QtWidgets.QLabel(self.formLayoutWidget)
+        self.nameLabel.setText("")
         self.nameLabel.setObjectName("nameLabel")
         self.formLayout.setWidget(0, QtWidgets.QFormLayout.FieldRole, self.nameLabel)
         self.label = QtWidgets.QLabel(self.formLayoutWidget)
@@ -52,18 +52,23 @@ class Ui_MainWindow(object):
         self.label_8.setObjectName("label_8")
         self.formLayout.setWidget(3, QtWidgets.QFormLayout.LabelRole, self.label_8)
         self.nframesLabel = QtWidgets.QLabel(self.formLayoutWidget)
+        self.nframesLabel.setText("")
         self.nframesLabel.setObjectName("nframesLabel")
         self.formLayout.setWidget(1, QtWidgets.QFormLayout.FieldRole, self.nframesLabel)
         self.nlabeledLabel = QtWidgets.QLabel(self.formLayoutWidget)
+        self.nlabeledLabel.setText("")
         self.nlabeledLabel.setObjectName("nlabeledLabel")
         self.formLayout.setWidget(2, QtWidgets.QFormLayout.FieldRole, self.nlabeledLabel)
         self.nunlabeledLabel = QtWidgets.QLabel(self.formLayoutWidget)
+        self.nunlabeledLabel.setText("")
         self.nunlabeledLabel.setObjectName("nunlabeledLabel")
         self.formLayout.setWidget(3, QtWidgets.QFormLayout.FieldRole, self.nunlabeledLabel)
         self.fpsLabel = QtWidgets.QLabel(self.formLayoutWidget)
+        self.fpsLabel.setText("")
         self.fpsLabel.setObjectName("fpsLabel")
         self.formLayout.setWidget(4, QtWidgets.QFormLayout.FieldRole, self.fpsLabel)
         self.durationLabel = QtWidgets.QLabel(self.formLayoutWidget)
+        self.durationLabel.setText("")
         self.durationLabel.setObjectName("durationLabel")
         self.formLayout.setWidget(5, QtWidgets.QFormLayout.FieldRole, self.durationLabel)
         self.verticalLayout.addWidget(self.videoBox)
@@ -136,6 +141,10 @@ class Ui_MainWindow(object):
         self.predictionsCombo = QtWidgets.QComboBox(self.groupBox_4)
         self.predictionsCombo.setObjectName("predictionsCombo")
         self.verticalLayout_3.addWidget(self.predictionsCombo)
+        self.exportPredictions = QtWidgets.QPushButton(self.groupBox_4)
+        self.exportPredictions.setEnabled(False)
+        self.exportPredictions.setObjectName("exportPredictions")
+        self.verticalLayout_3.addWidget(self.exportPredictions)
         self.verticalLayout.addWidget(self.groupBox_4)
         self.horizontalLayout.addLayout(self.verticalLayout)
         self.verticalLayout_2 = QtWidgets.QVBoxLayout()
@@ -233,17 +242,11 @@ class Ui_MainWindow(object):
         MainWindow.setWindowTitle(QtWidgets.QApplication.translate("MainWindow", "MainWindow", None, -1))
         self.videoBox.setTitle(QtWidgets.QApplication.translate("MainWindow", "Video Info", None, -1))
         self.name_constant.setText(QtWidgets.QApplication.translate("MainWindow", "Name", None, -1))
-        self.nameLabel.setText(QtWidgets.QApplication.translate("MainWindow", " ", None, -1))
         self.label.setText(QtWidgets.QApplication.translate("MainWindow", "N frames", None, -1))
         self.label_3.setText(QtWidgets.QApplication.translate("MainWindow", "FPS", None, -1))
         self.label_6.setText(QtWidgets.QApplication.translate("MainWindow", "Duration", None, -1))
         self.label_7.setText(QtWidgets.QApplication.translate("MainWindow", "N labeled", None, -1))
         self.label_8.setText(QtWidgets.QApplication.translate("MainWindow", "N unlabeled", None, -1))
-        self.nframesLabel.setText(QtWidgets.QApplication.translate("MainWindow", " ", None, -1))
-        self.nlabeledLabel.setText(QtWidgets.QApplication.translate("MainWindow", " ", None, -1))
-        self.nunlabeledLabel.setText(QtWidgets.QApplication.translate("MainWindow", " ", None, -1))
-        self.fpsLabel.setText(QtWidgets.QApplication.translate("MainWindow", " ", None, -1))
-        self.durationLabel.setText(QtWidgets.QApplication.translate("MainWindow", " ", None, -1))
         self.groupBox.setTitle(QtWidgets.QApplication.translate("MainWindow", "FlowGenerator", None, -1))
         self.flow_train.setText(QtWidgets.QApplication.translate("MainWindow", "Train", None, -1))
         self.groupBox_2.setTitle(QtWidgets.QApplication.translate("MainWindow", "FeatureExtractor", None, -1))
@@ -256,6 +259,7 @@ class Ui_MainWindow(object):
         self.importPredictions.setText(QtWidgets.QApplication.translate("MainWindow", "Import predictions as labels", None, -1))
         self.finalize_labels.setText(QtWidgets.QApplication.translate("MainWindow", "Finalize Labels", None, -1))
         self.groupBox_4.setTitle(QtWidgets.QApplication.translate("MainWindow", "Predictions", None, -1))
+        self.exportPredictions.setText(QtWidgets.QApplication.translate("MainWindow", "Export predictions to CSV", None, -1))
         self.label_4.setText(QtWidgets.QApplication.translate("MainWindow", "Labels", None, -1))
         self.label_5.setText(QtWidgets.QApplication.translate("MainWindow", "Predictions", None, -1))
         self.menuDeepEthogram.setTitle(QtWidgets.QApplication.translate("MainWindow", "File", None, -1))
@@ -279,4 +283,4 @@ class Ui_MainWindow(object):
         self.actionOvernight.setText(QtWidgets.QApplication.translate("MainWindow", "Overnight", None, -1))
         self.actionAdd_multiple.setText(QtWidgets.QApplication.translate("MainWindow", "Add multiple", None, -1))
 
-from .custom_widgets import VideoPlayer, LabelImg
+from deepethogram.gui.custom_widgets import VideoPlayer, LabelImg
