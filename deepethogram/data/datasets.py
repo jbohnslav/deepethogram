@@ -555,7 +555,11 @@ class SingleSequenceDataset(data.Dataset):
             label_pad = pad
         
         assert (len(indices) + pad_left + pad_right) == self.sequence_length, \
-            'indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}'.format(len(indices), pad_left, pad_right, self.sequence_length)
+                'indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}'.format(
+                len(indices), pad_left, pad_right, self.sequence_length)
+        assert (len(label_indices) + label_pad[0] + label_pad[1]) == self.sequence_length, \
+                'label indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}'.format(
+                len(label_indices), label_pad[0], label_pad[1], self.sequence_length)  
         return indices, label_indices, pad, label_pad
     
     def __del__(self):
@@ -566,7 +570,7 @@ class SingleSequenceDataset(data.Dataset):
         
     def __getitem__(self, index: int) -> dict:
         indices, label_indices, pad, label_pad = self.compute_indices_and_padding(index)
-        
+        # import pdb; pdb.set_trace()
         # dictionary
         data = self.read_sequence(indices)
         
@@ -593,6 +597,9 @@ class SingleSequenceDataset(data.Dataset):
             labels = labels.squeeze()
             labels = torch.from_numpy(labels).to(torch.long)
             output['labels'] = labels
+            
+            if labels.shape[1] != output['features'].shape[1]:
+                import pdb; pdb.set_trace()
             
         return output
     
@@ -718,7 +725,7 @@ class FeatureVectorDataset(SingleSequenceDataset):
         else:
             # assume indices are in order
             # we use the start and end so that we can slice without knowing the exact size of the dataset
-            data = self.read_features_from_disk(indices[0], indices[-1])
+            data = self.read_features_from_disk(indices[0], indices[-1]+1)
         return data
 
 
@@ -1009,7 +1016,8 @@ def get_sequence_datasets(datadir: Union[str, os.PathLike], latent_name: str, se
                                             store_in_ram=store_in_ram, reduce=reduce, 
                                             is_keypoint=is_keypoint, stack_in_time=stack_in_time)
         else:
-            datasets[split] = SequenceDataset(datafiles, labelfiles, videofiles, sequence_length=sequence_length,latent_name=latent_name,
+            datasets[split] = SequenceDataset(datafiles, labelfiles, videofiles=videofiles, 
+                                              sequence_length=sequence_length,h5_key=latent_name,
                                             is_two_stream=is_two_stream, nonoverlapping=nonoverlapping[split],
                                             store_in_ram=store_in_ram, reduce=reduce, 
                                             is_keypoint=is_keypoint, stack_in_time=stack_in_time)
