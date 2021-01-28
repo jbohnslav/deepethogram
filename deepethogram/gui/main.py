@@ -18,9 +18,9 @@ from omegaconf import DictConfig
 from deepethogram import projects, utils
 from deepethogram.file_io import VideoReader
 from deepethogram.postprocessing import get_postprocessor_from_cfg
-from .custom_widgets import UnclickButtonOnPipeCompletion, SubprocessChainer
-from .mainwindow import Ui_MainWindow
-from .menus_and_popups import CreateProject, simple_popup_question, ShouldRunInference, overwrite_or_not
+from deepethogram.gui.custom_widgets import UnclickButtonOnPipeCompletion, SubprocessChainer
+from deepethogram.gui.mainwindow import Ui_MainWindow
+from deepethogram.gui.menus_and_popups import CreateProject, simple_popup_question, ShouldRunInference, overwrite_or_not
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         open_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence('Ctrl+O'), self)
         open_shortcut.activated.connect(self.load_project)
         self.ui.finalize_labels.clicked.connect(self.finalize)
+        self.ui.exportPredictions.clicked.connect(self.export_predictions)
         self.saved = True
         self.num_label_initializations = 0
 
@@ -824,6 +825,7 @@ class MainWindow(QMainWindow):
 
         self.initialize_prediction(prediction_array=probabilities, opacity=opacity)
         self.ui.importPredictions.setEnabled(True)
+        self.ui.exportPredictions.setEnabled(True)
         log.info('CHANGING LATENT NAME TO : {}'.format(latent_name))
         self.latent_name = latent_name
 
@@ -838,6 +840,17 @@ class MainWindow(QMainWindow):
             self.ui.predictionsCombo.setCurrentText(latent_name)
         self.update()
         self.user_did_something()
+
+    def export_predictions(self):
+        array = self.estimated_labels
+        np.set_printoptions(suppress=True)
+        df = pd.DataFrame(data=array, columns=self.project_config['project']['class_names'])
+        print(df)
+        print(df.sum(axis=0))
+        fname, _ = os.path.splitext(self.videofile)
+        prediction_fname = fname + '_predictions.csv'
+        df.to_csv(prediction_fname)
+
 
     def change_predictions(self, new_text):
         log.debug('change predictions called with text: {}'.format(new_text))
@@ -883,11 +896,17 @@ class MainWindow(QMainWindow):
             raise ValueError('create or load a DEG project before loading video')
 
         options = QFileDialog.Options()
-        filestring = 'VideoReader files (*.h5 *.avi *.mp4)'
-        filename, _ = QFileDialog.getOpenFileName(self, "Click on video to open", data_dir,
+        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg)'
+        prompt = "Click on video to open. If a directory full of images, click any image"
+        filename, _ = QFileDialog.getOpenFileName(self, prompt, data_dir,
                                                   filestring, options=options)
         if len(filename) == 0 or not os.path.isfile(filename):
             raise ValueError('Could not open file: {}'.format(filename))
+        ext = os.path.splitext(filename)[1]
+
+        if ext in ['.png', '.jpg']:
+            filename = os.path.dirname(filename)
+            assert os.path.isdir(filename)
 
         self.initialize_video(filename)
         self.user_did_something()
@@ -900,13 +919,14 @@ class MainWindow(QMainWindow):
 
         # https://stackoverflow.com/questions/38252419/how-to-get-qfiledialog-to-select-and-return-multiple-folders
         options = QFileDialog.Options()
-        filestring = 'VideoReader files (*.h5 *.avi *.mp4)'
-        filenames, _ = QFileDialog.getOpenFileNames(self, "Click on videos to open", data_dir,
+        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg)'
+        prompt = "Click on video to open. If a directory full of images, click any image"
+        filenames, _ = QFileDialog.getOpenFileNames(self, prompt, data_dir,
                                                     filestring, options=options)
         if len(filenames) == 0:
             return
         for filename in filenames:
-            assert os.path.isfile(filename)
+            assert os.path.exists(filename)
 
         for filename in filenames:
             self.initialize_video(filename)
