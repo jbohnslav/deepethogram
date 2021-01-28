@@ -11,6 +11,7 @@ import torch
 from sklearn.metrics import f1_score, roc_auc_score, confusion_matrix, average_precision_score, auc
 
 from deepethogram import utils
+from deepethogram.postprocessing import remove_low_thresholds
 
 log = logging.getLogger(__name__)
 
@@ -417,9 +418,13 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     # optimum threshold: one that maximizes F1
     optimum_indices = np.argmax(metrics_by_threshold['f1'], axis=0)
     optimum_thresholds = thresholds[optimum_indices]
+    # if the threshold or the F1 is very low, these are erroneous: set to 0.5
+    optimum_f1s = metrics_by_threshold['f1'][optimum_indices, range(len(optimum_indices))]
+    optimum_thresholds = remove_low_thresholds(optimum_thresholds, f1s=optimum_f1s)
 
     # optimum info: maximizes informedness
     optimum_thresholds_info = thresholds[np.argmax(metrics_by_threshold['informedness'], axis=0)]
+    optimum_thresholds_info = remove_low_thresholds(optimum_thresholds_info)
 
     metrics_by_threshold['optimum'] = optimum_thresholds
     metrics_by_threshold['optimum_info'] = optimum_thresholds_info
