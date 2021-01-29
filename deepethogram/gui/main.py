@@ -775,7 +775,7 @@ class MainWindow(QMainWindow):
                                                    filestring, options=options)
         if projects.is_deg_file(labelfile):
             raise ValueError('Don''t use this to open labels: use to import non-DeepEthogram labels')
-        filestring = 'VideoReader files (*.h5 *.avi *.mp4)'
+        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg *.mov)'
         videofile, _ = QFileDialog.getOpenFileName(self, "Click on corresponding video file", data_dir,
                                                    filestring, options=options)
         if not projects.is_deg_file(videofile):
@@ -896,7 +896,7 @@ class MainWindow(QMainWindow):
             raise ValueError('create or load a DEG project before loading video')
 
         options = QFileDialog.Options()
-        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg)'
+        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg *.mov)'
         prompt = "Click on video to open. If a directory full of images, click any image"
         filename, _ = QFileDialog.getOpenFileName(self, prompt, data_dir,
                                                   filestring, options=options)
@@ -919,7 +919,7 @@ class MainWindow(QMainWindow):
 
         # https://stackoverflow.com/questions/38252419/how-to-get-qfiledialog-to-select-and-return-multiple-folders
         options = QFileDialog.Options()
-        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg)'
+        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg *.mov)'
         prompt = "Click on video to open. If a directory full of images, click any image"
         filenames, _ = QFileDialog.getOpenFileNames(self, prompt, data_dir,
                                                     filestring, options=options)
