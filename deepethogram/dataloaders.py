@@ -15,7 +15,7 @@ import pandas as pd
 import torch
 # from deepethogram.flow_generator import utils as flow_utils
 # from deepethogram.flow_generator.utils import rgb_to_flow, rgb_to_flow_polar
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig, OmegaConf
 from opencv_transforms import transforms
 from torch.utils import data
 from tqdm import tqdm
@@ -405,7 +405,7 @@ class MultiMovieIterator:
             *args, **kwargs: see SequentialIterator
         """
         for video in videofiles:
-            assert (os.path.isfile(video))
+            assert os.path.exists(video)
 
         self.videos = videofiles
         self.N = len(videofiles)
@@ -1155,16 +1155,29 @@ def get_transforms(augs: DictConfig, input_images: int = 1, mode: str = '2d') ->
     # augs = cfg.augs # convenience
     spatial_transforms = []
     common = []
+    # augs = OmegaConf.to_container(augs)
     # order here matters a lot!!
     if augs.crop_size is not None:
-        spatial_transforms.append(transforms.RandomCrop(augs.crop_size))
-        common.append(transforms.CenterCrop(augs.crop_size))
+        if isinstance(augs.crop_size, ListConfig):
+            crop_size = list(augs.crop_size)
+        else:
+            crop_size = augs.crop_size
+        spatial_transforms.append(transforms.RandomCrop(crop_size))
+        common.append(transforms.CenterCrop(crop_size))
     if augs.resize is not None:
-        spatial_transforms.append(transforms.Resize(augs.resize))
-        common.append(transforms.Resize(augs.resize))
+        if isinstance(augs.resize, ListConfig):
+            resize = list(augs.resize)
+        else:
+            resize = augs.resize
+        spatial_transforms.append(transforms.Resize(resize))
+        common.append(transforms.Resize(resize))
     if augs.pad is not None:
-        spatial_transforms.append(transforms.Pad(augs.pad))
-        common.append(transforms.Pad(augs.pad))
+        if isinstance(augs.pad, ListConfig): 
+            pad = list(augs.pad)
+        else:
+            pad = augs.pad
+        spatial_transforms.append(transforms.Pad(pad))
+        common.append(transforms.Pad(pad))
     if augs.LR > 0:
         spatial_transforms.append(transforms.RandomHorizontalFlip(p=augs.LR))
     if augs.UD > 0:

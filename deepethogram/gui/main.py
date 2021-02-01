@@ -299,8 +299,8 @@ class MainWindow(QMainWindow):
     def generate_flow_train_args(self):
         args = ['python', '-m', 'deepethogram.flow_generator.train',
                 'project.config_file={}'.format(self.project_config['project']['config_file'])]
-        weights = self.get_selected_models()['flow_generator']
-        if os.path.isfile(weights):
+        weights = self.get_selected_models('flow_generator')
+        if weights is not None and os.path.isfile(weights):
             args += ['reload.weights={}'.format(weights)]
         return args
 
@@ -344,10 +344,11 @@ class MainWindow(QMainWindow):
 
             args = ['python', '-m', 'deepethogram.feature_extractor.train',
                     'project.config_file={}'.format(self.project_config['project']['config_file'])]
-            weights = self.get_selected_models()['feature_extractor']
-            if os.path.isfile(weights):
+            weights = self.get_selected_models('feature_extractor')
+            
+            if weights is not None and os.path.isfile(weights):
                 args += ['feature_extractor.weights={}'.format(weights)]
-            flow_weights = self.get_selected_models()['flow_generator']
+            flow_weights = self.get_selected_models('flow_generator')
             assert flow_weights is not None
             args += ['flow_generator.weights={}'.format(flow_weights)]
             log.info('feature extractor train called with args: {}'.format(args))
@@ -390,16 +391,16 @@ class MainWindow(QMainWindow):
         self.ui.flow_train.setEnabled(False)
         # self.ui.flow_inference.setEnabled(False)
         self.ui.featureextractor_train.setEnabled(False)
-        weights = self.get_selected_models()['feature_extractor']
-        if os.path.isfile(weights):
+        weights = self.get_selected_models('feature_extractor')
+        if weights is not None and os.path.isfile(weights):
             weight_arg = 'feature_extractor.weights={}'.format(weights)
         else:
-            weight_arg = 'reload.weights=null'
+            raise ValueError('You must specify a valid weight file in order to run inference!')
 
         args = ['python', '-m', 'deepethogram.feature_extractor.inference',
                 'project.config_file={}'.format(self.project_config['project']['config_file']),
                 'inference.overwrite=True', weight_arg]
-        flow_weights = self.get_selected_models()['flow_generator']
+        flow_weights = self.get_selected_models('flow_generator')
         assert flow_weights is not None
         args += ['flow_generator.weights={}'.format(flow_weights)]
         string = 'inference.directory_list=['
@@ -452,7 +453,7 @@ class MainWindow(QMainWindow):
             # self.ui.sequence_train.setEnabled(False)
             args = ['python', '-m', 'deepethogram.sequence.train',
                     'project.config_file={}'.format(self.project_config['project']['config_file'])]
-            weights = self.get_selected_models()['sequence']
+            weights = self.get_selected_models('sequence')
             if weights is not None and os.path.isfile(weights):
                 args += ['reload.weights={}'.format(weights)]
             self.training_pipe = subprocess.Popen(args)
@@ -480,7 +481,7 @@ class MainWindow(QMainWindow):
         records = projects.get_records_from_datadir(self.data_path)
         keys = list(records.keys())
         outputs = projects.has_outputfile(records)
-        sequence_weights = self.get_selected_models()['sequence']
+        sequence_weights = self.get_selected_models('sequence')
         if sequence_weights is not None and os.path.isfile(sequence_weights):
             sequence_config = utils.load_yaml(os.path.join(os.path.dirname(sequence_weights), 'config.yaml'))
             latent_name = sequence_config['sequence']['latent_name']
@@ -490,8 +491,8 @@ class MainWindow(QMainWindow):
             if output_name is None:
                 output_name = sequence_config['sequence']['arch']
         else:
-            latent_name = ''
-            output_name = ''
+            raise ValueError('must specify a valid weight file to run sequence inference!')
+
         log.debug('latent name: {}'.format(latent_name))
         # sequence_name, _ = utils.get_latest_model_and_name(self.project_config['project']['path'], 'sequence')
 
@@ -515,7 +516,7 @@ class MainWindow(QMainWindow):
         all_false = np.all(np.array(should_infer) == False)
         if all_false:
             return
-        weights = self.get_selected_models()['sequence']
+        weights = self.get_selected_models('sequence')
         if os.path.isfile(weights):
             weight_arg = 'reload.weights={}'.format(weights)
         else:
@@ -1015,6 +1016,7 @@ class MainWindow(QMainWindow):
             arch = self.default_archs[model]['arch']
             if arch not in archs.keys():
                 continue
+            trained_dict[model]['no pretrained weights'] = None
             for run in trained_models[model][arch]:
                 key = os.path.basename(os.path.dirname(run))
                 trained_dict[model][key] = run
@@ -1045,30 +1047,37 @@ class MainWindow(QMainWindow):
 
         # print(self.get_selected_models())
 
-    def get_selected_models(self):
-        if not hasattr(self, 'trained_model_dict'):
-            return
-
-        flow_text = self.ui.flowSelector.currentText()
-        if flow_text in self.trained_model_dict['flow_generator'].keys():
-            flow_model = self.trained_model_dict['flow_generator'][flow_text]
-        else:
-            flow_model = None
-
-        fe_text = self.ui.feSelector.currentText()
-        if fe_text in self.trained_model_dict['feature_extractor'].keys():
-            fe_model = self.trained_model_dict['feature_extractor'][fe_text]
-        else:
-            fe_model = None
-
-        seq_text = self.ui.sequenceSelector.currentText()
-        if seq_text in self.trained_model_dict['sequence'].keys():
-            seq_model = self.trained_model_dict['sequence'][seq_text]
-        else:
-            seq_model = None
+    def get_selected_models(self, model_type: str = None):
+        flow_model = None
+        fe_model = None
+        seq_model = None
+        
         models = {'flow_generator': flow_model,
                   'feature_extractor': fe_model,
                   'sequence': seq_model}
+        
+        if not hasattr(self, 'trained_model_dict'):
+            if model_type is not None:
+                log.warning('No {} weights found. Please download using the link on GitHub: {}'.format(
+                model_type, 'https://github.com/jbohnslav/deepethogram'))
+                
+            return models
+
+        flow_text = self.ui.flowSelector.currentText()
+        if flow_text in self.trained_model_dict['flow_generator'].keys():
+            models['flow_generator'] = self.trained_model_dict['flow_generator'][flow_text]
+
+        fe_text = self.ui.feSelector.currentText()
+        if fe_text in self.trained_model_dict['feature_extractor'].keys():
+            models['feature_extractor'] = self.trained_model_dict['feature_extractor'][fe_text]
+
+        seq_text = self.ui.sequenceSelector.currentText()
+        if seq_text in self.trained_model_dict['sequence'].keys():
+            models['sequence'] = self.trained_model_dict['sequence'][seq_text]
+        
+        if model_type is not None:
+            return models[model_type]
+        
         return models
 
     def update_frame(self, n):
