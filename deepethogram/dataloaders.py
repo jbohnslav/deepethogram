@@ -76,7 +76,7 @@ class SequentialIterator:
         Returns:
             SequentialIterator object
         """
-        assert (os.path.isfile(videofile))
+        assert os.path.exists(videofile)
         # self.num_flows = num_flows
         self.num_images = int(num_images)
 
