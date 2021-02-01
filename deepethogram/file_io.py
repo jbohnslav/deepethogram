@@ -70,9 +70,24 @@ def read_label_csv(labelfile):
     return label
 
 
-def convert_video(videofile: Union[str, os.PathLike], movie_format: str, *args, **kwargs) -> None:
+def convert_video(videofile: Union[str, os.PathLike], movie_format: str, *args,
+                  **kwargs) -> None:
     with VideoReader(videofile) as reader:
-        with VideoWriter(videofile, movie_format=movie_format, *args, **kwargs) as writer:
+        basename = os.path.splitext(videofile)[0]
+        if movie_format == 'ffmpeg':
+            out_filename = basename + '.mp4'
+        elif movie_format == 'opencv':
+            out_filename = basename + '.avi'
+        elif movie_format == 'hdf5':
+            out_filename = basename + '.h5'
+        elif movie_format == 'directory':
+            out_filename = basename
+        else:
+            raise ValueError('unexpected value of movie format: {}'.format(movie_format))
+        with VideoWriter(out_filename,
+                         movie_format=movie_format,
+                         *args,
+                         **kwargs) as writer:
             for frame in reader:
                 writer.write(frame)
 
@@ -210,7 +225,7 @@ class VideoReader:
                 self.filetype = 'hdf5'
                 self.file_object = h5py.File(filename, 'r')
                 self.nframes = len(self.file_object['frame'])
-            elif ext == 'avi' or ext == 'mp4':
+            elif ext == 'avi' or ext == 'mp4' or ext == 'mov':
                 self.filetype = 'video'
                 self.file_object = cv2.VideoCapture(filename)
                 self.nframes = int(self.file_object.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -639,9 +654,9 @@ class VideoWriter:
 
     def __exit__(self, type, value, traceback):
         # allows use with decorator
-        self.stop()
+        self.close()
 
-    def stop(self):
+    def close(self):
         """Stops writing, closes all open file objects"""
         if self.has_stopped:
             return
@@ -671,7 +686,7 @@ class VideoWriter:
     def __del__(self):
         """Destructor"""
         try:
-            self.stop()
+            self.close()
         except BaseException as e:
             if self.verbose:
                 print('Error in destructor')
