@@ -564,13 +564,14 @@ class VideoDataset(data.Dataset):
         movie_index = bisect.bisect_right(self.start_indices, index)
         frame_index = index - self.start_indices[movie_index - 1] if movie_index > 0 else index
 
+        h = self.metadata['height'][movie_index]
+        w = self.metadata['width'][movie_index]
+        
         images = []
         # if frames per clip is 11, dataset[0] would have 5 blank frames preceding, with the 6th-11th being real frames
         blank_start_frames = max(self.frames_per_clip // 2 - frame_index, 0)
         if blank_start_frames > 0:
             for i in range(blank_start_frames):
-                h = self.metadata['height'][movie_index]
-                w = self.metadata['width'][movie_index]
                 images.append(np.zeros((h, w, 3), dtype=np.uint8))
 
         framecount = self.metadata['framecount'][movie_index]
@@ -580,7 +581,12 @@ class VideoDataset(data.Dataset):
         real_frames = self.frames_per_clip - blank_start_frames - blank_end_frames
         with VideoReader(self.video_list[movie_index]) as reader:
             for i in range(real_frames):
-                images.append(reader[i + start_frame])
+                try:
+                    image = reader[i + start_frame]
+                except Exception as e:
+                    image = np.zeros((h, w, 3), dtype=np.uint8)
+                    log.warning('Error {} on frame {} of video {}. Is the video corrupted?'.format(e, index, self.videofile))
+                images.append(image)
 
         if log.isEnabledFor(logging.DEBUG):
             log.debug('idx: {} st: {} blank_start: {} blank_end: {} real: {} total: {}'.format(frame_index,
@@ -590,8 +596,6 @@ class VideoDataset(data.Dataset):
                                                                                                real_frames, framecount))
         if blank_end_frames > 0:
             for i in range(blank_end_frames):
-                h = self.metadata['height'][movie_index]
-                w = self.metadata['width'][movie_index]
                 images.append(np.zeros((h, w, 3), dtype=np.uint8))
         images = np.concatenate(images, 2)
         # print(images.shape, images.dtype)
