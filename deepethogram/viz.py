@@ -846,7 +846,7 @@ def make_precision_recall_figure(logger_file, fig=None, splits=['train', 'val'])
 
         K = precision.shape[1]
         for j in range(K):
-            color = colors[j] if i < len(colors) else colors[-1]
+            color = colors[j % len(colors)]
             x = recall[:, j]
             y = precision[:, j]
             # there's a bug in how this is computed
@@ -881,7 +881,12 @@ def plot_metric(data: Union[dict, OrderedDict], name, ax, legend: bool = False, 
     # data = {'train': train, 'val': val}
     for i, (split, array) in enumerate(data.items()):
         xs = np.arange(len(array))
-        color = colors[color_inds[i]] if color_inds is not None else colors[i]
+        # use modulos to make the colors cycle if there are more items than there are colors
+        if color_inds is not None:
+            color_ind = color_inds[i] % len(colors)
+        else:
+            color_ind = i % len(colors)
+        color = colors[color_ind]
         if plot_args is not None and split in plot_args.keys():
             ax.plot(xs, array, label=split, **plot_args[split], color=color)
         else:
