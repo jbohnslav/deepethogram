@@ -139,7 +139,7 @@ class OpticalFlowLightning(BaseLightningModule):
         key_metric = self.metrics.key_metric
         self.log(f'{split}_loss', loss)
         if split == 'val':
-            self.log(f'{key_metric}', loss_components[key_metric].mean())
+            self.log(f'{split}_{key_metric}', loss_components[key_metric].mean())
 
         return loss
 
@@ -236,8 +236,7 @@ def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_par
     key_metric = 'SSIM'
     log.info('key metric is {}'.format(key_metric))
     # the metrics objects all take normal dicts instead of dict configs
-    metrics = OpticalFlow(rundir, key_metric, num_parameters,
-                          metrics=metrics_list)
+    metrics = OpticalFlow(rundir, key_metric, num_parameters)
     return metrics
 
 
