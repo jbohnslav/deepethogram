@@ -166,9 +166,15 @@ class MetricsCallback(Callback):
     def on_train_epoch_end(self, trainer, pl_module, outputs):
         pl_module.metrics.buffer.append('train', {'lr': utils.get_minimum_learning_rate(pl_module.optimizer)})
         pl_module.metrics.end_epoch('train')
-
+        latest_key = pl_module.metrics.latest_key['train']
+        key = 'train_{}'.format(pl_module.metrics.key_metric)
+        pl_module.log(key, latest_key, on_epoch=True)
+        
     def on_validation_epoch_end(self, trainer, pl_module):
         pl_module.metrics.end_epoch('val')
+        latest_key = pl_module.metrics.latest_key['val']
+        key = 'val_{}'.format(pl_module.metrics.key_metric)
+        pl_module.log(key, latest_key, on_epoch=True)
 
     def on_test_epoch_end(self, trainer, pl_module):
         pl_module.metrics.end_epoch('test')
