@@ -61,7 +61,7 @@ def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
     stopper = get_stopper(cfg)
 
     metrics = get_metrics(os.getcwd(), data_info['num_classes'],
-                          num_parameters=utils.get_num_parameters(model), key_metric='loss',
+                          num_parameters=utils.get_num_parameters(model), key_metric='f1_class_mean',
                           num_workers=cfg.compute.num_workers)
     criterion = get_criterion(cfg.feature_extractor.final_activation, data_info)
     lightning_module = SequenceLightning(model, cfg, datasets, metrics, criterion)
@@ -89,7 +89,7 @@ class SequenceLightning(BaseLightningModule):
         self.criterion = criterion
 
         # this will get overridden by the ExampleImagesCallback
-        self.viz_cnt = None
+        # self.viz_cnt = None
 
     def common_step(self, batch: dict, batch_idx: int, split: str):
         # images, outputs = self(batch, split)
@@ -108,7 +108,7 @@ class SequenceLightning(BaseLightningModule):
             'labels': batch['labels'].detach()
         })
         # need to use the native logger for lr scheduling, etc.
-        self.log('loss', loss)
+        self.log(f'{split}_loss', loss.detach())
         return loss
 
     def training_step(self, batch: dict, batch_idx: int):
