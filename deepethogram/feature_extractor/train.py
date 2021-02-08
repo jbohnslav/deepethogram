@@ -85,7 +85,7 @@ def train_from_cfg_lightning(cfg):
                                        pos=data_info['pos'],
                                        neg=data_info['neg'])
     _, spatial_classifier, flow_classifier, fusion, model = model_parts
-    log.info('model: {}'.format(model))
+    # log.info('model: {}'.format(model))
 
     num_classes = len(cfg.project.class_names)
 
@@ -159,6 +159,9 @@ def train_from_cfg_lightning(cfg):
         del datasets, lightning_module, trainer, stopper, data_info
         torch.cuda.empty_cache()
         gc.collect()
+        
+    torch.cuda.empty_cache()
+    gc.collect()
 
     model = HiddenTwoStream(flow_generator, spatial_classifier,
                             flow_classifier, fusion,
@@ -290,7 +293,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         self.criterion = criterion
 
         # this will get overridden by the ExampleImagesCallback
-        self.viz_cnt = None
+        # self.viz_cnt = None
 
     # def on_train_epoch_start(self) -> None:
     #     log.info('buffer on epoch start: {}'.format(self.metrics.buffer.data))
@@ -325,7 +328,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
                 'labels': batch['labels'].detach()
             })
         # need to use the native logger for lr scheduling, etc.
-        self.log('loss', loss)
+        self.log('train_loss', loss.detach().cpu())
         return loss
 
     def validation_step(self, batch: dict, batch_idx: int):
@@ -342,7 +345,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
             })
         # need to use the native logger for lr scheduling, etc.
         # TESTING
-        self.log('loss', loss)
+        self.log('val_loss', loss.detach().cpu())
 
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
@@ -363,37 +366,40 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         if viz_cnt > 10:
             return
         if hasattr(self.model, 'flow_generator'):
-            # re-compute optic flows for this batch for visualization
-            batch_size = images.size(0)
-            # don't compute flows for very large batches. only need a few random ones for
-            # visualization purposes
-            if batch_size > 2:
-                inds = torch.randperm(batch_size)[:2]
-                images = images[inds]
-                probs = probs[inds]
-                labels = labels[inds]
-
             with torch.no_grad():
+                # re-compute optic flows for this batch for visualization
+                batch_size = images.size(0)
+                # don't compute flows for very large batches. only need a few random ones for
+                # visualization purposes
+                if batch_size > 2:
+                    inds = torch.randperm(batch_size)[:2]
+                    images = images[inds]
+                    probs = probs[inds]
+                    labels = labels[inds]
+            
                 # only output the highest res flow
-                flows = self.model.flow_generator(images)[0]
-                inputs = self.gpu_transforms['denormalize'](images)
-            fig = plt.figure(figsize=(14, 14))
-            viz.visualize_hidden(inputs.detach().cpu(),
-                                 flows.detach().cpu(),
-                                 probs.detach().cpu(),
-                                 labels.detach().cpu(),
-                                 fig=fig)
-            viz.save_figure(fig, 'batch_with_flows', True, viz_cnt, split)
-            del images, probs, labels, flows
+                flows = self.model.flow_generator(images)[0].detach()
+                inputs = self.gpu_transforms['denormalize'](images).detach()
+                fig = plt.figure(figsize=(14, 14))
+                viz.visualize_hidden(inputs.detach().cpu(),
+                                    flows.detach().cpu(),
+                                    probs.detach().cpu(),
+                                    labels.detach().cpu(),
+                                    fig=fig)
+                # this should happen in the save figure function, but for some reason it doesn't
+                viz.save_figure(fig, 'batch_with_flows', True, viz_cnt, split)
+                del images, probs, labels, flows
+                torch.cuda.empty_cache()
         else:
             fig = plt.figure(figsize=(14, 14))
             with torch.no_grad():
                 inputs = self.gpu_transforms['denormalize'](images)
-            viz.visualize_batch_spatial(inputs, probs, labels, fig=fig)
-            viz.save_figure(fig, 'batch_spatial', True, viz_cnt, split)
+                viz.visualize_batch_spatial(inputs, probs, labels, fig=fig)
+                viz.save_figure(fig, 'batch_spatial', True, viz_cnt, split)
         try:
             # should've been closed in viz.save_figure. this is double checking
             plt.close(fig)
+            plt.close('all')
         except:
             pass
         torch.cuda.empty_cache()
@@ -404,7 +410,9 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         batch = self.validate_batch_size(batch)
         # lightning handles transfer to device
         images = batch['images']
-        images = self.apply_gpu_transforms(images, mode)
+        # no-grad should work in the apply_gpu_transforms method; adding here just in case
+        with torch.no_grad():
+            images = self.apply_gpu_transforms(images, mode)
 
         outputs = self.model(images)
         self.log_image_statistics(images)
@@ -514,12 +522,13 @@ def get_metrics(rundir: Union[str, bytes, os.PathLike],
                              key_metric,
                              num_parameters,
                              num_classes=num_classes,
-                             metrics=metric_list,
                              evaluate_threshold=True,
                              num_workers=num_workers)
     return metrics
 
 
 if __name__ == '__main__':
+    # I hate that hydra overrides errors
+    os.environ['HYDRA_FULL_ERROR'] = "1"
     sys.argv = projects.process_config_file_from_cl(sys.argv)
     main()
