@@ -106,6 +106,17 @@ class RandomColorJitterVideo(nn.Module):
         self.jitter_2d = K.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation,
                                        hue=hue, return_transform=return_transform,
                                        same_on_batch=same_on_batch, p=p)
+        
+        self.brightness = brightness
+        self.contrast = contrast
+        self.saturation = saturation
+        self.hue = hue
+        
+        self.aug_values = {0: self.brightness, 
+                           1: self.contrast, 
+                           2: self.saturation, 
+                           3: self.hue}
+        
         self.transform_list = [
             self.adjust_brightness,
             self.adjust_contrast,
@@ -136,13 +147,16 @@ class RandomColorJitterVideo(nn.Module):
         should_aug = params['batch_prob']
         if should_aug.sum() == 0:
             return batch
-        # N C T H W -> N T C H W
-        outputs = batch.clone().transpose(1, 2).contiguous()
-        # print(outputs.shape)
-        for idx in params['order'].tolist():
-            t = self.transform_list[idx]
-            outputs[should_aug] = t(outputs[should_aug], params)
-        outputs = outputs.transpose(1, 2).contiguous()
+        # we shouldn't need this context manager here-- but trying it due to VRAM overflow issues
+        with torch.no_grad():
+            # N C T H W -> N T C H W
+            outputs = batch.transpose(1, 2).contiguous().detach()
+            # print(outputs.shape)
+            for idx in params['order'].tolist():
+                if self.aug_values[idx] > 0:
+                    t = self.transform_list[idx]
+                    outputs[should_aug] = t(outputs[should_aug], params).detach()
+            outputs = outputs.transpose(1, 2).contiguous().detach()
         return outputs
 
 
@@ -168,8 +182,8 @@ class RandomGrayscaleVideo(nn.Module):
 
     def forward(self, batch):
         should_aug = self.generate_parameters(batch.shape[0])
-        outputs = batch.clone()
-        outputs[should_aug] = self.rgb_to_gray(outputs[should_aug])
+        outputs = batch# .clone()
+        outputs[should_aug] = self.rgb_to_gray(outputs[should_aug]).detach()
         return outputs
 
 
@@ -243,13 +257,13 @@ def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
                                                        contrast=augs.contrast,
                                                        saturation=augs.saturation,
                                                        hue=augs.hue,
-                                                       p=0.5,
+                                                       p=augs.color_p,
                                                        same_on_batch=False,
                                                        return_transform=False))
 
     if augs.grayscale > 0:
         train_transforms.append(RandomGrayscaleVideo(p=augs.grayscale))
-
+    
     norm = NormalizeVideo(mean=augs.normalization.mean,
                           std=augs.normalization.std)
     train_transforms.append(norm)

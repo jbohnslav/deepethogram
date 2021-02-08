@@ -1,3 +1,5 @@
+from collections import defaultdict
+from copy import deepcopy
 import logging
 import math
 from typing import Tuple
@@ -37,6 +39,7 @@ class BaseLightningModule(pl.LightningModule):
             gpu_transforms = get_empty_gpu_transforms()
         else:
             raise NotImplementedError
+        self.model_type = model_type
         self.gpu_transforms: dict = gpu_transforms
 
         self.optimizer = None  # will be overridden in configure_optimizers
@@ -50,6 +53,8 @@ class BaseLightningModule(pl.LightningModule):
         self.lr = self.hparams.train.lr if self.hparams.train.lr != 'auto' else 1e-4
         log.info('scheduler mode: {}'.format(self.scheduler_mode))
         # self.is_key_metric_loss = self.metrics.key_metric == 'loss'
+        
+        self.viz_cnt = defaultdict(int)
 
     def on_train_epoch_start(self) -> None:
         # self.viz_cnt['train'] = 0
@@ -98,7 +103,7 @@ class BaseLightningModule(pl.LightningModule):
 
     def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
         with torch.no_grad():
-            images = self.gpu_transforms[mode](images)
+            images = self.gpu_transforms[mode](images).detach()
         return images
 
     def configure_optimizers(self):
@@ -111,7 +116,8 @@ class BaseLightningModule(pl.LightningModule):
         log.info('learning rate: {}'.format(self.lr))
         scheduler = initialize_scheduler(optimizer, self.hparams, mode=self.scheduler_mode,
                                          reduction_factor=self.hparams.train.reduction_factor)
-        return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': self.metrics.key_metric}
+        monitor_key = 'val_' + self.metrics.key_metric
+        return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': monitor_key}
 
 
 # @profile
@@ -131,16 +137,36 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                              limit_val_batches=1.0,
                              limit_test_batches=1.0,
                              num_sanity_val_steps=0)
+                            # callbacks=[ExampleImagesCallback()])
         tmp_metrics = lightning_module.metrics
         tmp_workers = lightning_module.hparams.compute.num_workers
         # visualize_examples = lightning_module.visualize_examples
 
+        if lightning_module.model_type != 'sequence':
+            # there is a somewhat common error that VRAM will be maximized by the gpu-auto-tuner.
+            # However, during training, we probabilistically sample colorspace transforms; in an "unlucky"
+            # batch, perhaps all of the training samples are converted to HSV, hue and saturation changed, then changed 
+            # back. This is rare enough to not be encountered in "auto-tuning," so we'll get a train-time error. BAD!
+            # so, we crank up the colorspace augmentation probability, then pick batch size, then change it back
+            original_gpu_transforms = deepcopy(lightning_module.gpu_transforms)
+            
+            log.debug('orig: {}'.format(lightning_module.gpu_transforms))
+            
+            original_augs = cfg.augs
+            new_augs = deepcopy(cfg.augs)
+            new_augs.color_p = 1.0
+            
+            arch = lightning_module.hparams[lightning_module.model_type].arch
+            mode = '2d'
+            gpu_transforms = get_gpu_transforms(new_augs, '3d' if '3d' in arch.lower() else '2d')
+            lightning_module.gpu_transforms = gpu_transforms        
+            log.debug('new: {}'.format(lightning_module.gpu_transforms))
+            
         tuner = pl.tuner.tuning.Tuner(trainer)
         # hack for lightning to find the batch size
         cfg.batch_size = 2  # to start
 
         empty_metrics = EmptyMetrics()
-
         # don't store metrics when batch size finding
         lightning_module.metrics = empty_metrics
         # don't visualize our model inputs when batch size finding
@@ -152,7 +178,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         if cfg.compute.batch_size == 'auto':
             max_trials = int(math.log2(bs_end)) - int(math.log2(bs_start))
             log.info('max trials: {}'.format(max_trials))
-            new_batch_size = trainer.tuner.scale_batch_size(lightning_module, mode='power', steps_per_trial=20,
+            new_batch_size = trainer.tuner.scale_batch_size(lightning_module, mode='power', steps_per_trial=30,
                                                             init_val=bs_start, max_trials=max_trials)
 
             cfg.compute.batch_size = new_batch_size
@@ -175,6 +201,9 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         lightning_module.hparams.train.viz = should_viz
         lightning_module.metrics = tmp_metrics
         lightning_module.hparams.compute.num_workers = tmp_workers
+        if lightning_module.model_type != 'sequence':
+            lightning_module.gpu_transforms = original_gpu_transforms
+            log.debug('reverted: {}'.format(lightning_module.gpu_transforms))
 
     # tuning fucks with the callbacks
     trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
@@ -188,6 +217,9 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                                     StopperCallback(stopper)],
                          reload_dataloaders_every_epoch=True,
                          profiler=profiler)
+    torch.cuda.empty_cache()
+    # gc.collect()
+    
     # import signal
     # signal.signal(signal.SIGTERM, signal.SIG_DFL)
     # log.info('trainer is_slurm_managing_tasks: {}'.format(trainer.is_slurm_managing_tasks))

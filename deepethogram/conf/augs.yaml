@@ -9,6 +9,8 @@ augs:
   hue: 0.1
   # randomly alter saturation of the image. large values = more distortion
   saturation: 0.1
+  # the probability to do brightness / contrast / hue / saturation
+  color_p: 0.5
   # randomly change image to grayscale
   grayscale: 0.5
   # if not null, crop size will take random crops of the given shape during training, and center crop during inference.
