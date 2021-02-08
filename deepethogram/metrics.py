@@ -675,7 +675,6 @@ class Metrics:
     """Class for saving a list of per-epoch metrics to disk as an HDF5 file"""
 
     def __init__(self, run_dir: Union[str, bytes, os.PathLike],
-                 metrics: list,
                  key_metric: str,
                  name: str,
                  num_parameters: int,
@@ -687,8 +686,6 @@ class Metrics:
         ----------
         run_dir: str, os.PathLike
             directory into which to save metrics file
-        metrics: list
-            list of metrics. a dataset will be created in the HDF5 file for each of these, for each split
         key_metric: str
             which metric is considered the "key". This can be used for determining when a model has converged, etc.
         name: str
@@ -699,11 +696,8 @@ class Metrics:
             either ['train', 'val'] or ['train', 'val', 'test']
         """
         assert (os.path.isdir(run_dir))
-        assert key_metric in metrics or key_metric == 'loss'
         self.fname = os.path.join(run_dir, '{}_metrics.h5'.format(name))
         log.debug('making metrics file at {}'.format(self.fname))
-
-        self.metrics = metrics
         self.key_metric = key_metric
         self.splits = splits
         self.num_parameters = num_parameters
@@ -837,7 +831,7 @@ class Classification(Metrics):
     """ Metrics class for saving multiclass or multilabel classifcation metrics to disk """
 
     def __init__(self, run_dir: Union[str, bytes, os.PathLike], key_metric: str, num_parameters: int,
-                 num_classes: int = None, metrics: list = ['accuracy', 'mean_class_accuracy', 'f1', 'roc_auc'],
+                 num_classes: int = None,
                  splits: list = ['train', 'val'],
                  ignore_index: int = -1, evaluate_threshold: bool = False, num_workers: int = 4):
         """ Constructor for classification metrics class
@@ -862,12 +856,9 @@ class Classification(Metrics):
             Hack for multi-label classification problems. If True, at each epoch will compute a bunch of metrics for
             each potential threshold. See evaluate_thresholds
         """
-        super().__init__(run_dir, metrics, key_metric, 'classification', num_parameters, splits, num_workers)
+        super().__init__(run_dir, key_metric, 'classification', num_parameters, splits, num_workers)
 
         self.metric_funcs = all_metrics
-
-        if 'confusion' in metrics:
-            assert (num_classes is not None)
 
         self.num_classes = num_classes
         self.ignore_index = ignore_index
@@ -945,9 +936,9 @@ class Classification(Metrics):
 class OpticalFlow(Metrics):
     """ Metrics class for saving optic flow metrics to disk """
 
-    def __init__(self, run_dir, key_metric, num_parameters, metrics=['SSIM_full'],
+    def __init__(self, run_dir, key_metric, num_parameters,
                  splits=['train', 'val']):
-        super().__init__(run_dir, metrics, key_metric, 'opticalflow', num_parameters, splits)
+        super().__init__(run_dir, key_metric, 'opticalflow', num_parameters, splits)
 
     def compute(self, data: dict) -> dict:
         """ Computes metrics from one epoch's batch of data
