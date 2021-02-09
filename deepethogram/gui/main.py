@@ -1170,7 +1170,7 @@ def set_style(app):
     return app
 
 
-@hydra.main(config_path='../conf/gui.yaml')
+@hydra.main(config_path='../conf', config_name='gui')
 def run(cfg: DictConfig) -> None:
     log.info('CWD: {}'.format(os.getcwd()))
     log.info('Configuration used: {}'.format(cfg.pretty()))
