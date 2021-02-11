@@ -336,7 +336,7 @@ def extract(rgbs: list,
         f.close()
 
 
-@hydra.main(config_path='../conf/feature_extractor_inference.yaml')
+@hydra.main(config_path='../conf', config_name='feature_extractor_inference')
 def main(cfg: DictConfig):
     log.info('args: {}'.format(' '.join(sys.argv)))
     # turn "models" in your project configuration to "full/path/to/models"
