@@ -354,6 +354,8 @@ def main(cfg: DictConfig):
     elif type(directory_list) == str and directory_list == 'all':
         basedir = cfg.project.data_path
         directory_list = utils.get_subfiles(basedir, 'directory')
+    elif isinstance(directory_list, list): 
+        pass
     else:
         raise ValueError('unknown value for directory list: {}'.format(directory_list))
 

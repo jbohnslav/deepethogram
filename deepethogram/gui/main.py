@@ -24,6 +24,8 @@ from deepethogram.gui.menus_and_popups import CreateProject, simple_popup_questi
 
 log = logging.getLogger(__name__)
 
+# I hate that hydra overrides errors
+os.environ['HYDRA_FULL_ERROR'] = "1"
 
 class MainWindow(QMainWindow):
     # lots of inspiration from this wonderful stackoverflow answer here:
