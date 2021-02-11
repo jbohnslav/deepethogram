@@ -10,7 +10,7 @@ import hydra
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, ListConfig
 from torch import nn
 from tqdm import tqdm
 
@@ -356,6 +356,8 @@ def main(cfg: DictConfig):
         directory_list = utils.get_subfiles(basedir, 'directory')
     elif isinstance(directory_list, list): 
         pass
+    elif isinstance(directory_list, ListConfig):
+        directory_list = OmegaConf.to_container(directory_list)
     else:
         raise ValueError('unknown value for directory list: {}'.format(directory_list))
 
