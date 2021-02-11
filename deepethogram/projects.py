@@ -1178,7 +1178,7 @@ def convert_config_paths_to_absolute(project_cfg: DictConfig) -> DictConfig:
 
     model_path = os.path.join(root, model_path)
     data_path = os.path.join(root, data_path)
-    if not os.path.isdir(model_path) or not os.path.isdir(data_path) or os.path.isfile(cfg_path):
+    if not os.path.isdir(model_path) or not os.path.isdir(data_path) or not os.path.isfile(cfg_path):
         raise ValueError('model or data path not found! {}: {}, {}: {}, {}: {}'.format(
             model_path, os.path.isdir(model_path), data_path,
             os.path.isdir(data_path), 
