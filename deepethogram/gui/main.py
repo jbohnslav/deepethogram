@@ -959,7 +959,7 @@ class MainWindow(QMainWindow):
                                        self.project_config['project']['model_path'])
         
         self.project_config = projects.convert_config_paths_to_absolute(self.project_config)
-        import pdb; pdb.set_trace()
+        
         # self.project_config['project']['class_names'] = self.project_config['class_names']
         # load up the last alphabetic record, which if user includes dates in filename, will be the most recent
         # data_path = os.path.join(self.project_config['project']['path'], self.project_config['project']['data_path'])
