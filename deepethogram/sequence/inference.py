@@ -240,11 +240,14 @@ def main(cfg: DictConfig):
     model = build_model_from_cfg(cfg, 1024, len(cfg.project.class_names))
     log.info('model: {}'.format(model))
 
-
     model = utils.load_weights(model, weights)
     metrics_file = os.path.join(os.path.dirname(weights), 'classification_metrics.h5')
     with h5py.File(metrics_file, 'r') as f:
-        thresholds = f['threshold_curves']['val']['optimum'][:]
+        try:
+            thresholds = f['val']['metrics_by_threshold']['optimum'][:]
+        except KeyError:
+            thresholds = f['threshold_curves']['val']['optimum'][:]
+        
         log.info('thresholds: {}'.format(thresholds))
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
     class_names = cfg.project.class_names
