@@ -1006,7 +1006,8 @@ def get_weights_from_model_path(model_path: Union[str, os.PathLike]) -> dict:
             if not os.path.isfile(paramfile):
                 continue
         params = utils.load_yaml(paramfile)
-
+        if params is None:
+            continue
         # this horrible if-else tree is for backwards compatability with how I used to save config files
         if 'model' in params.keys():
             model_type = params['model']
