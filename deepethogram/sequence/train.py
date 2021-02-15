@@ -3,7 +3,6 @@ import os
 import sys
 from typing import Type, Tuple, Union
 
-import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -26,14 +25,14 @@ log = logging.getLogger(__name__)
 plt.switch_backend('agg')
 
 
-@hydra.main(config_path='../conf', config_name='sequence_train')
+# @hydra.main(config_path='../conf', config_name='sequence_train')
 def main(cfg: DictConfig) -> None:
-    log.debug('cwd: {}'.format(os.getcwd()))
-    log.info('args: {}'.format(' '.join(sys.argv)))
+    
     # only two custom overwrites of the configuration file
     # first, change the project paths from relative to absolute
-
-    cfg = deepethogram.projects.convert_config_paths_to_absolute(cfg)
+    
+    log.info('args: {}'.format(' '.join(sys.argv)))
+    
     if cfg.sequence.latent_name is None:
         cfg.sequence.latent_name = cfg.feature_extractor.arch
         # allow for editing
@@ -213,7 +212,9 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
 
 
 if __name__ == '__main__':
-    # I hate that hydra overrides errors
-    os.environ['HYDRA_FULL_ERROR'] = "1"
-    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
-    main()
+    config_list = ['config','model/feature_extractor','model/sequence', 'train']
+    run_type = 'train'
+    model = 'sequence'
+    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
+    cfg = projects.setup_run(cfg)
+    main(cfg)

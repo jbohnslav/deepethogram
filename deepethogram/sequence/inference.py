@@ -4,7 +4,7 @@ import sys
 from typing import Union, Type
 
 import h5py
-import hydra
+# import hydra
 import numpy as np
 import torch
 from omegaconf import DictConfig
@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 import deepethogram.projects
 from deepethogram import utils, projects
-from deepethogram.data.datasets import SingleSequenceDataset
+from deepethogram.data.datasets import FeatureVectorDataset
 from deepethogram.sequence.train import build_model_from_cfg
 
 log = logging.getLogger(__name__)
@@ -26,8 +26,8 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
           is_two_stream: bool = True):
     assert (latent_name is not None)
 
-    gen = SingleSequenceDataset(dataloader, labelfile=None, h5_key=latent_name,
-                                sequence_length=sequence_length, dimension=None,
+    gen = FeatureVectorDataset(dataloader, labelfile=None, h5_key=latent_name,
+                                sequence_length=sequence_length,
                                 nonoverlapping=True, store_in_ram=False, is_two_stream=is_two_stream)
     n_datapoints = gen.shape[1]
     gen = data.DataLoader(gen, batch_size=1, shuffle=False, num_workers=0, drop_last=False)
@@ -92,7 +92,7 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
 
 
 def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: str,
-            latent_name: str, output_name: str = 'tgmj', sequence_length: int = 180, dimension: int = None,
+            latent_name: str, output_name: str = 'tgmj', sequence_length: int = 180,
             is_two_stream: bool = True, device: str = 'cuda:1', ignore_error=True, overwrite=False,
             class_names: list = ['background']):
     torch.backends.cudnn.benchmark = True
@@ -119,8 +119,8 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
         outputfile = outputfiles[i]
         log.info('running inference on {}. latent name: {} output name: {}...'.format(outputfile, latent_name,
                                                                                       output_name))
-        gen = SingleSequenceDataset(outputfile, labelfile=None, h5_key=latent_name,
-                                    sequence_length=sequence_length, dimension=dimension,
+        gen = FeatureVectorDataset(outputfile, labelfile=None, h5_key=latent_name,
+                                    sequence_length=sequence_length,
                                     nonoverlapping=True, store_in_ram=False, is_two_stream=is_two_stream)
         n_datapoints = gen.shape[1]
         gen = data.DataLoader(gen, batch_size=1, shuffle=False, num_workers=0, drop_last=False)
@@ -145,13 +145,10 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
                 with torch.no_grad():
                     try:
                         batch = next(gen)
-                        batch = batch.to(device)
                         # star means that if batch is a tuple of images, flows, it will pass in as sequential
                         # positional arguments
-                        if type(batch) == tuple:
-                            logits = model(*batch)
-                        else:
-                            logits = model(batch)
+                        features = batch['features'].to(device)
+                        logits = model(features)
 
                         if not has_printed:
                             log.debug('logits shape: {}'.format(logits.shape))
@@ -193,11 +190,9 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
                 del (batch, logits, probabilities)
 
 
-@hydra.main(config_path='../conf/sequence_inference.yaml')
 def main(cfg: DictConfig):
     log.info('args: {}'.format(' '.join(sys.argv)))
     # turn "models" in your project configuration to "full/path/to/models"
-    cfg = deepethogram.projects.parse_cfg_paths(cfg)
     log.info('configuration used: ')
     log.info(cfg.pretty())
 
@@ -215,6 +210,7 @@ def main(cfg: DictConfig):
             latent_name = loaded_cfg['feature_extractor']['arch']
     else:
         latent_name = cfg.sequence.latent_name
+    log.info('latent name used for running sequence inference: {}'.format(latent_name))
 
     # the output name will be a group in the output hdf5 dataset containing probabilities, etc
     if cfg.sequence.output_name is None:
@@ -253,10 +249,15 @@ def main(cfg: DictConfig):
     class_names = cfg.project.class_names
     class_names = np.array(class_names)
     extract(model, outputfiles, thresholds, cfg.feature_extractor.final_activation, latent_name, output_name,
-            cfg.sequence.sequence_length, None, True, device, cfg.inference.ignore_error,
+            cfg.sequence.sequence_length, True, device, cfg.inference.ignore_error,
             cfg.inference.overwrite, class_names=class_names)
 
 
 if __name__ == '__main__':
-    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
-    main()
+    config_list = ['config','augs','model/feature_extractor', 'model/sequence', 'inference']
+    run_type = 'inference'
+    model = 'sequence'
+    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
+    cfg = projects.setup_run(cfg)
+    
+    main(cfg)

@@ -3,7 +3,7 @@ import os
 import sys
 from typing import Union
 
-import hydra
+# import hydra
 import numpy as np
 import torch
 from omegaconf import DictConfig
@@ -180,7 +180,7 @@ def update_project_with_normalization(norm_dict: dict, project_config: dict):
     utils.save_dict_to_yaml(project_config, os.path.join(project_config['project']['path'], 'project_config.yaml'))
 
 
-@hydra.main(config_path='../conf/zscore.yaml')
+# @hydra.main(config_path='../conf/zscore.yaml')
 def main(cfg: DictConfig):
     assert os.path.isfile(cfg.videofile)
     project_config = utils.load_yaml(cfg.project.config_file)
@@ -188,5 +188,9 @@ def main(cfg: DictConfig):
 
 
 if __name__ == '__main__':
-    sys.argv = deepethogram.projects.process_config_file_from_cl(sys.argv)
-    main()
+    config_list = ['config','zscore']
+    run_type = 'zscore'
+    model = None
+    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
+    cfg = projects.setup_run(cfg)
+    main(cfg)

@@ -10,7 +10,7 @@ from typing import Union
 import h5py
 import numpy as np
 import pandas as pd
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf, ListConfig
 from tqdm import tqdm
 
 import deepethogram
@@ -1106,9 +1106,9 @@ def get_weightfile_from_cfg(cfg: DictConfig,
     weightfile: path to weight file
     """
 
-    if cfg.reload.weights is not None:
-        assert os.path.isfile(cfg.reload.weights)
-        return cfg.reload.weights
+    # if cfg.reload.weights is not None:
+    #     assert os.path.isfile(cfg.reload.weights)
+    #     return cfg.reload.weights
 
     assert model_type in [
         'flow_generator', 'feature_extractor', 'end_to_end', 'sequence'
@@ -1192,9 +1192,7 @@ def convert_config_paths_to_absolute(project_cfg: DictConfig) -> DictConfig:
 
 def load_config(path_to_config: Union[str, os.PathLike]) -> dict:
     """Convenience function to load dictionary from yaml and sort out potentially erroneous paths"""
-    assert os.path.isfile(
-        path_to_config), 'configuration file does not exist! {}'.format(
-            path_to_config)
+    assert os.path.isfile(path_to_config), 'configuration file does not exist! {}'.format(path_to_config)
 
     project = utils.load_yaml(path_to_config)
     project = fix_config_paths(project, path_to_config)
@@ -1235,21 +1233,17 @@ def get_config_from_path(path: Union[str, os.PathLike]) -> str:
         cfg_path = os.path.join(path, cfg_path + '.yaml')
         if os.path.isfile(cfg_path):
             return cfg_path
-    raise ValueError('No configuration file found in directory! {}'.format(
-        os.listdir(path)))
+    raise ValueError('No configuration file found in directory! {}'.format(os.listdir(path)))
 
 
 def fix_config_paths(cfg, path_to_config: Union[str, os.PathLike]):
     error = False
     if cfg['project']['path'] != os.path.dirname(path_to_config):
-        log.warning(
-            'Erroneous project path in the config file itself, changing...')
+        log.warning('Erroneous project path in the config file itself, changing...')
         cfg['project']['path'] = os.path.dirname(path_to_config)
         error = True
     if cfg['project']['config_file'] != os.path.basename(path_to_config):
-        log.warning(
-            'Erroneous name of config file in the config file itself, changing...'
-        )
+        log.warning('Erroneous name of config file in the config file itself, changing...')
         cfg['project']['config_file'] = os.path.basename(path_to_config)
         error = True
     if error:
@@ -1257,11 +1251,11 @@ def fix_config_paths(cfg, path_to_config: Union[str, os.PathLike]):
     return cfg
 
 
-def fix_project_paths(project_path):
+def get_config_file_from_project_path(project_path):
     assert os.path.isdir(project_path)
     project_path = os.path.abspath(project_path)
     cfg_file = get_config_from_path(project_path)
-    project_cfg = utils.load_yaml(cfg_file)
+    project_cfg = OmegaConf.load(cfg_file)
     project_cfg = fix_config_paths(project_cfg, cfg_file)
     return project_cfg
 
@@ -1291,60 +1285,93 @@ def fix_project_paths(project_path):
 #
 #         assert os.path.isfile(cfg.reload.weights)
 #     return cfg
-def process_config_file_from_cl(argv: list) -> list:
-    """ Unfortunate HACK for Hydra. Moves an input yaml file into Hydra's search path
-
-    Allows for fully-functional config compositions while passing a yaml file from the command line. For example,
-    deepethogram expects each project to have its own specific hyperparameters. We want to be able to integrate that
-    with our given defaults.
-
-    Example: in your project configuration file, you specify that the preset model should be deg_s. This changes
-    the loss function for the flow generator, but you didn't specify that in your project config. This function will
-    move your project config into Hydra's search path by literally copying a file to the deepethogram directory.
-    When Hydra sees this in its search path, it will figure out that you've changed the preset model, and automatically
-    change the associated hyperparameters (in this case, the loss function).
-
-    Parameters
-    ----------
-    argv: list
-        command line inputs
-
-    Returns
-    ------
-    argv: list
-        command line inputs
-    """
-    def move_project_file(path):
-        log.debug('file: {}'.format(__file__))
-        log.debug('deepethogram loc: {}'.format(deepethogram.__file__))
-        conf_dir = os.path.join(os.path.dirname(deepethogram.__file__), 'conf',
-                                'project')
-        shutil.copy(path, conf_dir)
-        basename = os.path.splitext(os.path.basename(path))[0]
-        return basename
-
-    path = None
+def get_project_path_from_cl(argv: list) -> str:
     for arg in argv:
         if 'project.config_file' in arg:
             key, path = arg.split('=')
             assert os.path.isfile(path)
             # path is the path to the project directory, not the config file
             path = os.path.dirname(path)
+            return path
+            
         elif 'project.path' in arg:
             key, path = arg.split('=')
             assert os.path.isdir(path)
+            return path
+    raise ValueError('project path or file not in args: {}'.format(argv))
 
-        # if we found either one of config_file or path
-        if path is not None:
-            # make sure the locations in the config file match the current directory
-            project_cfg = fix_project_paths(path)
-            path = project_cfg['project']['path']
-            # argv.append('--config-dir')
-            # argv.append(path + '/')
-            cfg_path = get_config_from_path(path)
-            basename = move_project_file(cfg_path)
-            #
-            # # argv.append('project={}'.format(basename))
-            # log.debug('args: {}'.format(sys.argv))
-            return argv
-    return argv
+def make_config(project_path: Union[str, os.PathLike], config_list: list, run_type: str, model: str) -> DictConfig:
+    config_path = os.path.join(os.path.dirname(deepethogram.__file__), 'conf')
+    
+    def config_string_to_path(config_path, string): 
+        fullpath = os.path.join(config_path, *string.split('/'))  + '.yaml'
+        assert os.path.isfile(fullpath)
+        return fullpath
+    
+    user_cfg = get_config_file_from_project_path(project_path)
+    
+    cli = OmegaConf.from_cli()
+    
+    # order of operations: first, defaults specified in config_list
+    # then, if preset is specified in user config or at the command line, load those preset values
+    # then, append the user config
+    # then, the command line args
+    # so if we specify a preset and manually change, say, the feature extractor architecture, we can do that
+    if 'preset' in user_cfg:
+        config_list += ['preset/' + user_cfg.preset]
+    if 'preset' in cli:
+        config_list += ['preset/' + cli.preset]
+        
+    config_files = [config_string_to_path(config_path, i) for i in config_list]
+    
+    cfgs = [OmegaConf.load(i) for i in config_files]    
+    
+    # first defaults; then user cfg; then cli
+    cfg = OmegaConf.merge(*cfgs, user_cfg, cli)
+
+    cfg.run = {'type': run_type, 'model': model}
+    return cfg
+    
+def make_config_from_cli(argv, *args, **kwargs):
+    project_path = get_project_path_from_cl(argv)
+    return make_config(project_path, *args, **kwargs)
+
+def configure_run_directory(cfg: DictConfig) -> None:
+    datestring = datetime.now().strftime('%Y%m%d_%H%M%S')
+    if cfg.run.type == 'gui':
+        path = cfg.project.path if cfg.project.path is not None else os.getcwd()
+        directory = os.path.join(path, 'gui_logs', datestring)
+    else:
+        directory = f'{datestring}_{cfg.run.model}_{cfg.run.type}'
+        directory = os.path.join(cfg.project.model_path, directory)
+    if cfg.notes is not None:
+        directory += f'_{cfg.notes}'
+    if not os.path.isdir(directory):
+        os.makedirs(directory)
+    os.chdir(directory)
+    
+def configure_logging(cfg: DictConfig) -> None:
+    # assume current directory is run directory
+    assert cfg.log.level in ['debug', 'info', 'warning', 'error', 'critical']
+    
+    # https://docs.python.org/3/library/logging.html#logging-levels
+    log_lookup = {'critical': 50,
+                  'error': 40, 
+                  'warning': 30,
+                  'info': 20, 
+                  'debug': 10}
+    
+    logging.basicConfig(level=log_lookup[cfg.log.level], 
+                        format='[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s',
+                        handlers=[
+                            logging.FileHandler(cfg.log.level + '.log'), 
+                            logging.StreamHandler()
+                        ])
+    
+def setup_run(cfg):
+    cfg = deepethogram.projects.convert_config_paths_to_absolute(cfg)
+    configure_run_directory(cfg)
+    configure_logging(cfg)
+    
+    utils.save_dict_to_yaml(OmegaConf.to_container(cfg), 'config.yaml')
+    return cfg

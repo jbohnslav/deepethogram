@@ -7,7 +7,7 @@ from typing import Union, Tuple
 
 import cv2
 cv2.setNumThreads(0)
-import hydra
+# import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -40,12 +40,11 @@ plt.switch_backend('agg')
 log = logging.getLogger(__name__)
 
 
-@hydra.main(config_path='../conf', config_name='feature_extractor_train')
+# @hydra.main(config_path='../conf', config_name='feature_extractor_train')
 def main(cfg: DictConfig) -> None:
-    log.info('cwd: {}'.format(os.getcwd()))
+    log.debug('cwd: {}'.format(os.getcwd()))
     log.info('args: {}'.format(' '.join(sys.argv)))
     # change the project paths from relative to absolute
-    cfg = projects.convert_config_paths_to_absolute(cfg)
     # allow for editing
     OmegaConf.set_struct(cfg, False)
     # SHOULD NEVER MODIFY / MAKE ASSIGNMENTS TO THE CFG OBJECT AFTER RIGHT HERE!
@@ -528,7 +527,9 @@ def get_metrics(rundir: Union[str, bytes, os.PathLike],
 
 
 if __name__ == '__main__':
-    # I hate that hydra overrides errors
-    os.environ['HYDRA_FULL_ERROR'] = "1"
-    sys.argv = projects.process_config_file_from_cl(sys.argv)
-    main()
+    config_list = ['config','augs','model/flow_generator','model/feature_extractor', 'train']
+    run_type = 'train'
+    model = 'feature_extractor'
+    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
+    cfg = projects.setup_run(cfg)
+    main(cfg)
