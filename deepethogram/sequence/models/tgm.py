@@ -302,6 +302,8 @@ class TGMJ(nn.Module):
             with torch.no_grad():
                 bias = np.nan_to_num(np.log(pos / neg), neginf=0.0)
                 bias = torch.nn.Parameter(torch.from_numpy(bias).float())
+        else:
+            bias = torch.nn.Parameter(torch.zeros(classes).float())
         if final_bn:
             bn_1 = nn.BatchNorm1d(classes)
             bn_2 = nn.BatchNorm1d(classes)
