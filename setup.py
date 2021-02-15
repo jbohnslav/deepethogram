@@ -5,7 +5,7 @@ with open("README.md", 'r') as f:
 
 setuptools.setup(
     name='deepethogram',
-    version='0.0.1.post1',
+    version='0.1',
     author='Jim Bohnslav',
     author_email='jbohnslav@gmail.com',
     description='Temporal action detection for biology',
@@ -22,11 +22,12 @@ setuptools.setup(
             'deepethogram = deepethogram.gui.main:entry']
     },
     python_requires='>=3.6',
-    install_requires=['h5py',
-                      'hydra-core>=1.0',
+    install_requires=['chardet<4.0', 
+                      'h5py',
                       'kornia',
                       'matplotlib',
                       'numpy',
+                      'omegaconf>=2'
                       'opencv-python',
                       'opencv-transforms',
                       'pandas',
