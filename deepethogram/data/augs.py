@@ -250,7 +250,7 @@ def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
         train_transforms.append(K.RandomVerticalFlip3D(p=augs.UD,
                                                        same_on_batch=False, return_transform=False))
     if augs.degrees > 0:
-        train_transforms.append(K.RandomRotation3D((0, 0, augs.degrees)))
+        train_transforms.append(K.RandomRotation3D((1e-7, 1e-7, augs.degrees)))
 
     if augs.brightness > 0 or augs.contrast > 0 or augs.saturation > 0 or augs.hue > 0:
         train_transforms.append(RandomColorJitterVideo(brightness=augs.brightness,
