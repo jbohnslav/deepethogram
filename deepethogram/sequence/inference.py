@@ -65,8 +65,8 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
 
         with torch.no_grad():
             batch = next(gen)
-            batch = batch.to(device)
-            logits = model(batch)
+            features = batch['features'].to(device)
+            logits = model(features)
 
             probabilities = activation_function(logits).detach().cpu().numpy().squeeze().T
             logits = logits.detach().cpu().numpy().squeeze().T

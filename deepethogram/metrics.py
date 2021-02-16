@@ -423,8 +423,10 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     optimum_thresholds = remove_low_thresholds(optimum_thresholds, f1s=optimum_f1s)
 
     # optimum info: maximizes informedness
-    optimum_thresholds_info = thresholds[np.argmax(metrics_by_threshold['informedness'], axis=0)]
-    optimum_thresholds_info = remove_low_thresholds(optimum_thresholds_info)
+    optimum_indices_info = np.argmax(metrics_by_threshold['informedness'], axis=0)
+    optimum_thresholds_info = thresholds[optimum_indices_info]
+    optimum_info = metrics_by_threshold['informedness'][optimum_indices_info, range(len(optimum_indices_info))]
+    optimum_thresholds_info = remove_low_thresholds(optimum_thresholds_info, f1s=optimum_info)
 
     metrics_by_threshold['optimum'] = optimum_thresholds
     metrics_by_threshold['optimum_info'] = optimum_thresholds_info
