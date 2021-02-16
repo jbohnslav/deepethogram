@@ -1,12 +1,15 @@
 import logging
 from pprint import pformat
 
+import cv2
 import numpy as np
 import torch
 from kornia import augmentation as K, adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue, pi
 from omegaconf import DictConfig
 from opencv_transforms import transforms
 from torch import nn
+
+cv2.setNumThreads(0)
 
 log = logging.getLogger(__name__)
 
