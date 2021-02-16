@@ -870,6 +870,9 @@ def import_outputfile(project_dir: Union[str, os.PathLike],
             probabilities[probabilities < 0] = 0
 
         thresholds = f[key]['thresholds'][:]
+        if thresholds.ndim == 2:
+            # this should not happen
+            thresholds = thresholds[-1, :]
         loaded_class_names = f[key]['class_names'][:]
         if type(loaded_class_names[0]) == bytes:
             loaded_class_names = [
