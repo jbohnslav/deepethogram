@@ -243,6 +243,8 @@ def main(cfg: DictConfig):
             thresholds = f['val']['metrics_by_threshold']['optimum'][:]
         except KeyError:
             thresholds = f['threshold_curves']['val']['optimum'][:]
+        if thresholds.ndim == 2:
+            thresholds = thresholds[-1, :]
         
         log.info('thresholds: {}'.format(thresholds))
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
