@@ -515,9 +515,9 @@ class MainWindow(QMainWindow):
             return
         weights = self.get_selected_models()['sequence']
         if os.path.isfile(weights):
-            weight_arg = 'reload.weights={}'.format(weights)
+            weight_arg = 'sequence.weights={}'.format(weights)
         else:
-            weight_arg = 'reload.weights=null'
+            raise ValueError('weights do not exist! {}'.format(weights))
         args = ['python', '-m', 'deepethogram.sequence.inference',
                 'project.path={}'.format(self.cfg.project.path),
                 'inference.overwrite=True', weight_arg]
@@ -893,7 +893,7 @@ class MainWindow(QMainWindow):
         # print(changed)
 
     def open_avi_browser(self):
-        if hasattr(self, 'project_config'):
+        if self.data_path is not None:
             data_dir = self.data_path
         else:
             raise ValueError('create or load a DEG project before loading video')
