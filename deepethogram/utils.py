@@ -158,6 +158,8 @@ def save_dict_to_yaml(dictionary: dict, filename: Union[str, bytes, os.PathLike]
     """
     if os.path.isfile(filename):
         log.debug('File {} already exists, overwriting...'.format(filename))
+    if isinstance(dictionary, DictConfig):
+        dictionary = OmegaConf.to_container(dictionary)
     with open(filename, 'w') as f:
         yaml.dump(dictionary, f, default_flow_style=False)
 
