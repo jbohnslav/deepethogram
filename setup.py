@@ -24,7 +24,7 @@ setuptools.setup(
     python_requires='>=3.6',
     install_requires=['chardet<4.0', 
                       'h5py',
-                      'kornia',
+                      'kornia>=0.4.1',
                       'matplotlib',
                       'numpy',
                       'omegaconf>=2'
