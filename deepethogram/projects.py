@@ -608,26 +608,26 @@ def parse_subdir(root: Union[str, bytes, os.PathLike],
     return record
 
 
-def write_all_records(root: Union[str, bytes, os.PathLike],
-                      preference: list = None):
-    """ For a given data directory, finds all subdirs and their files. Saves their records as .yaml files
+# def write_all_records(root: Union[str, bytes, os.PathLike],
+#                       preference: list = None):
+#     """ For a given data directory, finds all subdirs and their files. Saves their records as .yaml files
 
-    Parameters
-    ----------
-    root: str, bytes, os.PathLike
-        data directory. e.g. '/path/to/DATA', which contains 'animal0, animal1, animal2'
-    preference: list
-        list of filetype preferences. see parse_subdir
+#     Parameters
+#     ----------
+#     root: str, bytes, os.PathLike
+#         data directory. e.g. '/path/to/DATA', which contains 'animal0, animal1, animal2'
+#     preference: list
+#         list of filetype preferences. see parse_subdir
 
-    Returns
-    -------
-    None
-    """
-    subdirs = get_subfiles(root, return_type='directory')
-    for subdir in subdirs:
-        record = parse_subdir(subdir, preference=preference)
-        outfile = os.path.join(subdir, 'record.yaml')
-        utils.save_dict_to_yaml(record, outfile)
+#     Returns
+#     -------
+#     None
+#     """
+#     subdirs = get_subfiles(root, return_type='directory')
+#     for subdir in subdirs:
+#         record = parse_subdir(subdir, preference=preference)
+#         outfile = os.path.join(subdir, 'record.yaml')
+#         utils.save_dict_to_yaml(record, outfile)
 
 
 # def add_key_to_record(record: dict, key: str, value) -> dict:
@@ -708,7 +708,7 @@ def get_records_from_datadir(datadir: Union[str, bytes, os.PathLike]) -> dict:
     for subdir in subdirs:
         parsed_record = get_record_from_subdir(os.path.join(datadir, subdir))
         records[parsed_record['key']] = parsed_record
-    write_all_records(datadir)
+    # write_all_records(datadir)
     return records
 
 
@@ -1301,7 +1301,8 @@ def get_project_path_from_cl(argv: list) -> str:
             key, path = arg.split('=')
             assert os.path.isdir(path)
             return path
-    raise ValueError('project path or file not in args: {}'.format(argv))
+    warnings.warn('project path or file not in args: {}'.format(argv))
+    return None
 
 def make_config(project_path: Union[str, os.PathLike], config_list: list, run_type: str, model: str) -> DictConfig:
     config_path = os.path.join(os.path.dirname(deepethogram.__file__), 'conf')
@@ -1311,17 +1312,19 @@ def make_config(project_path: Union[str, os.PathLike], config_list: list, run_ty
         assert os.path.isfile(fullpath)
         return fullpath
     
-    user_cfg = get_config_file_from_project_path(project_path)
-    
     cli = OmegaConf.from_cli()
     
-    # order of operations: first, defaults specified in config_list
-    # then, if preset is specified in user config or at the command line, load those preset values
-    # then, append the user config
-    # then, the command line args
-    # so if we specify a preset and manually change, say, the feature extractor architecture, we can do that
-    if 'preset' in user_cfg:
-        config_list += ['preset/' + user_cfg.preset]
+    if project_path is not None:
+        user_cfg = get_config_file_from_project_path(project_path)
+    
+        # order of operations: first, defaults specified in config_list
+        # then, if preset is specified in user config or at the command line, load those preset values
+        # then, append the user config
+        # then, the command line args
+        # so if we specify a preset and manually change, say, the feature extractor architecture, we can do that
+        if 'preset' in user_cfg:
+            config_list += ['preset/' + user_cfg.preset]
+            
     if 'preset' in cli:
         config_list += ['preset/' + cli.preset]
         
@@ -1329,8 +1332,11 @@ def make_config(project_path: Union[str, os.PathLike], config_list: list, run_ty
     
     cfgs = [OmegaConf.load(i) for i in config_files]    
     
-    # first defaults; then user cfg; then cli
-    cfg = OmegaConf.merge(*cfgs, user_cfg, cli)
+    if project_path is not None:
+        # first defaults; then user cfg; then cli
+        cfg = OmegaConf.merge(*cfgs, user_cfg, cli)
+    else:
+        cfg = OmegaConf.merge(*cfgs, cli)
 
     cfg.run = {'type': run_type, 'model': model}
     return cfg
@@ -1363,7 +1369,9 @@ def configure_logging(cfg: DictConfig) -> None:
                   'warning': 30,
                   'info': 20, 
                   'debug': 10}
-    
+    logger = logging.getLogger()
+    while logger.hasHandlers():
+        logger.removeHandler(logger.handlers[0])
     logging.basicConfig(level=log_lookup[cfg.log.level], 
                         format='[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s',
                         handlers=[
