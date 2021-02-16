@@ -670,6 +670,7 @@ class FeatureVectorDataset(SingleSequenceDataset):
         self.logit_key = self.key + '/logits'
         self.data_file = data_file
         
+        self.verify_dataset()
         data = self.read_features_from_disk(None, None)
                  
         features_shape = data['features'].shape

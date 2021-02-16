@@ -7,13 +7,13 @@ from functools import partial
 from typing import Union
 
 import cv2
-import hydra
+# import hydra
 import numpy as np
 import pandas as pd
 from PySide2 import QtCore, QtWidgets, QtGui
 from PySide2.QtCore import Slot
 from PySide2.QtWidgets import (QMainWindow, QFileDialog, QInputDialog)
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from deepethogram import projects, utils
 from deepethogram.file_io import VideoReader
@@ -24,8 +24,6 @@ from deepethogram.gui.menus_and_popups import CreateProject, simple_popup_questi
 
 log = logging.getLogger(__name__)
 
-# I hate that hydra overrides errors
-os.environ['HYDRA_FULL_ERROR'] = "1"
 
 class MainWindow(QMainWindow):
     # lots of inspiration from this wonderful stackoverflow answer here:
@@ -156,9 +154,7 @@ class MainWindow(QMainWindow):
             return
 
     def has_trained(self, model_type: str) -> bool:
-        config = self.project_config.copy()
-        weight_dict = projects.get_weights_from_model_path(os.path.join(config['project']['path'],
-                                                                        config['project']['model_path']))
+        weight_dict = projects.get_weights_from_model_path(self.cfg.project.model_path)
         model_list = weight_dict[model_type]
         if len(model_list) == 0:
             return False
@@ -169,7 +165,7 @@ class MainWindow(QMainWindow):
         self.ui.actionOpen.setEnabled(True)
         self.ui.actionAdd.setEnabled(True)
         self.ui.actionRemove.setEnabled(True)
-        number_finalized_labels = projects.get_number_finalized_labels(self.project_config)
+        number_finalized_labels = projects.get_number_finalized_labels(self.cfg)
         log.info('Number finalized labels: {}'.format(number_finalized_labels))
         if self.has_trained('flow_generator'):
             # self.ui.flow_inference.setEnabled(True)
@@ -222,7 +218,7 @@ class MainWindow(QMainWindow):
                     self.initialize_prediction()
             else:
                 log.info('Copying {} to your DEG directory'.format(videofile))
-                new_loc = projects.add_video_to_project(self.project_config,
+                new_loc = projects.add_video_to_project(OmegaConf.to_container(self.cfg),
                                                         videofile)
                 log.debug('New video location: {}'.format(new_loc))
                 self.videofile = new_loc
@@ -237,7 +233,7 @@ class MainWindow(QMainWindow):
             print(tb)
             return
         self.ui.videoPlayer.videoView.update_frame(0, force=True)
-        self.setWindowTitle('{}'.format(self.project_config['project']['name']))
+        self.setWindowTitle('DeepEthogram: {}'.format(self.cfg.project.name))
         self.update_video_info()
         self.user_did_something()
 
@@ -270,9 +266,9 @@ class MainWindow(QMainWindow):
         self.ui.nunlabeledLabel.setText('{:,}'.format(self.n_timepoints - n))
 
     def initialize_label(self, label_array: np.ndarray = None, debug: bool = False):
-        if not hasattr(self, 'project_config'):
-            raise ValueError('initialize or start a DEG project before initializing labels!')
-        self.ui.labels.initialize(behaviors=self.project_config['project']['class_names'],
+        if self.cfg.project is None:
+            raise ValueError('must load or create project before initializing a label!')
+        self.ui.labels.initialize(behaviors=OmegaConf.to_container(self.cfg.project.class_names),
                                   n_timepoints=self.n_timepoints, debug=debug, fixed=False, array=label_array,
                                   colormap=self.cfg.cmap)
         # we never want to connect signals to slots more than once
@@ -287,7 +283,7 @@ class MainWindow(QMainWindow):
                               debug: bool = False, opacity: np.ndarray = None):
 
         # do all the setup for labels and predictions
-        self.ui.predictions.initialize(behaviors=self.project_config['project']['class_names'],
+        self.ui.predictions.initialize(behaviors=OmegaConf.to_container(self.cfg.project.class_names),
                                        n_timepoints=self.n_timepoints, debug=debug, fixed=True,
                                        array=prediction_array, opacity=opacity,
                                        colormap=self.cfg.cmap)
@@ -300,7 +296,7 @@ class MainWindow(QMainWindow):
 
     def generate_flow_train_args(self):
         args = ['python', '-m', 'deepethogram.flow_generator.train',
-                'project.config_file={}'.format(self.project_config['project']['config_file'])]
+                'project.path={}'.format(self.cfg.project.path)]
         weights = self.get_selected_models()['flow_generator']
         if os.path.isfile(weights):
             args += ['reload.weights={}'.format(weights)]
@@ -345,7 +341,7 @@ class MainWindow(QMainWindow):
             self.ui.sequence_train.setEnabled(False)
 
             args = ['python', '-m', 'deepethogram.feature_extractor.train',
-                    'project.config_file={}'.format(self.project_config['project']['config_file'])]
+                    'project.path={}'.format(self.cfg.project.path)]
             weights = self.get_selected_models()['feature_extractor']
             if os.path.isfile(weights):
                 args += ['feature_extractor.weights={}'.format(weights)]
@@ -399,7 +395,7 @@ class MainWindow(QMainWindow):
             weight_arg = 'reload.weights=null'
 
         args = ['python', '-m', 'deepethogram.feature_extractor.inference',
-                'project.config_file={}'.format(self.project_config['project']['config_file']),
+                'project.path={}'.format(self.cfg.project.path),
                 'inference.overwrite=True', weight_arg]
         flow_weights = self.get_selected_models()['flow_generator']
         assert flow_weights is not None
@@ -418,7 +414,7 @@ class MainWindow(QMainWindow):
             args = self.generate_featureextractor_inference_args()
             if args is None:
                 return
-            log.info('inference running with args: {}'.format(args))
+            log.info('inference running with args: {}'.format(' '.join(args)))
             self.inference_pipe = subprocess.Popen(args)
             self.listener = UnclickButtonOnPipeCompletion(self.ui.featureextractor_infer, self.inference_pipe)
             self.listener.start()
@@ -453,7 +449,7 @@ class MainWindow(QMainWindow):
             self.ui.sequence_infer.setEnabled(False)
             # self.ui.sequence_train.setEnabled(False)
             args = ['python', '-m', 'deepethogram.sequence.train',
-                    'project.config_file={}'.format(self.project_config['project']['config_file'])]
+                    'project.path={}'.format(self.cfg.project.path)]
             weights = self.get_selected_models()['sequence']
             if weights is not None and os.path.isfile(weights):
                 args += ['reload.weights={}'.format(weights)]
@@ -519,11 +515,11 @@ class MainWindow(QMainWindow):
             return
         weights = self.get_selected_models()['sequence']
         if os.path.isfile(weights):
-            weight_arg = 'reload.weights={}'.format(weights)
+            weight_arg = 'sequence.weights={}'.format(weights)
         else:
-            weight_arg = 'reload.weights=null'
+            raise ValueError('weights do not exist! {}'.format(weights))
         args = ['python', '-m', 'deepethogram.sequence.inference',
-                'project.config_file={}'.format(self.project_config['project']['config_file']),
+                'project.path={}'.format(self.cfg.project.path),
                 'inference.overwrite=True', weight_arg]
         string = 'inference.directory_list=['
         for key, infer in zip(keys, should_infer):
@@ -638,16 +634,12 @@ class MainWindow(QMainWindow):
         behaviors = behaviors.split(',')
         behaviors.insert(0, 'background')
 
-        self.project_config = projects.initialize_project(form.project_directory,
+        _ = projects.initialize_project(form.project_directory,
                                                           project_name,
                                                           behaviors,
                                                           labeler)
-        self.data_path = os.path.join(self.project_config['project']['path'],
-                                      self.project_config['project']['data_path'])
-        self.model_path = os.path.join(self.project_config['project']['path'],
-                                       self.project_config['project']['model_path'])
         
-        self.project_loaded_buttons()
+        self.initialize_project(form.project_directory)
 
     def add_class(self):
         text, ok = QInputDialog.getText(self, 'AddBehaviorDialog', 'Enter behavior name: ')
@@ -657,7 +649,7 @@ class MainWindow(QMainWindow):
         if not ok:
             return
 
-        if text in self.project_config['project']['class_names']:
+        if text in self.cfg.project.class_names:
             log.warning('This behavior is already in the list...')
             return
             # self.add_class()
@@ -671,12 +663,15 @@ class MainWindow(QMainWindow):
         if not self.saved:
             if simple_popup_question(self, 'You have unsaved changes. Do you want to save them first?'):
                 self.save()
-        projects.add_behavior_to_project(os.path.join(self.project_config['project']['path'], 'project_config.yaml'),
+        projects.add_behavior_to_project(os.path.join(self.cfg.project.path, 'project_config.yaml'),
                                          text)
-        self.project_config['project']['class_names'].append(text)
-        self.project_config = projects.load_config(
-            os.path.join(self.project_config['project']['path'], 'project_config.yaml'))
-        behaviors = self.project_config['project']['class_names']
+        behaviors = OmegaConf.to_container(self.cfg.project.class_names)
+        behaviors.append(text)
+        self.cfg.project.class_names = behaviors
+        # self.project_config['project']['class_names'].append(text)
+        # self.project_config = projects.load_config(
+        #     os.path.join(self.project_config['project']['path'], 'project_config.yaml'))
+        # behaviors = self.project_config['project']['class_names']
 
         self.import_labelfile(self.labelfile)
         self.import_outputfile(self.outputfile)
@@ -691,7 +686,7 @@ class MainWindow(QMainWindow):
         if not ok:
             return
 
-        if text not in self.project_config['project']['class_names']:
+        if text not in self.cfg.project.class_names:
             log.warning('This behavior is not in the list...')
             return
         if text == 'background':
@@ -702,10 +697,15 @@ class MainWindow(QMainWindow):
         if not simple_popup_question(self, message):
             return
         projects.remove_behavior_from_project(
-            os.path.join(self.project_config['project']['path'], 'project_config.yaml'),
+            os.path.join(self.cfg.project.path, 'project_config.yaml'),
             text)
-        self.project_config = projects.load_config(os.path.join(self.project_config['project']['path'],
-                                                                'project_config.yaml'))
+        
+        behaviors = OmegaConf.to_container(self.cfg.project.class_names)
+        behaviors.remove(text)
+        self.cfg.project.class_names = behaviors
+        
+        # self.project_config = projects.load_config(os.path.join(self.project_config['project']['path'],
+        #                                                         'project_config.yaml'))
         # self.project_config['class_names'].remove(text)
         # self.project_config['class_names'].append(text)
         self.import_labelfile(self.labelfile)
@@ -794,8 +794,8 @@ class MainWindow(QMainWindow):
             self.initialize_prediction()
             return
         try:
-            outputs = projects.import_outputfile(self.project_config['project']['path'], outputfile,
-                                                 class_names=self.project_config['project']['class_names'],
+            outputs = projects.import_outputfile(self.cfg.project.path, outputfile,
+                                                 class_names=OmegaConf.to_container(self.cfg.project.class_names),
                                                  latent_name=latent_name)
         except ValueError as e:
             log.exception(e)
@@ -847,7 +847,7 @@ class MainWindow(QMainWindow):
     def export_predictions(self):
         array = self.estimated_labels
         np.set_printoptions(suppress=True)
-        df = pd.DataFrame(data=array, columns=self.project_config['project']['class_names'])
+        df = pd.DataFrame(data=array, columns=self.cfg.project.class_names)
         print(df)
         print(df.sum(axis=0))
         fname, _ = os.path.splitext(self.videofile)
@@ -893,7 +893,7 @@ class MainWindow(QMainWindow):
         # print(changed)
 
     def open_avi_browser(self):
-        if hasattr(self, 'project_config'):
+        if self.data_path is not None:
             data_dir = self.data_path
         else:
             raise ValueError('create or load a DEG project before loading video')
@@ -944,23 +944,32 @@ class MainWindow(QMainWindow):
         filename = os.path.join(directory, 'project_config.yaml')
 
         if len(filename) == 0 or not os.path.isfile(filename):
-            log.warning('something wrong with loading yaml file: {}'.format(filename))
+            log.error('something wrong with loading yaml file: {}'.format(filename))
             return
 
-        project_dict = projects.load_config(filename)
-        if not projects.is_config_dict(project_dict):
-            raise ValueError('Not a properly formatted configuration dictionary! Look at defaults/config.yaml: dict: {}'
-                             'filename: {}'.format(project_dict, filename))
-        self.project_config = project_dict
-        # self.project_config = projects.convert_config_paths_to_absolute(self.project_config)
-        log.info('loaded project configuration: {}'.format(project_dict))
-        # for convenience
-        self.data_path = os.path.join(self.project_config['project']['path'],
-                                      self.project_config['project']['data_path'])
-        self.model_path = os.path.join(self.project_config['project']['path'],
-                                       self.project_config['project']['model_path'])
         
-        self.project_config = projects.convert_config_paths_to_absolute(self.project_config)
+        
+        # project_dict = projects.load_config(filename)
+        # if not projects.is_config_dict(project_dict):
+        #     raise ValueError('Not a properly formatted configuration dictionary! Look at defaults/config.yaml: dict: {}'
+        #                      'filename: {}'.format(project_dict, filename))
+        # self.project_config = project_dict
+        # # self.project_config = projects.convert_config_paths_to_absolute(self.project_config)
+        
+        # # for convenience
+        # self.data_path = os.path.join(self.project_config['project']['path'],
+        #                               self.project_config['project']['data_path'])
+        # self.model_path = os.path.join(self.project_config['project']['path'],
+        #                                self.project_config['project']['model_path'])
+        
+        # overwrite cfg passed at command line now that we know the project path. still includes command line arguments
+        self.cfg = projects.make_config(directory, ['config', 'gui', 'postprocessor'], run_type='gui', model=None)
+        self.cfg = projects.convert_config_paths_to_absolute(self.cfg)
+        self.cfg = projects.setup_run(self.cfg)
+        log.info('loaded project configuration: {}'.format(OmegaConf.to_yaml(self.cfg)))
+        # for convenience
+        self.data_path = self.cfg.project.data_path
+        self.model_path = self.cfg.project.model_path
         
         # self.project_config['project']['class_names'] = self.project_config['class_names']
         # load up the last alphabetic record, which if user includes dates in filename, will be the most recent
@@ -990,23 +999,20 @@ class MainWindow(QMainWindow):
 
     def get_default_archs(self):
         # TODO: replace this default logic with hydra 1.0
-        if 'preset' in self.project_config.keys():
-            preset = self.project_config['preset']
+        if 'preset' in self.cfg:
+            preset = self.cfg.preset
         else:
             preset = 'deg_f'
         default_archs = projects.load_default('preset/{}'.format(preset))
         seq_default = projects.load_default('model/sequence')
         default_archs['sequence'] = {'arch': seq_default['sequence']['arch']}
 
-        if 'feature_extractor' in self.project_config.keys():
-            if 'arch' in self.project_config['feature_extractor'].keys():
-                default_archs['feature_extractor']['arch'] = self.project_config['feature_extractor']['arch']
-        if 'flow_generator' in self.project_config.keys():
-            if 'arch' in self.project_config['flow_generator'].keys():
-                default_archs['flow_generator']['arch'] = self.project_config['flow_generator']['arch']
-        if 'sequence' in self.project_config.keys():
-            if 'arch' in self.project_config['sequence'].keys():
-                default_archs['sequence']['arch'] = self.project_config['sequence']['arch']
+        if self.cfg.feature_extractor.arch is not None:
+            default_archs['feature_extractor']['arch'] = self.cfg.feature_extractor.arch
+        if self.cfg.flow_generator.arch is not None:
+            default_archs['flow_generator']['arch'] = self.cfg.flow_generator.arch
+        if self.cfg.sequence.arch is not None:
+            default_archs['sequence']['arch'] = self.cfg.sequence.arch 
         self.default_archs = default_archs
         log.debug('default archs: {}'.format(default_archs))
 
@@ -1099,7 +1105,7 @@ class MainWindow(QMainWindow):
         label[np.logical_not(changed), :] = null_row
         # print(array.shape, len(self.label.behaviors))
         # print(self.label.behaviors)
-        df = pd.DataFrame(data=label, columns=self.project_config['project']['class_names'])
+        df = pd.DataFrame(data=label, columns=self.cfg.project.class_names)
         return df
 
     def check_saved(self):
@@ -1176,8 +1182,18 @@ def set_style(app):
     return app
 
 
-@hydra.main(config_path='../conf', config_name='gui')
-def run(cfg: DictConfig) -> None:
+# @hydra.main(config_path='../conf', config_name='gui')
+def run() -> None:
+    config_list = ['config', 'gui']
+    run_type = 'gui'
+    model = None
+    
+    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
+    try:
+        cfg = projects.setup_run(cfg)
+    except Exception:
+        pass
+        
     log.info('CWD: {}'.format(os.getcwd()))
     log.info('Configuration used: {}'.format(cfg.pretty()))
     app = QtWidgets.QApplication(sys.argv)

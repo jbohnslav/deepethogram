@@ -6,7 +6,6 @@ import time
 from typing import Type
 
 import h5py
-import hydra
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -336,24 +335,27 @@ def extract(rgbs: list,
         f.close()
 
 
-@hydra.main(config_path='../conf', config_name='feature_extractor_inference')
-def main(cfg: DictConfig):
-    log.info('args: {}'.format(' '.join(sys.argv)))
+def main(cfg: DictConfig):    
     # turn "models" in your project configuration to "full/path/to/models"
-    cfg = projects.convert_config_paths_to_absolute(cfg)
+    log.info('args: {}'.format(' '.join(sys.argv)))
+    
     log.info('configuration used in inference: ')
     log.info(OmegaConf.to_yaml(cfg))
     if cfg.sequence.latent_name is None:
         latent_name = cfg.feature_extractor.arch
     else:
         latent_name = cfg.sequence.latent_name
+    log.info('Latent name used in HDF5 file: {}'.format(latent_name))
     directory_list = cfg.inference.directory_list
+    
     if directory_list is None or len(directory_list) == 0:
         raise ValueError('must pass list of directories from commmand line. '
                          'Ex: directory_list=[path_to_dir1,path_to_dir2]')
     elif type(directory_list) == str and directory_list == 'all':
         basedir = cfg.project.data_path
         directory_list = utils.get_subfiles(basedir, 'directory')
+    elif isinstance(directory_list, str):
+        directory_list = [directory_list]
     elif isinstance(directory_list, list): 
         pass
     elif isinstance(directory_list, ListConfig):
@@ -388,6 +390,7 @@ def main(cfg: DictConfig):
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
     feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
     metrics_file = os.path.join(os.path.dirname(feature_extractor_weights), 'classification_metrics.h5')
+
     assert os.path.isfile(metrics_file)
     with h5py.File(metrics_file, 'r') as f:
         try: 
@@ -417,9 +420,14 @@ def main(cfg: DictConfig):
             batch_size=cfg.compute.batch_size)
 
     # update each record file in the subdirectory to add our new output files
-    projects.write_all_records(cfg.project.data_path)
+    # projects.write_all_records(cfg.project.data_path)
 
 
 if __name__ == '__main__':
-    sys.argv = projects.process_config_file_from_cl(sys.argv)
-    main()
+    config_list = ['config','augs','model/feature_extractor', 'model/flow_generator', 'inference']
+    run_type = 'inference'
+    model = 'feature_extractor'
+    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
+    cfg = projects.setup_run(cfg)
+    
+    main(cfg)

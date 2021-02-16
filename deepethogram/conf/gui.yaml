@@ -19,8 +19,3 @@ unlabeled_alpha: 0.1
 prediction_opacity: 0.2
 # notes to add to gui logs
 notes: null
-defaults:
-  - postprocessor
-hydra:
-  run:
-    dir: gui_logs/${now:%y%m%d_%H%M%S}_${notes}

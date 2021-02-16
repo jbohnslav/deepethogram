@@ -4,7 +4,7 @@ import sys
 from typing import Union, Type, Tuple
 import warnings
 
-import hydra
+# import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -45,14 +45,12 @@ log = logging.getLogger(__name__)
 
 # __all__ = ['build_model_from_cfg', 'train_from_cfg', 'train']
 
-@hydra.main(config_path='../conf/flow_train.yaml')
+# @hydra.main(config_path='../conf/flow_train.yaml')
 def main(cfg: DictConfig) -> None:
     log.debug('cwd: {}'.format(os.getcwd()))
     log.info('args: {}'.format(' '.join(sys.argv)))
     # only two custom overwrites of the configuration file
-    # first, change the project paths from relative to absolute
 
-    cfg = projects.convert_config_paths_to_absolute(cfg)
     # allow for editing
     OmegaConf.set_struct(cfg, False)
     # second, use the model directory to find the most recent run of each model type
@@ -241,5 +239,10 @@ def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_par
 
 
 if __name__ == '__main__':
-    sys.argv = projects.process_config_file_from_cl(sys.argv)
-    main()
+    config_list = ['config','augs','model/flow_generator', 'train']
+    run_type = 'train'
+    model = 'flow_generator'
+    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
+    # sys.argv = projects.process_config_file_from_cl(sys.argv)
+    cfg = projects.setup_run(cfg)
+    main(cfg)
