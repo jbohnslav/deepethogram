@@ -9,7 +9,7 @@ train:
   # multistep: decrease learning rate at fixed milestones (below)
   scheduler: plateau
   # number of epochs to train before automatically stopping. Use to decrease training time
-  num_epochs: 1000
+  num_epochs: 100
   # number of gradient descent steps during each "epoch". for large datasets, it will take too long to go through
   # the entire dataset before validation (when model saving occurs). Reduce to speed up training, or increase to train
   # further before visualization, checkpointing, learning rate decrements, etc.
