@@ -20,7 +20,7 @@ sequence:
   # if true, only loads data in non-overlapping chunks of length `filter_length`. E.g., the first batch of your dataset
   # would be frames 0-180, then 181-360, etc. If false, the first batch would be 0-180, the second would be 1-181, etc.
   # Setting to True will dramatically speed up training
-  nonoverlapping: False
+  nonoverlapping: True
   # tgm parameters
   # Length (in time) per TGM filter
   filter_length: 15
