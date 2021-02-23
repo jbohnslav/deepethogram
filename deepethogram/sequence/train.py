@@ -88,7 +88,7 @@ class SequenceLightning(BaseLightningModule):
         self.criterion = criterion
 
 
-        self.batch_cnt = 0
+        # self.batch_cnt = 0
         # this will get overridden by the ExampleImagesCallback
         # self.viz_cnt = None
 
@@ -111,9 +111,9 @@ class SequenceLightning(BaseLightningModule):
         self.metrics.buffer.append(split, loss_dict)
         # need to use the native logger for lr scheduling, etc.
         self.log(f'{split}_loss', loss.detach())
-        if self.batch_cnt == 100:
-            print('stop')
-        self.batch_cnt += 1
+        # if self.batch_cnt == 100:
+        #     print('stop')
+        # self.batch_cnt += 1
         return loss
 
     def training_step(self, batch: dict, batch_idx: int):
