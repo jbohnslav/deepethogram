@@ -809,22 +809,17 @@ def import_outputfile(project_dir: Union[str, os.PathLike],
 
     # all this tortured logic is to try to figure out what the correct "latent name" is in an HDF5 file. Also includes
     # logic for backwards compatibility
-    project_config = load_config(
-        os.path.join(project_dir, 'project_config.yaml'))
-    if 'sequence' in project_config.keys(
-    ) and 'arch' in project_config['sequence'].keys():
+    project_config = load_config(os.path.join(project_dir, 'project_config.yaml'))
+    if 'sequence' in project_config.keys() and 'arch' in project_config['sequence'].keys():
         sequence_name = project_config['sequence']['arch']
     else:
         sequence_name = load_default('model/sequence')['sequence']['arch']
 
-    if 'sequence' in project_config.keys(
-    ) and 'latent_name' in project_config['sequence'].keys():
-        sequence_inference_latent_name = project_config['sequence'][
-            'latent_name']
+    if 'sequence' in project_config.keys() and 'latent_name' in project_config['sequence'].keys():
+        sequence_inference_latent_name = project_config['sequence']['latent_name']
     else:
         sequence_inference_latent_name = None
-    if 'feature_extractor' in project_config.keys(
-    ) and 'arch' in project_config['feature_extractor'].keys():
+    if 'feature_extractor' in project_config.keys() and 'arch' in project_config['feature_extractor'].keys():
         feature_extractor_arch = project_config['feature_extractor']['arch']
     elif 'preset' in project_config.keys():
         preset = project_config['preset']
@@ -1174,22 +1169,41 @@ def convert_config_paths_to_absolute(project_cfg: DictConfig) -> DictConfig:
     root = project_cfg['project']['path']
     model_path = project_cfg['project']['model_path']
     data_path = project_cfg['project']['data_path']
-
+    # backwards compatibility
+    if 'pretrained_path' in project_cfg['project'].keys():
+        pretrained_path = project_cfg['project']['pretrained_path']
+    else:
+        pretrained_path = 'pretrained_models'
     cfg_path = os.path.join(root, project_cfg['project']['config_file'])
     
-    if os.path.isdir(model_path) and os.path.isdir(data_path) and os.path.isfile(cfg_path):
+    if (os.path.isdir(model_path) and os.path.isdir(data_path) and os.path.isfile(cfg_path)
+        and os.path.isdir(pretrained_path)):
+        # already absolute
         return project_cfg
-
-    model_path = os.path.join(root, model_path)
-    data_path = os.path.join(root, data_path)
-    if not os.path.isdir(model_path) or not os.path.isdir(data_path) or not os.path.isfile(cfg_path):
-        raise ValueError('model or data path not found! {}: {}, {}: {}, {}: {}'.format(
-            model_path, os.path.isdir(model_path), data_path,
-            os.path.isdir(data_path), 
-            cfg_path, os.path.isfile(cfg_path)))
+    
+    if not os.path.isdir(model_path):
+        model_path = os.path.join(root, model_path)
+        assert os.path.isdir(model_path), 'model path does not exist! {}'.format(model_path)
+    
+    if not os.path.isdir(data_path):
+        data_path = os.path.join(root, data_path)
+        assert os.path.isdir(data_path), 'data path does not exist! {}'.format(data_path)
+        
+    if not os.path.isfile(cfg_path):
+        cfg_path = os.path.join(root, cfg_path)
+        assert os.path.isdir(cfg_path), 'config file does not exist! {}'.format(cfg_path)
+        
+    if not os.path.isdir(pretrained_path):
+        pretrained_path = os.path.join(model_path, pretrained_path)
+        error_string = 'pretrained directory does not exist! {}\nSee instructions '.format(pretrained_path) + \
+            'on the project GitHub for downloading weights: https://github.com/jbohnslav/deepethogram'
+        assert os.path.isdir(pretrained_path), error_string
+    
     project_cfg['project']['model_path'] = model_path
     project_cfg['project']['data_path'] = data_path
     project_cfg['project']['config_file'] = cfg_path
+    project_cfg['project']['pretrained_path'] = pretrained_path
+    
     return project_cfg
 
 

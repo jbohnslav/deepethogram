@@ -34,6 +34,7 @@ project:
   data_path: DATA
   labeler: null
   model_path: models
+  pretrained_path: pretrained_models
   name: null
   path: null
 sequence:
