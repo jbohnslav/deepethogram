@@ -28,7 +28,10 @@ feature_extractor:
   curriculum: false
   # deprecated
   inputs: both
-  # the amount of weight decay (L2 normalization) to use on the feature extractors.
-  weight_decay: 0 # use 1e-4 if training from scratch
   # path to a checkpoint.pt file which will reload this model. Should have weights for both spatial and flow streams
   weights: null
+train:
+  # overwrite default steps per epoch: ideally we would not limit train steps at all. However, with very large datasets
+  # this can be infeasible
+  steps_per_epoch:
+    test: null
