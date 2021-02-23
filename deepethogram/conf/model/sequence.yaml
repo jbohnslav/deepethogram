@@ -59,3 +59,5 @@ train:
   regularization:
     # can't use l2_sp regularization because we are not pretraining sequence models
     style: l2
+  # overwrite patience: because of Nonoverlapping, train epochs can be very low
+  patience: 5

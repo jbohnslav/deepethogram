@@ -37,7 +37,7 @@ train:
   # whether or not to weight your loss function by the number of examples. Should essentially always keep to true
   weight_loss: true
   # patience used both in stopping and the learning rate scheduler
-  patience: 5
+  patience: 3
   # if using early stopping, you can set this value and early stopping will not kick in until the below epoch is reached
   early_stopping_begins: 0
   # whether or not to visualize data. always keep true
