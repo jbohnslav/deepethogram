@@ -275,11 +275,9 @@ def hidden_two_stream(classifier: str,
                               pos=pos, neg=neg, **kwargs)
 
     spatial_classifier, flow_classifier, fusion = build_fusion_layer(spatial_classifier, flow_classifier,
-                                                                     fusion_style)
+                                                                     fusion_style, num_classes)
 
-    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, fusion, classifier,
-                            fusion_style=fusion_style,
-                            num_classes=num_classes)
+    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, fusion, classifier)
     return model
 
 
