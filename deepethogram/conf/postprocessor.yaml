@@ -6,4 +6,4 @@ postprocessor:
   type: min_bout
   # if type is min_bout, postprocessor will remove any consecutive set of 1s or 0s of less than this length.
   # see deepethogram/postprocessing.py for details
-  min_bout_length: 2
+  min_bout_length: 5
