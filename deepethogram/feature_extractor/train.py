@@ -92,7 +92,8 @@ def train_from_cfg_lightning(cfg):
     metrics = get_metrics(
         rundir,
         num_classes=num_classes,
-        num_parameters=utils.get_num_parameters(spatial_classifier))
+        num_parameters=utils.get_num_parameters(spatial_classifier), 
+        key_metric='f1_class_mean')
 
     # cfg.compute.batch_size will be changed by the automatic batch size finder, possibly. store here so that
     # with each step of the curriculum, we can auto-tune it
