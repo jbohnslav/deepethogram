@@ -6,7 +6,8 @@ from omegaconf import DictConfig
 
 log = logging.getLogger(__name__)
 
-def remove_low_thresholds(thresholds: np.ndarray, minimum: float=0.01, f1s: np.ndarray=None) -> np.ndarray:
+def remove_low_thresholds(thresholds: np.ndarray, minimum: float=0.01, f1s: np.ndarray=None, 
+                          minimum_f1: float= 0.05) -> np.ndarray:
     """ Replaces thresholds below a certain value with 0.5
     
     If the model completely fails, the optimum threshold might be something erreoneous, such as 
@@ -30,10 +31,10 @@ def remove_low_thresholds(thresholds: np.ndarray, minimum: float=0.01, f1s: np.n
         log.debug('thresholds {} too low, setting to {}'.format(thresholds[indices], minimum))
         thresholds[thresholds < minimum] = minimum
     if f1s is not None:
-        if np.sum(f1s < minimum) > 0:
-            indices = np.where(f1s < minimum)[0]
-            log.debug('thresholds {} too low, setting to 0.5'.format(thresholds[indices]))
-            thresholds[f1s < minimum] = 0.5
+        if np.sum(f1s < minimum_f1) > 0:
+            indices = np.where(f1s < minimum_f1)[0]
+            log.debug('f1 {} too low, setting to 0.5'.format(f1s))
+            thresholds[f1s < minimum_f1] = 0.5
     return thresholds
 
 def get_onsets_offsets(binary: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
