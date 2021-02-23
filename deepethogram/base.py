@@ -180,7 +180,6 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
             log.info('max trials: {}'.format(max_trials))
             new_batch_size = trainer.tuner.scale_batch_size(lightning_module, mode='power', steps_per_trial=30,
                                                             init_val=bs_start, max_trials=max_trials)
-
             cfg.compute.batch_size = new_batch_size
             log.info('auto-tuned batch size: {}'.format(new_batch_size))
         if cfg.train.lr == 'auto':
@@ -211,6 +210,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                          limit_train_batches=steps_per_epoch['train'],
                          limit_val_batches=steps_per_epoch['val'],
                          limit_test_batches=steps_per_epoch['test'],
+                         max_epochs=cfg.train.num_epochs,
                          num_sanity_val_steps=0,
                          callbacks=[FPSCallback(),  # DebugCallback(),# SpeedtestCallback(),
                                     MetricsCallback(), ExampleImagesCallback(), CheckpointCallback(),
