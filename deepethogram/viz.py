@@ -554,22 +554,22 @@ def fig_to_img(fig_handle: matplotlib.figure.Figure) -> np.ndarray:
     return data
 
 
-def image_list_to_tiff_stack(images, tiff_fname):
-    """ Write a list of images to a tiff stack using tifffile """
-    # WRITE ALL TO TIFF!
-    height = images[0].shape[0]
-    width = images[0].shape[1]
-    channels = images[0].shape[2]
-    N = len(images)
-    fig_mat = np.empty([N, height, width, channels], dtype='uint8')
-    for i in range(N):
-        img = images[i]
-        if img.shape != fig_mat.shape[1:2]:
-            img = cv2.resize(img, (fig_mat.shape[2], fig_mat.shape[1]), interpolation=cv2.INTER_LINEAR)
-        img = np.uint8(img)
+# def image_list_to_tiff_stack(images, tiff_fname):
+#     """ Write a list of images to a tiff stack using tifffile """
+#     # WRITE ALL TO TIFF!
+#     height = images[0].shape[0]
+#     width = images[0].shape[1]
+#     channels = images[0].shape[2]
+#     N = len(images)
+#     fig_mat = np.empty([N, height, width, channels], dtype='uint8')
+#     for i in range(N):
+#         img = images[i]
+#         if img.shape != fig_mat.shape[1:2]:
+#             img = cv2.resize(img, (fig_mat.shape[2], fig_mat.shape[1]), interpolation=cv2.INTER_LINEAR)
+#         img = np.uint8(img)
 
-        fig_mat[i, :, :, :] = img
-    TIFF.imsave(tiff_fname, fig_mat, photometric='rgb', compress=0, metadata={'axes': 'TYXC'})
+#         fig_mat[i, :, :, :] = img
+#     TIFF.imsave(tiff_fname, fig_mat, photometric='rgb', compress=0, metadata={'axes': 'TYXC'})
 
 
 def plot_histogram(array, ax, bins='auto', width_factor=0.9, rotation=30):
@@ -915,7 +915,7 @@ def make_learning_curves_figure_multilabel_classification(logger_file, fig=None)
             fig = plt.figure(figsize=(12, 12))
 
         # loss and learning rate
-        ax = fig.add_subplot(3, 2, 1)
+        ax = fig.add_subplot(4, 2, 1)
         data = OrderedDict(train=f['train/loss'][:],
                            val=f['val/loss'][:])
         # import pdb; pdb.set_trace()
@@ -925,8 +925,20 @@ def make_learning_curves_figure_multilabel_classification(logger_file, fig=None)
         ax2.set_ylabel('learning rate')
         ax2.grid(False)
 
+        ax = fig.add_subplot(4, 2, 2)
+        data = OrderedDict(train=f['train/data_loss'][:],
+                           val=f['val/data_loss'][:])
+        # import pdb; pdb.set_trace()
+        plot_metric(data, 'data_loss', ax)
+        
+        ax = fig.add_subplot(4, 2, 3)
+        data = OrderedDict(train=f['train/reg_loss'][:],
+                           val=f['val/reg_loss'][:])
+        # import pdb; pdb.set_trace()
+        plot_metric(data, 'reg_loss', ax)
+
         # FPS
-        ax = fig.add_subplot(3, 2, 2)
+        ax = fig.add_subplot(4, 2, 4)
         try:
             data = OrderedDict(train=f['train/fps'][:],
                                val=f['val/fps'][:],
@@ -940,14 +952,14 @@ def make_learning_curves_figure_multilabel_classification(logger_file, fig=None)
         ax.semilogy()
 
         # accuracy
-        ax = fig.add_subplot(3, 2, 3)
+        ax = fig.add_subplot(4, 2, 5)
         data = OrderedDict(train=f['train/accuracy_overall'][:],
                            val=f['val/accuracy_overall'][:])
 
         plot_metric(data, 'accuracy', ax)
 
         # F1 score!
-        ax = fig.add_subplot(3, 2, 4)
+        ax = fig.add_subplot(4, 2, 6)
         # we'll reuse these for the following figures
         plot_args = {'train_class_mean': {'linestyle': '--'},
                      'val_class_mean': {'linestyle': '--'}}
@@ -956,12 +968,12 @@ def make_learning_curves_figure_multilabel_classification(logger_file, fig=None)
         plot_metric(data, 'F1', ax, False, plot_args, color_inds)
 
         # AUROC
-        ax = fig.add_subplot(3, 2, 5)
+        ax = fig.add_subplot(4, 2, 7)
         data = get_data_from_file(f, 'auroc')
         plot_metric(data, 'AUROC', ax, False, plot_args, color_inds)
 
         # Average precision
-        ax = fig.add_subplot(3, 2, 6)
+        ax = fig.add_subplot(4, 2, 8)
         data = get_data_from_file(f, 'mAP')
         plot_metric(data, 'Average Precision', ax, False, plot_args, color_inds)
 
@@ -1169,7 +1181,7 @@ def make_learning_curves_figure_opticalflow(logger_file, fig=None):
                            val=h5py_obj[f'val/{name}'][:])
         return data
 
-    ax = fig.add_subplot(3, 2, 1)
+    ax = fig.add_subplot(4, 2, 1)
     with h5py.File(logger_file, 'r') as f:
         data = get_data(f, 'loss')
         plot_metric(data, 'loss', ax)
@@ -1183,9 +1195,9 @@ def make_learning_curves_figure_opticalflow(logger_file, fig=None):
         keys = list(f['train'].keys())
 
         plot_ind = 2
-        for metric in ['fps', 'SSIM', 'L1', 'smoothness', 'sparsity']:
+        for metric in ['fps','reg_loss', 'SSIM', 'L1', 'smoothness', 'sparsity']:
             if metric in keys:
-                ax = fig.add_subplot(3, 2, plot_ind)
+                ax = fig.add_subplot(4, 2, plot_ind)
                 data = get_data(f, metric)
                 plot_metric(data, metric, ax, legend=metric == 'fps')
 
@@ -1321,8 +1333,9 @@ def plot_ethogram(ethogram: np.ndarray, mapper, start_index: Union[int, float],
     xticks = ax.get_xticks()
     new_ticks = [i + start_index for i in xticks]
     ax.set_xticklabels([str(int(i)) for i in new_ticks])
-    ax.set_yticks(np.arange(0, len(classes)))
-    ax.set_yticklabels(classes, rotation=rotation, fontdict={'fontsize': 12})
+    ax.set_yticks(np.arange(0, ethogram.shape[1]))
+    if classes is not None:
+        ax.set_yticklabels(classes, rotation=rotation, fontdict={'fontsize': 12})
     ax.set_ylabel(ylabel)
     return im_h
 
@@ -1418,6 +1431,9 @@ def make_ethogram_movie_with_predictions(outfile: Union[str, bytes, os.PathLike]
                                          width: int = 100,
                                          fps: float = 30):
     """ Makes a movie with movie, then ethogram, then model predictions """
+    
+    if mapper is None:
+        mapper = Mapper()
     fig = plt.figure(figsize=(6, 8))
     # camera = Camera(fig)
 

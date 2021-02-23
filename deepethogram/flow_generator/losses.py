@@ -162,7 +162,8 @@ def charbonnier_smoothness(flows, alpha=0.3, eps=1e-7):
 
 
 class MotionNetLoss(torch.nn.Module):
-    def __init__(self, is_multiscale=True, smooth_weights=[.01, .02, .04, .08, .16], highres: bool = False,
+    def __init__(self, regularization_criterion, 
+                 is_multiscale=True, smooth_weights=[.01, .02, .04, .08, .16], highres: bool = False,
                  calculate_ssim_full: bool = False, flow_sparsity: bool = False, sparsity_weight: float = 1.0,
                  smooth_weight_multiplier: float = 1.0):
         super(MotionNetLoss, self).__init__()
@@ -176,8 +177,9 @@ class MotionNetLoss(torch.nn.Module):
         self.sparsity_weight = sparsity_weight
         log.info('Using MotionNet Loss with settings: smooth_weights: {} flow_sparsity: {} sparsity_weight: {}'.format(
             self.smooth_weights, flow_sparsity, sparsity_weight))
+        self.regularization_criterion = regularization_criterion
 
-    def forward(self, originals, images, reconstructed, outputs):
+    def forward(self, originals, images, reconstructed, outputs, model: torch.nn.Module):
         if type(images) is not tuple:
             images = (images)
         if type(reconstructed) is not tuple:
@@ -255,13 +257,17 @@ class MotionNetLoss(torch.nn.Module):
         L1_per_image = torch.stack(L1_mean).sum(dim=0)
         smoothness_per_image = torch.stack(smooth_mean).sum(dim=0)
 
-        loss_components = {'SSIM': SSIM_per_image.detach(),
+        regularization_loss = self.regularization_criterion(model)
+        
+        loss_components = {'reg_loss': regularization_loss.detach(), 
+                           'SSIM': SSIM_per_image.detach(),
                            'L1': L1_per_image.detach(),
                            'smoothness': smoothness_per_image.detach(),
                            'SSIM_full': SSIM_full_mean.detach()
                            }
         # mean across batch elements
-        loss = torch.mean(SSIM_per_image) + torch.mean(L1_per_image) + torch.mean(smoothness_per_image)
+        loss = (torch.mean(SSIM_per_image) + torch.mean(L1_per_image) + torch.mean(smoothness_per_image) + 
+                regularization_loss)
 
         if loss != loss:
             import pdb; pdb.set_trace()

@@ -890,6 +890,11 @@ class Classification(Metrics):
             # might happen during speedtest
             return metrics
 
+        # automatically handle loss components
+        for key in data.keys():
+            if 'loss' in key and key != 'loss':
+                metrics[key] = np.mean(data[key])
+
         # if data are from sequence models, stack into N*T x K not N x K x T
         probs = self.stack_sequence_data(data['probs'])
         labels = self.stack_sequence_data(data['labels'])
@@ -955,7 +960,7 @@ class OpticalFlow(Metrics):
         """
         metrics = super().compute(data)
 
-        for key in ['SSIM', 'L1', 'smoothness', 'sparsity', 'L1']:
+        for key in ['reg_loss', 'SSIM', 'L1', 'smoothness', 'sparsity', 'L1']:
             if key in data.keys():
                 metrics[key] = data[key].mean()
         return metrics

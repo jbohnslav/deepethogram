@@ -18,11 +18,12 @@ from deepethogram import utils, viz
 from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
 from deepethogram.data.augs import get_gpu_transforms
 from deepethogram.data.datasets import get_datasets_from_cfg
-from deepethogram.feature_extractor.losses import BCELossCustom
+from deepethogram.feature_extractor.losses import ClassificationLoss, BinaryFocalLoss
 from deepethogram.feature_extractor.models.CNN import get_cnn
 from deepethogram.feature_extractor.models.hidden_two_stream import HiddenTwoStream, FlowOnlyClassifier, \
     build_fusion_layer
 from deepethogram.flow_generator.train import build_model_from_cfg as build_flow_generator
+from deepethogram.losses import get_regularization_loss
 from deepethogram.metrics import Classification
 from deepethogram import projects
 from deepethogram.stoppers import get_stopper
@@ -77,15 +78,12 @@ def train_from_cfg_lightning(cfg):
         model_type='feature_extractor',
         input_images=cfg.feature_extractor.n_flows + 1)
 
-    criterion = get_criterion(cfg.feature_extractor.final_activation,
-                              data_info)
-
     model_parts = build_model_from_cfg(cfg,
                                        pos=data_info['pos'],
                                        neg=data_info['neg'])
     _, spatial_classifier, flow_classifier, fusion, model = model_parts
     # log.info('model: {}'.format(model))
-
+    
     num_classes = len(cfg.project.class_names)
 
     utils.save_dict_to_yaml(data_info['split'],
@@ -115,6 +113,8 @@ def train_from_cfg_lightning(cfg):
             model_type='feature_extractor',
             input_images=cfg.feature_extractor.n_rgb)
         stopper = get_stopper(cfg)
+
+        criterion = get_criterion(cfg, spatial_classifier, data_info)
 
         lightning_module = HiddenTwoStreamLightning(spatial_classifier, cfg,
                                                     datasets, metrics,
@@ -149,6 +149,7 @@ def train_from_cfg_lightning(cfg):
         # this class will freeze the flow generator
         flow_generator_and_classifier = FlowOnlyClassifier(
             flow_generator, flow_classifier)
+        criterion = get_criterion(cfg, flow_generator_and_classifier, data_info)
         lightning_module = HiddenTwoStreamLightning(
             flow_generator_and_classifier, cfg, datasets, metrics, criterion)
         trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
@@ -170,6 +171,7 @@ def train_from_cfg_lightning(cfg):
         cfg,
         model_type='feature_extractor',
         input_images=cfg.feature_extractor.n_flows + 1)
+    criterion = get_criterion(cfg, model, data_info)
     stopper = get_stopper(cfg)
     cfg.compute.batch_size = original_batch_size
     cfg.train.lr = original_lr
@@ -316,7 +318,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         images, outputs = self(batch, 'train')
         probabilities = self.activation(outputs)
 
-        loss = self.criterion(outputs, batch['labels'])
+        loss, loss_dict = self.criterion(outputs, batch['labels'], self.model)
 
         self.visualize_batch(images, probabilities, batch['labels'], 'train')
 
@@ -326,6 +328,8 @@ class HiddenTwoStreamLightning(BaseLightningModule):
                 'probs': probabilities.detach(),
                 'labels': batch['labels'].detach()
             })
+        # add the individual components of the loss to the metrics buffer
+        self.metrics.buffer.append('train', loss_dict)
         # need to use the native logger for lr scheduling, etc.
         self.log('train_loss', loss.detach().cpu())
         return loss
@@ -334,7 +338,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         images, outputs = self(batch, 'val')
         probabilities = self.activation(outputs)
 
-        loss = self.criterion(outputs, batch['labels'])
+        loss, loss_dict = self.criterion(outputs, batch['labels'], self.model)
         self.visualize_batch(images, probabilities, batch['labels'], 'val')
         self.metrics.buffer.append(
             'val', {
@@ -342,6 +346,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
                 'probs': probabilities.detach(),
                 'labels': batch['labels'].detach()
             })
+        self.metrics.buffer.append('val', loss_dict)
         # need to use the native logger for lr scheduling, etc.
         # TESTING
         self.log('val_loss', loss.detach().cpu())
@@ -349,13 +354,14 @@ class HiddenTwoStreamLightning(BaseLightningModule):
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
         probabilities = self.activation(outputs)
-        loss = self.criterion(outputs, batch['labels'])
+        loss, loss_dict = self.criterion(outputs, batch['labels'], self.model)
         self.metrics.buffer.append(
             'test', {
                 'loss': loss.detach(),
                 'probs': probabilities.detach(),
                 'labels': batch['labels'].detach()
             })
+        self.metrics.buffer.append('test', loss_dict)
 
     def visualize_batch(self, images, probs, labels, split: str):
         if not self.hparams.train.viz:
@@ -454,7 +460,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         log.debug('label min: {}'.format(labels.min()))
 
 
-def get_criterion(final_activation: str, dataloaders: dict, device=None):
+def get_criterion(cfg: DictConfig, model, data_info: dict, device=None):
     """ Get loss function based on final activation.
 
     If final activation is softmax: use cross-entropy loss
@@ -471,22 +477,27 @@ def get_criterion(final_activation: str, dataloaders: dict, device=None):
     Returns:
         criterion (nn.Module): loss function
     """
+    final_activation = cfg.feature_extractor.final_activation
     if final_activation == 'softmax':
-        if 'weight' in list(dataloaders.keys()):
-            weight = dataloaders['loss_weight']
+        if 'weight' in list(data_info.keys()):
+            weight = data_info['loss_weight']
         else:
             weight = None
-        criterion = nn.CrossEntropyLoss(weight=weight)
+        data_criterion = nn.CrossEntropyLoss(weight=weight)
 
     elif final_activation == 'sigmoid':
-        pos_weight = dataloaders['pos_weight']
+        pos_weight = data_info['pos_weight']
         if type(pos_weight) == np.ndarray:
             pos_weight = torch.from_numpy(pos_weight)
             pos_weight = pos_weight.to(
                 device) if device is not None else pos_weight
-        criterion = BCELossCustom(pos_weight=pos_weight)
+        data_criterion = BinaryFocalLoss(pos_weight=pos_weight, gamma=cfg.train.loss_gamma)
     else:
         raise NotImplementedError
+    
+    regularization_criterion = get_regularization_loss(cfg, model)
+    
+    criterion = ClassificationLoss(data_criterion, regularization_criterion)
     criterion = criterion.to(device) if device is not None else criterion
 
     return criterion
@@ -527,7 +538,7 @@ def get_metrics(rundir: Union[str, bytes, os.PathLike],
 
 
 if __name__ == '__main__':
-    config_list = ['config','augs','model/flow_generator','model/feature_extractor', 'train']
+    config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor']
     run_type = 'train'
     model = 'feature_extractor'
     cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)

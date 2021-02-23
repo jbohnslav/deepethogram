@@ -62,11 +62,11 @@ def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
     metrics = get_metrics(os.getcwd(), data_info['num_classes'],
                           num_parameters=utils.get_num_parameters(model), key_metric='f1_class_mean',
                           num_workers=cfg.compute.num_workers)
-    criterion = get_criterion(cfg.feature_extractor.final_activation, data_info)
+    criterion = get_criterion(cfg, model, data_info)
     lightning_module = SequenceLightning(model, cfg, datasets, metrics, criterion)
     # change auto batch size parameters because large sequences can overflow RAM
     trainer = get_trainer_from_cfg(cfg, lightning_module, stopper,
-                                   bs_start=16, bs_end=256)
+                                   bs_start=16, bs_end=64)
     trainer.fit(lightning_module)
     return model
 
@@ -87,6 +87,8 @@ class SequenceLightning(BaseLightningModule):
 
         self.criterion = criterion
 
+
+        self.batch_cnt = 0
         # this will get overridden by the ExampleImagesCallback
         # self.viz_cnt = None
 
@@ -95,7 +97,7 @@ class SequenceLightning(BaseLightningModule):
         outputs = self(batch, split)
         probabilities = self.activation(outputs)
 
-        loss = self.criterion(outputs, batch['labels'])
+        loss, loss_dict = self.criterion(outputs, batch['labels'], self.model)
 
         # downsampled_t0, estimated_t0, flows_reshaped = self.reconstructor(images, outputs)
         # loss, loss_components = self.criterion(batch, downsampled_t0, estimated_t0, flows_reshaped)
@@ -106,8 +108,12 @@ class SequenceLightning(BaseLightningModule):
             'probs': probabilities.detach(),
             'labels': batch['labels'].detach()
         })
+        self.metrics.buffer.append(split, loss_dict)
         # need to use the native logger for lr scheduling, etc.
         self.log(f'{split}_loss', loss.detach())
+        if self.batch_cnt == 100:
+            print('stop')
+        self.batch_cnt += 1
         return loss
 
     def training_step(self, batch: dict, batch_idx: int):
@@ -212,7 +218,7 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
 
 
 if __name__ == '__main__':
-    config_list = ['config','model/feature_extractor','model/sequence', 'train']
+    config_list = ['config','model/feature_extractor', 'train', 'model/sequence']
     run_type = 'train'
     model = 'sequence'
     cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)

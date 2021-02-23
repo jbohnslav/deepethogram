@@ -55,3 +55,7 @@ sequence:
   final_bn: true
   # what kinds of inputs to use for the sequence model. choices: ['features', 'keypoints']
   input_type: features
+train:
+  regularization:
+    # can't use l2_sp regularization because we are not pretraining sequence models
+    style: l2

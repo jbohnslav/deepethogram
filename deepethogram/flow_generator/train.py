@@ -19,6 +19,7 @@ from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.flow_generator import models
 from deepethogram.flow_generator.losses import MotionNetLoss
 from deepethogram.flow_generator.utils import Reconstructor
+from deepethogram.losses import get_regularization_loss
 from deepethogram.metrics import OpticalFlow
 from deepethogram.stoppers import get_stopper
 
@@ -98,14 +99,8 @@ class OpticalFlowLightning(BaseLightningModule):
 
         self.has_logged_channels = False
         # for convenience
-
-        if cfg.flow_generator.loss == 'MotionNet':
-            criterion = MotionNetLoss(flow_sparsity=self.hparams.flow_generator.flow_sparsity,
-                                      sparsity_weight=self.hparams.flow_generator.sparsity_weight,
-                                      smooth_weight_multiplier=self.hparams.flow_generator.smooth_weight_multiplier)
-        else:
-            raise NotImplementedError
-        self.criterion = criterion
+        
+        self.criterion = get_criterion(cfg, self.model)
         # this will get overridden by the ExampleImagesCallback
         self.viz_cnt = None
 
@@ -126,7 +121,7 @@ class OpticalFlowLightning(BaseLightningModule):
         images, outputs = self(batch, split)
 
         downsampled_t0, estimated_t0, flows_reshaped = self.reconstructor(images, outputs)
-        loss, loss_components = self.criterion(batch, downsampled_t0, estimated_t0, flows_reshaped)
+        loss, loss_components = self.criterion(batch, downsampled_t0, estimated_t0, flows_reshaped, self.model)
         self.visualize_batch(images, downsampled_t0, estimated_t0, flows_reshaped, split)
 
         to_log = loss_components
@@ -224,6 +219,20 @@ class OpticalFlowLightning(BaseLightningModule):
         log.debug('label min: {}'.format(labels.min()))
 
 
+def get_criterion(cfg, model):
+    regularization_criterion = get_regularization_loss(cfg, model)
+    
+    if cfg.flow_generator.loss == 'MotionNet':
+        criterion = MotionNetLoss(regularization_criterion, flow_sparsity=cfg.flow_generator.flow_sparsity,
+                                    sparsity_weight=cfg.flow_generator.sparsity_weight,
+                                    smooth_weight_multiplier=cfg.flow_generator.smooth_weight_multiplier, 
+                                    )
+    else:
+        raise NotImplementedError
+    
+    return criterion
+
+
 def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_parameters: Union[int, float]):
     metrics_list = ['SSIM', 'L1', 'smoothness', 'SSIM_full']
     if cfg.flow_generator.flow_sparsity:
@@ -239,7 +248,7 @@ def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_par
 
 
 if __name__ == '__main__':
-    config_list = ['config','augs','model/flow_generator', 'train']
+    config_list = ['config','augs','train', 'model/flow_generator']
     run_type = 'train'
     model = 'flow_generator'
     cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
