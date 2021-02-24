@@ -99,7 +99,8 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
     assert isinstance(model, torch.nn.Module)
 
     device = torch.device(device)
-    torch.cuda.set_device(device)
+    if device.type != 'cpu':
+        torch.cuda.set_device(device)
     model = model.to(device)
     for parameter in model.parameters():
         parameter.requires_grad = False

@@ -46,7 +46,7 @@ def train_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
     rundir = os.getcwd()  # done by hydra
 
     device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
-    if device != 'cpu': torch.cuda.set_device(device)
+    if device.type != 'cpu': torch.cuda.set_device(device)
     log.info('Training sequence model...')
 
     dataloaders = get_dataloaders_from_cfg(cfg, model_type='sequence')
