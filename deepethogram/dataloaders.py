@@ -585,7 +585,7 @@ class VideoDataset(data.Dataset):
                     image = reader[i + start_frame]
                 except Exception as e:
                     image = np.zeros((h, w, 3), dtype=np.uint8)
-                    log.warning('Error {} on frame {} of video {}. Is the video corrupted?'.format(e, index, self.videofile))
+                    log.warning('Error {} on frame {} of video {}. Is the video corrupted?'.format(e, index, self.video_list[movie_index]))
                 images.append(image)
 
         if log.isEnabledFor(logging.DEBUG):
