@@ -764,3 +764,19 @@ def print_top_largest_variables(local_call, num: int=20):
     for name, size in sorted(((name, sys.getsizeof(value)) for name, value in local_call.items()),
                              key=lambda x: -x[1])[:10]:
         print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
+
+
+def get_hparams_from_cfg(cfg, hparams): 
+    hparam_dict = {key: get_dotted_from_cfg(cfg, key) for key in hparams}
+    return hparam_dict
+
+def get_dotted_from_cfg(cfg, dotted):
+    # cfg: DictConfig
+    # dotted: string parameter name. can be nested. e.g. 'tune.hparams.feature_extractor.dropout_p.min'
+    key_list = dotted.split('.')
+    
+    cfg_chunk = cfg.get(key_list[0])
+    for i in range(1, len(key_list)):
+        cfg_chunk = cfg_chunk.get(key_list[i])
+        
+    return cfg_chunk

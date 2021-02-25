@@ -13,8 +13,8 @@ from omegaconf import DictConfig, OmegaConf, ListConfig
 from torch import nn
 from tqdm import tqdm
 
-import deepethogram.projects
 from deepethogram import utils, projects
+from deepethogram.configuration import make_feature_extractor_inference_cfg
 from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms_inference, get_gpu_transforms
 from deepethogram.data.datasets import VideoIterable
 from deepethogram.feature_extractor.train import build_model_from_cfg as build_feature_extractor
@@ -119,7 +119,7 @@ def print_debug_statement(images, logits, spatial_features, flow_features, proba
     elif images.ndim == 5:
         N, C, T, H, W = images.shape
     else:
-        raise ValueError('images of unknown shape: {}').format(images.shape)
+        raise ValueError('images of unknown shape: {}'.format(images.shape))
   
     log.info('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
     log.info('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
@@ -335,7 +335,8 @@ def extract(rgbs: list,
         f.close()
 
 
-def main(cfg: DictConfig):    
+def feature_extractor_inference(cfg: DictConfig):    
+    cfg = projects.setup_run(cfg)
     # turn "models" in your project configuration to "full/path/to/models"
     log.info('args: {}'.format(' '.join(sys.argv)))
     
@@ -424,10 +425,7 @@ def main(cfg: DictConfig):
 
 
 if __name__ == '__main__':
-    config_list = ['config','augs','model/feature_extractor', 'model/flow_generator', 'inference']
-    run_type = 'inference'
-    model = 'feature_extractor'
-    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
-    cfg = projects.setup_run(cfg)
+    project_path = projects.get_project_path_from_cl(sys.argv)
+    cfg = make_feature_extractor_inference_cfg(project_path, use_command_line=True)
     
-    main(cfg)
+    feature_extractor_inference(cfg)

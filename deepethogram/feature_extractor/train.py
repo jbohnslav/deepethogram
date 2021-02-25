@@ -16,6 +16,7 @@ from omegaconf import OmegaConf, DictConfig
 
 from deepethogram import utils, viz
 from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
+from deepethogram.configuration import make_feature_extractor_train_cfg
 from deepethogram.data.augs import get_gpu_transforms
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.feature_extractor.losses import ClassificationLoss, BinaryFocalLoss
@@ -41,9 +42,11 @@ plt.switch_backend('agg')
 log = logging.getLogger(__name__)
 
 
-# @hydra.main(config_path='../conf', config_name='feature_extractor_train')
-def main(cfg: DictConfig) -> None:
-    log.debug('cwd: {}'.format(os.getcwd()))
+# @profile
+def feature_extractor_train(cfg) -> nn.Module:
+    rundir = os.getcwd()  # done by hydra
+    cfg = projects.setup_run(cfg)
+    
     log.info('args: {}'.format(' '.join(sys.argv)))
     # change the project paths from relative to absolute
     # allow for editing
@@ -51,18 +54,7 @@ def main(cfg: DictConfig) -> None:
     # SHOULD NEVER MODIFY / MAKE ASSIGNMENTS TO THE CFG OBJECT AFTER RIGHT HERE!
     log.info('configuration used ~~~~~')
     log.info(OmegaConf.to_yaml(cfg))
-
-    try:
-        train_from_cfg_lightning(cfg)
-    except KeyboardInterrupt:
-        torch.cuda.empty_cache()
-        raise
-
-
-# @profile
-def train_from_cfg_lightning(cfg):
-    rundir = os.getcwd()  # done by hydra
-
+    
     # we build flow generator independently because you might want to load it from a different location
     flow_generator = build_flow_generator(cfg)
     flow_weights = projects.get_weightfile_from_cfg(cfg, 'flow_generator')
@@ -93,7 +85,8 @@ def train_from_cfg_lightning(cfg):
         rundir,
         num_classes=num_classes,
         num_parameters=utils.get_num_parameters(spatial_classifier), 
-        key_metric='f1_class_mean')
+        key_metric='f1_class_mean', 
+        num_workers=cfg.compute.metrics_workers)
 
     # cfg.compute.batch_size will be changed by the automatic batch size finder, possibly. store here so that
     # with each step of the curriculum, we can auto-tune it
@@ -183,7 +176,8 @@ def train_from_cfg_lightning(cfg):
     # see above for horrible syntax explanation
     # lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
     trainer.fit(lightning_module)
-    trainer.test(model=lightning_module)
+    # trainer.test(model=lightning_module)
+    return model
     # utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
 
 
@@ -365,7 +359,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         self.metrics.buffer.append('test', loss_dict)
 
     def visualize_batch(self, images, probs, labels, split: str):
-        if not self.hparams.train.viz:
+        if not self.hparams.train.viz_examples:
             return
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]
@@ -539,9 +533,9 @@ def get_metrics(rundir: Union[str, bytes, os.PathLike],
 
 
 if __name__ == '__main__':
-    config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor']
-    run_type = 'train'
-    model = 'feature_extractor'
-    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
-    cfg = projects.setup_run(cfg)
-    main(cfg)
+    project_path = projects.get_project_path_from_cl(sys.argv)
+    cfg = make_feature_extractor_train_cfg(project_path, use_command_line=True)
+    
+    feature_extractor_train(cfg)
+    
+    

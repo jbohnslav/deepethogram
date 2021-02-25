@@ -13,6 +13,7 @@ from omegaconf import DictConfig, OmegaConf
 import deepethogram.projects
 from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
 from deepethogram import utils, projects, viz
+from deepethogram.configuration import make_sequence_inference_cfg
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.feature_extractor.train import get_metrics, get_stopper, get_criterion
 from deepethogram.schedulers import initialize_scheduler
@@ -25,28 +26,17 @@ log = logging.getLogger(__name__)
 plt.switch_backend('agg')
 
 
-# @hydra.main(config_path='../conf', config_name='sequence_train')
-def main(cfg: DictConfig) -> None:
-    
-    # only two custom overwrites of the configuration file
-    # first, change the project paths from relative to absolute
-    
+def sequence_train(cfg: DictConfig) -> nn.Module:
+    cfg = projects.setup_run(cfg)
     log.info('args: {}'.format(' '.join(sys.argv)))
     
     if cfg.sequence.latent_name is None:
         cfg.sequence.latent_name = cfg.feature_extractor.arch
         # allow for editing
     OmegaConf.set_struct(cfg, False)
-    # second, use the model directory to find the most recent run of each model type
-    # cfg = projects.overwrite_cfg_with_latest_weights(cfg, cfg.project.model_path, model_type='flow_generator')
-    # SHOULD NEVER MODIFY / MAKE ASSIGNMENTS TO THE CFG OBJECT AFTER RIGHT HERE!
     log.info('Configuration used: ')
     log.info(OmegaConf.to_yaml(cfg))
-
-    model = train_from_cfg_lightning(cfg)
-
-
-def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
+    
     datasets, data_info = get_datasets_from_cfg(cfg, 'sequence')
     utils.save_dict_to_yaml(data_info['split'], os.path.join(os.getcwd(), 'split.yaml'))
     model = build_model_from_cfg(cfg, data_info['num_features'], data_info['num_classes'],
@@ -218,9 +208,7 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
 
 
 if __name__ == '__main__':
-    config_list = ['config','model/feature_extractor', 'train', 'model/sequence']
-    run_type = 'train'
-    model = 'sequence'
-    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
-    cfg = projects.setup_run(cfg)
-    main(cfg)
+    project_path = projects.get_project_path_from_cl(sys.argv)
+    cfg = make_sequence_inference_cfg(project_path, use_command_line=True)
+    
+    sequence_train(cfg)

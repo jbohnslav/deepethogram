@@ -7,13 +7,13 @@ import h5py
 # import hydra
 import numpy as np
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch import nn
 from torch.utils import data
 from tqdm import tqdm
 
-import deepethogram.projects
 from deepethogram import utils, projects
+from deepethogram.configuration import make_sequence_inference_cfg
 from deepethogram.data.datasets import FeatureVectorDataset
 from deepethogram.sequence.train import build_model_from_cfg
 
@@ -190,11 +190,12 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
                 del (batch, logits, probabilities)
 
 
-def main(cfg: DictConfig):
+def sequence_inference(cfg: DictConfig):
+    cfg = projects.setup_run(cfg)
     log.info('args: {}'.format(' '.join(sys.argv)))
     # turn "models" in your project configuration to "full/path/to/models"
     log.info('configuration used: ')
-    log.info(cfg.pretty())
+    log.info(OmegaConf.to_yaml(cfg))
 
     weights = projects.get_weightfile_from_cfg(cfg, model_type='sequence')
     assert weights is not None, 'Must either specify a weightfile or use reload.latest=True'
@@ -256,10 +257,7 @@ def main(cfg: DictConfig):
 
 
 if __name__ == '__main__':
-    config_list = ['config','augs','model/feature_extractor', 'model/sequence', 'inference']
-    run_type = 'inference'
-    model = 'sequence'
-    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
-    cfg = projects.setup_run(cfg)
+    project_path = projects.get_project_path_from_cl(sys.argv)
+    cfg = make_sequence_inference_cfg(project_path, use_command_line=True)
     
-    main(cfg)
+    sequence_inference(cfg)

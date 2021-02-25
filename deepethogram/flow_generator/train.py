@@ -14,6 +14,7 @@ from omegaconf import DictConfig, OmegaConf
 import deepethogram.projects
 from deepethogram import utils, viz, projects
 from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
+from deepethogram.configuration import make_flow_generator_train_cfg
 from deepethogram.data.augs import get_gpu_transforms
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.flow_generator import models
@@ -47,8 +48,10 @@ log = logging.getLogger(__name__)
 # __all__ = ['build_model_from_cfg', 'train_from_cfg', 'train']
 
 # @hydra.main(config_path='../conf/flow_train.yaml')
-def main(cfg: DictConfig) -> None:
-    log.debug('cwd: {}'.format(os.getcwd()))
+
+
+def flow_generator_train(cfg: DictConfig) -> nn.Module:
+    cfg = projects.setup_run(cfg)
     log.info('args: {}'.format(' '.join(sys.argv)))
     # only two custom overwrites of the configuration file
 
@@ -59,21 +62,7 @@ def main(cfg: DictConfig) -> None:
     # SHOULD NEVER MODIFY / MAKE ASSIGNMENTS TO THE CFG OBJECT AFTER RIGHT HERE!
     log.info('configuration used ~~~~~')
     log.info(OmegaConf.to_yaml(cfg))
-
-    try:
-        model = train_from_cfg_lightning(cfg)
-    except KeyboardInterrupt:
-        torch.cuda.empty_cache()
-        raise
-
-
-def build_model_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
-    flow_generator = flow_generators[cfg.flow_generator.arch](num_images=cfg.flow_generator.n_rgb,
-                                                              flow_div=cfg.flow_generator.max)
-    return flow_generator
-
-
-def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
+    
     datasets, data_info = get_datasets_from_cfg(cfg, 'flow_generator', input_images=cfg.flow_generator.n_rgb)
     flow_generator = build_model_from_cfg(cfg)
     log.info('Total trainable params: {:,}'.format(utils.get_num_parameters(flow_generator)))
@@ -89,6 +78,13 @@ def train_from_cfg_lightning(cfg: DictConfig) -> nn.Module:
 
     trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
     trainer.fit(lightning_module)
+    return flow_generator
+    
+    
+def build_model_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
+    flow_generator = flow_generators[cfg.flow_generator.arch](num_images=cfg.flow_generator.n_rgb,
+                                                              flow_div=cfg.flow_generator.max)
+    return flow_generator
 
 
 class OpticalFlowLightning(BaseLightningModule):
@@ -146,7 +142,7 @@ class OpticalFlowLightning(BaseLightningModule):
         images, outputs = self(batch, 'test')
 
     def visualize_batch(self, images, downsampled_t0, estimated_t0, flows_reshaped, split: str):
-        if not self.hparams.train.viz:
+        if not self.hparams.train.viz_examples:
             return
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]
@@ -248,10 +244,7 @@ def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_par
 
 
 if __name__ == '__main__':
-    config_list = ['config','augs','train', 'model/flow_generator']
-    run_type = 'train'
-    model = 'flow_generator'
-    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
-    # sys.argv = projects.process_config_file_from_cl(sys.argv)
-    cfg = projects.setup_run(cfg)
-    main(cfg)
+    project_path = projects.get_project_path_from_cl(sys.argv)
+    cfg = make_flow_generator_train_cfg(project_path, use_command_line=True)
+    
+    flow_generator_train(cfg)

@@ -41,7 +41,8 @@ train:
   # if using early stopping, you can set this value and early stopping will not kick in until the below epoch is reached
   early_stopping_begins: 0
   # whether or not to visualize data. always keep true
-  viz: true
+  viz_metrics: true
+  viz_examples: true
   # the amount to reduce the learning rate by when the scheduler demands
   reduction_factor: 0.1
   # In the paper, see Methods / loss functions. This value is beta.

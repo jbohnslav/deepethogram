@@ -797,12 +797,12 @@ class Metrics:
 
         if split != 'speedtest':
             assert 'loss' in data.keys()
-
             # store most recent loss and key metric as attributes, for use in scheduling, stopping, etc.
             self.latest_loss[split] = metrics['loss']
             self.latest_key[split] = metrics[self.key_metric]
 
         self.save_metrics_to_disk(metrics, split)
+        return metrics, split
 
     def __getitem__(self, inp: tuple) -> np.ndarray:
         split, metric_name, epoch_number = inp
