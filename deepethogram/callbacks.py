@@ -3,6 +3,7 @@ import logging
 import os
 import time
 
+import numpy as np
 from pytorch_lightning.callbacks import Callback
 
 from deepethogram import utils
@@ -157,6 +158,20 @@ class FPSCallback(Callback):
 #
 #     def on_validation_end(self, trainer, pl_module):
 #         trainer.test(pl_module)
+def log_metrics(pl_module, split):
+    assert split in ['train', 'val', 'test']
+    metrics, _ = pl_module.metrics.end_epoch(split)
+    scalar_metrics = {}
+    for key, value in metrics.items():
+        if isinstance(value, np.ndarray):
+            # check if it's a one-element np array
+            if value.size == 1:
+                value = value.squeeze()[0]
+        if np.isscalar(value):
+            pl_module.log(split + '_' + key, value, on_epoch=True)
+            scalar_metrics[split + '_' + key] = value
+            
+    return scalar_metrics
 
 
 class MetricsCallback(Callback):
@@ -165,23 +180,42 @@ class MetricsCallback(Callback):
 
     def on_train_epoch_end(self, trainer, pl_module, outputs):
         pl_module.metrics.buffer.append('train', {'lr': utils.get_minimum_learning_rate(pl_module.optimizer)})
-        pl_module.metrics.end_epoch('train')
-        latest_key = pl_module.metrics.latest_key['train']
-        key = 'train_{}'.format(pl_module.metrics.key_metric)
-        pl_module.log(key, latest_key, on_epoch=True)
+        _ = log_metrics(pl_module, 'train')
+        # latest_key = pl_module.metrics.latest_key['train']
+        # key = 'train_{}'.format(pl_module.metrics.key_metric)
+        # pl_module.log(key, latest_key, on_epoch=True)
         
     def on_validation_epoch_end(self, trainer, pl_module):
-        pl_module.metrics.end_epoch('val')
+        scalar_metrics = log_metrics(pl_module, 'val')
         latest_key = pl_module.metrics.latest_key['val']
-        key = 'val_{}'.format(pl_module.metrics.key_metric)
-        pl_module.log(key, latest_key, on_epoch=True)
+        
+        # this logic is to correctly log only important hyperparameters and important metrics  to tensorboard's 
+        # hyperparameter view. Just using all the parameters in our configuration makes for a huge and ugly tensorboard 
+        # plot
+        # similarly, we only want to look at a few metrics for hyperparameter viewing. e.g. I don't need to see
+        # train F1 micro-- if I wanted to see that, I would look only at the run directory
+        hparam_metrics = {}
+        for key in pl_module.tune_metrics:
+            # have to have a different key, otherwise pytorch lightning will log it twice
+            if key in scalar_metrics.keys():
+                hparam_metrics[key + '_hp'] = scalar_metrics[key]
+            else:
+                log.warning('requested hparam metric {} not found in metrics: {}'.format(
+                    key, list(scalar_metrics.keys())
+                ))
+        print(pl_module.tune_hparams, hparam_metrics)
+        pl_module.logger.log_hyperparams(pl_module.tune_hparams, hparam_metrics)
+        
+        # # log the latest key metric in tensorboard as hp_metric, which will enable hparam view
+        # pl_module.log('hp_metric', latest_key, on_epoch=True)
 
     def on_test_epoch_end(self, trainer, pl_module):
-        pl_module.metrics.end_epoch('test')
+        log_metrics(pl_module, 'test')
         # pl_module.metrics.end_epoch('speedtest')
 
     def on_keyboard_interrupt(self, trainer, pl_module):
         pl_module.metrics.buffer.clear()
+        
 
 
 class ExampleImagesCallback(Callback):

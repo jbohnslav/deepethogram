@@ -1,0 +1,53 @@
+tune:
+  use: True
+  metrics:
+    - val_loss
+    - val_f1_class_mean
+    - val_data_loss
+    - val_reg_loss
+  num_trials: 50 # number of runs
+  resources_per_trial:
+    cpu: 8
+    gpu: 1
+  name: tune_feature_extractor
+  grace_period: 5 # number of epochs
+  hparams:
+    feature_extractor.dropout_p: # each hparam key should be an attribute in a valid configuration
+      min: 0.0 # min: minimum of range
+      max: 0.9 # max: maximum of range
+      space: uniform # space: how to sample
+      short: dropout # a shortened version to view in Ray's command line interface
+    train.regularization.alpha: 
+      min: 1e-5
+      max: 0.01
+      space: uniform
+      short: reg_alpha
+    train.regularization.beta: 
+      min: 1e-6
+      max: 1e-3
+      space: uniform
+      short: reg_beta
+    train.loss_gamma:
+      choices: [0, 0.5, 1, 2]
+      space: choice
+      short: gamma
+    train.loss_weight_exp:
+      min: 0.0
+      max: 1.0
+      space: uniform
+      short: loss_weight_exp
+    train.lr:
+      min: 1e-5
+      max: 1e-2
+      space: log
+      short: lr
+# use these to overwrite default configuration parameters only when running tune jobs
+train:
+  viz_examples: False # don't spend time and space making example images 
+  steps_per_epoch:
+    train: 500
+    val: 500
+  num_epochs: 20
+compute:
+  metrics_workers: 0 # sometimes has a bug in already multiprocessed jobs
+  batch_size: 64 # auto batch sizing takes a long time

@@ -2,11 +2,20 @@ from collections import defaultdict
 from copy import deepcopy
 import logging
 import math
+import os
 from typing import Tuple
 
 import matplotlib.pyplot as plt
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
+try: 
+    from ray.tune.integration.pytorch_lightning import TuneReportCallback, \
+        TuneReportCheckpointCallback
+    from ray.tune import get_trial_dir
+    from ray.tune import CLIReporter
+    ray = True
+except ImportError:
+    ray = False
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -16,7 +25,7 @@ from deepethogram.callbacks import FPSCallback, DebugCallback, MetricsCallback, 
     ExampleImagesCallback, CheckpointCallback, StopperCallback
 from deepethogram.metrics import Metrics, EmptyMetrics
 from deepethogram.schedulers import initialize_scheduler
-from deepethogram import viz
+from deepethogram import viz, utils
 
 log = logging.getLogger(__name__)
 
@@ -55,11 +64,23 @@ class BaseLightningModule(pl.LightningModule):
         # self.is_key_metric_loss = self.metrics.key_metric == 'loss'
         
         self.viz_cnt = defaultdict(int)
+        # for hyperparameter tuning, log specific hyperparameters and metrics for tensorboard
+        if 'tune' in cfg.keys():
+            # print('KEYS KEYS KEYS')
+            tune_keys = list(cfg.tune.hparams.keys())
+            # this function goes takes a list like [`feature_extractor.dropout_p`, `train.loss_weight_exp`], and finds
+            # those entries in the configuration
+            self.tune_hparams = utils.get_hparams_from_cfg(cfg, tune_keys)
+            self.tune_metrics = OmegaConf.to_container(cfg.tune.metrics)
+        else:
+            self.tune_hparams = {}
+            self.tune_metrics = []
+            
 
     def on_train_epoch_start(self) -> None:
         # self.viz_cnt['train'] = 0
         # I couldn't figure out how to make sure that this is called after BOTH train and validation ends
-        if self.current_epoch > 0 and self.hparams.train.viz:
+        if self.current_epoch > 0 and self.hparams.train.viz_metrics:
             # all models shall define a visualization function that points to the metrics file on disk
             self.visualization_func(self.metrics.fname)
 
@@ -121,6 +142,13 @@ class BaseLightningModule(pl.LightningModule):
 
 
 # @profile
+default_tune_dict = {
+    'loss': 'val_loss', 
+    'f1_micro': 'val_f1_class_mean', 
+    'data_loss': 'val_data_loss', 
+    'reg_loss': 'val_reg_loss'
+}
+
 def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: str = None,
                          bs_start: int=2, bs_end: int=2048) -> pl.Trainer:
     steps_per_epoch = cfg.train.steps_per_epoch
@@ -171,8 +199,8 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         lightning_module.metrics = empty_metrics
         # don't visualize our model inputs when batch size finding
         # lightning_module.visualize_examples = False
-        should_viz = cfg.train.viz
-        lightning_module.hparams.train.viz = False
+        should_viz = cfg.train.viz_examples
+        lightning_module.hparams.train.viz_examples = False
         # dramatically reduces RAM usage by this process
         lightning_module.hparams.compute.num_workers = min(tmp_workers, 1)
         if cfg.compute.batch_size == 'auto':
@@ -197,25 +225,40 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
             lightning_module.hparams.lr = new_lr
         del trainer, tuner
         #  restore lightning module to original state
-        lightning_module.hparams.train.viz = should_viz
+        lightning_module.hparams.train.viz_examples = should_viz
         lightning_module.metrics = tmp_metrics
         lightning_module.hparams.compute.num_workers = tmp_workers
         if lightning_module.model_type != 'sequence':
             lightning_module.gpu_transforms = original_gpu_transforms
             log.debug('reverted: {}'.format(lightning_module.gpu_transforms))
 
+    callback_list = [FPSCallback(),  # DebugCallback(),# SpeedtestCallback(),
+                                    MetricsCallback(), ExampleImagesCallback(), CheckpointCallback(),
+                                    StopperCallback(stopper)]
+    if cfg.tune.use and ray: 
+        callback_list.append(TuneReportCallback(OmegaConf.to_container(cfg.tune.metrics), 
+                                                on='validation_end'))
+        # https://docs.ray.io/en/master/tune/tutorials/tune-pytorch-lightning.html
+        tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(
+            save_dir=get_trial_dir(), name="", version=".", 
+            default_hp_metric=False)
+        refresh_rate = 100
+    else:
+        tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(os.getcwd())
+        refresh_rate = 1
+    
     # tuning fucks with the callbacks
     trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
                          precision=16 if cfg.compute.fp16 else 32,
                          limit_train_batches=steps_per_epoch['train'],
                          limit_val_batches=steps_per_epoch['val'],
                          limit_test_batches=steps_per_epoch['test'],
+                         logger=tensorboard_logger,
                          max_epochs=cfg.train.num_epochs,
                          num_sanity_val_steps=0,
-                         callbacks=[FPSCallback(),  # DebugCallback(),# SpeedtestCallback(),
-                                    MetricsCallback(), ExampleImagesCallback(), CheckpointCallback(),
-                                    StopperCallback(stopper)],
+                         callbacks=callback_list,
                          reload_dataloaders_every_epoch=True,
+                         progress_bar_refresh_rate=refresh_rate, 
                          profiler=profiler)
     torch.cuda.empty_cache()
     # gc.collect()
