@@ -11,7 +11,7 @@ except ImportError:
     print('To use the deepethogram.tune module, you must `pip install \'ray[tune]`')
     raise
 
-from deepethogram.configuration import make_feature_extractor_train_cfg, load_config_by_name
+from deepethogram.configuration import make_config, load_config_by_name
 from deepethogram import feature_extractor_train
 from deepethogram import projects
 
@@ -69,9 +69,11 @@ def tune_feature_extractor(project_path, cfg: DictConfig=None):
     analysis = tune.run(
         tune.with_parameters(
             run_ray_experiment, 
-            project_path=project_path
+            project_path=project_path, 
+            cfg=cfg,
         ), 
-        resources_per_trial=OmegaConf.to_container(cfg.tune.resources_per_trial), 
+        resources_per_trial={'cpu': 8, 
+                             'gpu': 1}, 
         metric='val_f1_class_mean', 
         mode='max', 
         config=tune_experiment_cfg,
@@ -85,21 +87,21 @@ def tune_feature_extractor(project_path, cfg: DictConfig=None):
     analysis.results_df.to_csv(os.path.join(project_path, 'models', 'ray_results.csv'))
 
 
-def run_ray_experiment(ray_cfg, project_path): 
-    cfg = make_feature_extractor_train_cfg(project_path, use_command_line=False, preset='deg_f')
-    tune_cfg = load_config_by_name('tune')
+def run_ray_experiment(ray_cfg, project_path, cfg): 
+    # cfg = make_feature_extractor_train_cfg(project_path, use_command_line=False, preset='deg_f')
+    # tune_cfg = load_config_by_name('tune')
     
     ray_cfg = OmegaConf.from_dotlist(dict_to_dotlist(ray_cfg))
     
-    cfg = OmegaConf.merge(cfg, tune_cfg, ray_cfg)
+    cfg = OmegaConf.merge(cfg, ray_cfg)
     # cfg.tune.use = True
     
-    cfg.flow_generator.weights = 'latest'
-    cfg.feature_extractor.weights = '/media/jim/DATA_SSD/niv_revision_deepethogram/models/pretrained_models/200415_125824_hidden_two_stream_kinetics_degf/checkpoint.pt'
+    # cfg.flow_generator.weights = 'latest'
+    # cfg.feature_extractor.weights = '/media/jim/DATA_SSD/niv_revision_deepethogram/models/pretrained_models/200415_125824_hidden_two_stream_kinetics_degf/checkpoint.pt'
     # cfg.compute.batch_size = 64
     # cfg.train.steps_per_epoch.train = 20
     # cfg.train.steps_per_epoch.val = 20
-    cfg.notes = cfg.tune.name
+    cfg.notes = f'{cfg.tune.name}_{tune.get_trial_id()}'
     feature_extractor_train(cfg)
     
 if __name__ == '__main__':
@@ -111,10 +113,18 @@ if __name__ == '__main__':
     # for bugs like "could not terminate"
     # "/usr/bin/redis-server 127.0.0.1:6379" "" "" "" "" "" "" ""` due to psutil.AccessDenied (pid=56271, name='redis-server')
     # sudo /etc/init.d/redis-server stop
+    # if you have a GPU you can't use for training (e.g. I have a tiny, old GPU just for my monitors) exclude that
+    # using command line arguments. e.g. CUDA_VISIBLE_DEVICES=0,1 ray start --head
     ray.init(address='auto')  #num_gpus=1
     
-    project_path = projects.get_project_path_from_cl(sys.argv)
+    config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor', 'tune']
+    run_type = 'train'
+    model = 'feature_extractor'
     
-    tune_feature_extractor(project_path)
+    project_path = projects.get_project_path_from_cl(sys.argv)
+    cfg = make_config(project_path=project_path, config_list=config_list, run_type=run_type, model=model, 
+                      use_command_line=True)
+    
+    tune_feature_extractor(project_path, cfg)
     
     

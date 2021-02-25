@@ -1386,6 +1386,7 @@ def configure_run_directory(cfg: DictConfig) -> None:
     if not os.path.isdir(directory):
         os.makedirs(directory)
     os.chdir(directory)
+    return directory
     
 def configure_logging(cfg: DictConfig) -> None:
     # assume current directory is run directory
@@ -1409,7 +1410,8 @@ def configure_logging(cfg: DictConfig) -> None:
     
 def setup_run(cfg):
     cfg = deepethogram.projects.convert_config_paths_to_absolute(cfg)
-    configure_run_directory(cfg)
+    directory = configure_run_directory(cfg)
+    cfg.run.dir = directory
     configure_logging(cfg)
     
     utils.save_dict_to_yaml(OmegaConf.to_container(cfg), 'config.yaml')

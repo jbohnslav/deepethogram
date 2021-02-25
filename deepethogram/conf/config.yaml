@@ -19,6 +19,8 @@ compute:
   # reduce model complexity or buy a better GPU instead
   # "auto" will use Pytorch Lightning's automatic batch sizing feature
   batch_size: auto
+  min_batch_size: 8   # minimum batch size with auto
+  max_batch_size: 512 # maximum batch size with auto
   # not implemented: for distributed training
   distributed: false
   # which GPU to use on a multi-GPU computer. use nvidia-smi to see which numbers correspond to which GPUs

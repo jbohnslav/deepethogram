@@ -149,8 +149,7 @@ default_tune_dict = {
     'reg_loss': 'val_reg_loss'
 }
 
-def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: str = None,
-                         bs_start: int=2, bs_end: int=2048) -> pl.Trainer:
+def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: str = None) -> pl.Trainer:
     steps_per_epoch = cfg.train.steps_per_epoch
     for split in ['train', 'val', 'test']:
         steps_per_epoch[split] = steps_per_epoch[split] if steps_per_epoch[split] is not None else 1.0
@@ -204,10 +203,10 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         # dramatically reduces RAM usage by this process
         lightning_module.hparams.compute.num_workers = min(tmp_workers, 1)
         if cfg.compute.batch_size == 'auto':
-            max_trials = int(math.log2(bs_end)) - int(math.log2(bs_start))
+            max_trials = int(math.log2(cfg.compute.max_batch_size)) - int(math.log2(cfg.compute.min_batch_size))
             log.info('max trials: {}'.format(max_trials))
             new_batch_size = trainer.tuner.scale_batch_size(lightning_module, mode='power', steps_per_trial=30,
-                                                            init_val=bs_start, max_trials=max_trials)
+                                                            init_val=cfg.compute.min_batch_size, max_trials=max_trials)
             cfg.compute.batch_size = new_batch_size
             log.info('auto-tuned batch size: {}'.format(new_batch_size))
         if cfg.train.lr == 'auto':

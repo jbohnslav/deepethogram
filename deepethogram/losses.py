@@ -63,8 +63,8 @@ class L2_SP(nn.Module):
         
         self.pretrained_keys, self.new_keys = self.get_keys(model, pretrained_state)
         
-        log.info('pretrained keys for L2SP: {}'.format(self.pretrained_keys))
-        log.info('Novel keys for L2SP: {}'.format(self.new_keys))
+        log.debug('pretrained keys for L2SP: {}'.format(self.pretrained_keys))
+        log.debug('Novel keys for L2SP: {}'.format(self.new_keys))
         
         # self.pretrained_weights = nn.ModuleDict({key: pretrained_state[key] for key in self.pretrained_keys})
         for key in self.pretrained_keys:

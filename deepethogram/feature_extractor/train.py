@@ -44,7 +44,7 @@ log = logging.getLogger(__name__)
 
 # @profile
 def feature_extractor_train(cfg) -> nn.Module:
-    rundir = os.getcwd()  # done by hydra
+    # rundir = os.getcwd()  # done by hydra
     cfg = projects.setup_run(cfg)
     
     log.info('args: {}'.format(' '.join(sys.argv)))
@@ -79,10 +79,10 @@ def feature_extractor_train(cfg) -> nn.Module:
     num_classes = len(cfg.project.class_names)
 
     utils.save_dict_to_yaml(data_info['split'],
-                            os.path.join(rundir, 'split.yaml'))
+                            os.path.join(cfg.run.dir, 'split.yaml'))
 
     metrics = get_metrics(
-        rundir,
+        cfg.run.dir,
         num_classes=num_classes,
         num_parameters=utils.get_num_parameters(spatial_classifier), 
         key_metric='f1_class_mean', 
