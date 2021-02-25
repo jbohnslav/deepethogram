@@ -7,7 +7,7 @@ tune:
     - val_reg_loss
   num_trials: 100 # number of runs
   name: tune_feature_extractor
-  grace_period: 3 # number of epochs
+  grace_period: 2 # number of epochs
   hparams:
     feature_extractor.dropout_p: # each hparam key should be an attribute in a valid configuration
       min: 0.0 # min: minimum of range

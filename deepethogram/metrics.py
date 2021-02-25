@@ -453,6 +453,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
         'accuracy_by_class': metrics_by_class['accuracy'],
         'f1_overall': overall_metrics['f1'],
         'f1_class_mean': metrics_by_class['f1'].mean(),
+        'f1_class_mean_nobg': metrics_by_class['f1'][1:].mean(), 
         'f1_by_class': metrics_by_class['f1'],
         'binary_confusion': metrics_by_class['confusion'].transpose(2, 0, 1),
         'auroc_by_class': metrics_by_threshold['auroc'],
