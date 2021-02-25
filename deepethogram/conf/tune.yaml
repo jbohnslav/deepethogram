@@ -10,7 +10,7 @@ tune:
     cpu: 8
     gpu: 1
   name: tune_feature_extractor
-  grace_period: 5 # number of epochs
+  grace_period: 3 # number of epochs
   hparams:
     feature_extractor.dropout_p: # each hparam key should be an attribute in a valid configuration
       min: 0.0 # min: minimum of range
@@ -45,8 +45,8 @@ tune:
 train:
   viz_examples: False # don't spend time and space making example images 
   steps_per_epoch:
-    train: 500
-    val: 500
+    train: 1000
+    val: 1000
   num_epochs: 20
 compute:
   metrics_workers: 0 # sometimes has a bug in already multiprocessed jobs
