@@ -1194,10 +1194,25 @@ def convert_config_paths_to_absolute(project_cfg: DictConfig) -> DictConfig:
         assert os.path.isdir(cfg_path), 'config file does not exist! {}'.format(cfg_path)
         
     if not os.path.isdir(pretrained_path):
-        pretrained_path = os.path.join(model_path, pretrained_path)
-        error_string = 'pretrained directory does not exist! {}\nSee instructions '.format(pretrained_path) + \
+        
+        # pretrained_dir can be one of the following locations:
+        # my_model_dir/pretrained
+        # my_project/pretrained
+        # my_project/models/pretrained
+        pretrained_options = [os.path.join(i, pretrained_path) for i in 
+                              [model_path, root, os.path.join(root, 'models')]]
+        
+        exists = [os.path.isdir(i) for i in pretrained_options]
+        
+        try:
+            index = exists.index(True)
+            pretrained_path = pretrained_options[index]
+        except ValueError as e:
+            error_string = 'pretrained directory does not exist! {}\nSee instructions '.format(pretrained_path) + \
             'on the project GitHub for downloading weights: https://github.com/jbohnslav/deepethogram'
-        assert os.path.isdir(pretrained_path), error_string
+            print(error_string)
+            raise
+        
     
     project_cfg['project']['model_path'] = model_path
     project_cfg['project']['data_path'] = data_path
@@ -1315,8 +1330,7 @@ def get_project_path_from_cl(argv: list) -> str:
             key, path = arg.split('=')
             assert os.path.isdir(path)
             return path
-    warnings.warn('project path or file not in args: {}'.format(argv))
-    return None
+    raise ValueError('project path or file not in args: {}'.format(argv))
 
 def make_config(project_path: Union[str, os.PathLike], config_list: list, run_type: str, model: str) -> DictConfig:
     config_path = os.path.join(os.path.dirname(deepethogram.__file__), 'conf')
