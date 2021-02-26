@@ -1108,9 +1108,7 @@ def get_weightfile_from_cfg(cfg: DictConfig,
     #     assert os.path.isfile(cfg.reload.weights)
     #     return cfg.reload.weights
 
-    assert model_type in [
-        'flow_generator', 'feature_extractor', 'end_to_end', 'sequence'
-    ]
+    assert model_type in ['flow_generator', 'feature_extractor', 'end_to_end', 'sequence']
 
     if not os.path.isdir(cfg.project.model_path):
         cfg = convert_config_paths_to_absolute(cfg)
@@ -1119,25 +1117,29 @@ def get_weightfile_from_cfg(cfg: DictConfig,
 
     architecture = cfg[model_type].arch
 
+    if cfg[model_type].weights is not None and cfg[model_type].weights == 'pretrained':
+        assert model_type in ['flow_generator', 'feature_extractor']
+        pretrained_models = get_weights_from_model_path(cfg.project.pretrained_path)
+        assert len(pretrained_models[model_type][architecture]) > 0
+        weights = pretrained_models[model_type][architecture][-1]
+        log.info('loading pretrained weights: {}'.format(weights))
+        return weights
+    
     if model_type == 'end_to_end':
         if cfg.reload.latest:
             assert len(trained_models['feature_extractor'][architecture]) > 0
             return trained_models['feature_extractor'][architecture][-1]
     else:
-        if cfg[model_type].weights is not None and cfg[
-                model_type].weights != 'latest':
-            path_to_weights = get_weight_file_absolute_or_relative(
-                cfg, cfg[model_type].weights)
+        if cfg[model_type].weights is not None and cfg[model_type].weights != 'latest':
+            path_to_weights = get_weight_file_absolute_or_relative(cfg, cfg[model_type].weights)
             assert os.path.isfile(path_to_weights)
             log.info('loading specified weights')
             return path_to_weights
         elif cfg.reload.latest or cfg[model_type].weights == 'latest':
             # print(trained_models)
             assert len(trained_models[model_type][architecture]) > 0
-            log.debug('trained models found: {}'.format(
-                trained_models[model_type][architecture]))
-            log.info('loading LATEST weights: {}'.format(
-                trained_models[model_type][architecture][-1]))
+            log.debug('trained models found: {}'.format(trained_models[model_type][architecture]))
+            log.info('loading LATEST weights: {}'.format(trained_models[model_type][architecture][-1]))
             return trained_models[model_type][architecture][-1]
         else:
             log.warning('no {} weights found...'.format(model_type))
