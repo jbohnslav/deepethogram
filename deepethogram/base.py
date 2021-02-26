@@ -6,6 +6,7 @@ import os
 from typing import Tuple
 
 import matplotlib.pyplot as plt
+import numpy as np
 from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
 try: 
@@ -18,7 +19,7 @@ except ImportError:
     ray = False
 import torch
 from torch import nn, optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from deepethogram.data.augs import get_gpu_transforms, get_empty_gpu_transforms
 from deepethogram.callbacks import FPSCallback, DebugCallback, MetricsCallback, \
@@ -76,8 +77,10 @@ class BaseLightningModule(pl.LightningModule):
             self.tune_hparams = {}
             self.tune_metrics = []
             
-
-    def on_train_epoch_start(self) -> None:
+        self.val_sampler = self.get_val_sampler()
+        # self.val_sampler = None
+            
+    def on_train_epoch_start(self, *args, **kwargs):
         # self.viz_cnt['train'] = 0
         # I couldn't figure out how to make sure that this is called after BOTH train and validation ends
         if self.current_epoch > 0 and self.hparams.train.viz_metrics:
@@ -92,10 +95,15 @@ class BaseLightningModule(pl.LightningModule):
         # top-level in self.hparams
         batch_size = self.hparams.compute.batch_size if self.hparams.compute.batch_size != 'auto' else \
             self.hparams.batch_size
-        shuffles = {'train': True, 'val': True, 'test': False}
+        val_shuffle = True if self.val_sampler is None else None
+        shuffles = {'train': True, 'val': val_shuffle, 'test': False}
+        
+        sampler = self.val_sampler if split == 'val' else None
+            
         dataloader = DataLoader(self.datasets[split], batch_size=batch_size,
                                 shuffle=shuffles[split], num_workers=self.hparams.compute.num_workers,
-                                pin_memory=torch.cuda.is_available(), drop_last=False)
+                                pin_memory=torch.cuda.is_available(), drop_last=False, 
+                                sampler=sampler)
         return dataloader
 
     def train_dataloader(self):
@@ -121,7 +129,26 @@ class BaseLightningModule(pl.LightningModule):
 
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
+    
+    def get_val_sampler(self):
+        # get sample weights for validation dataset to up-sample rare classes
+        dataset = self.datasets['val']
+        if dataset.labels is None:
+            # self-supervised, e.g. flow generators
+            return
 
+        # weights are inversely proportional to fraction of positive examples
+        pos_fraction = np.mean(dataset.labels, axis=0)
+        weights = 1/pos_fraction
+        # mat-mult by labels to get sampling weights per datapoint
+        # highest probability: multiple rare classes
+        # lowest probability: one common class
+        weights_per_sample = dataset.labels @ weights
+        sampler = WeightedRandomSampler(weights = weights_per_sample, 
+                                        num_samples=len(dataset), replacement=False)
+        return sampler
+        
+        
     def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
         with torch.no_grad():
             images = self.gpu_transforms[mode](images).detach()

@@ -406,7 +406,7 @@ class VideoDataset(data.Dataset):
     """ Simple wrapper around SingleVideoDataset for smoothly loading multiple videos """
 
     def __init__(self, videofiles: list, labelfiles: list, *args, **kwargs):
-        datasets = []
+        datasets, labels = [], []
         for i in range(len(videofiles)):
             labelfile = None if labelfiles is None else labelfiles[i]
             # for i, (videofile, labelfile) in enumerate(zip(videofiles, labelfiles)):
@@ -424,6 +424,7 @@ class VideoDataset(data.Dataset):
                     num_pos += dataset.num_pos
                     num_neg += dataset.num_neg
                     num_labels += dataset.num_labels
+                labels.append(dataset.labels)
 
         self.dataset = data.ConcatDataset(datasets)
         if labelfiles is not None:
@@ -431,6 +432,7 @@ class VideoDataset(data.Dataset):
             self.num_pos = num_pos
             self.num_neg = num_neg
             self.num_labels = num_labels
+            self.labels = np.concatenate(labels)
 
     def __len__(self):
         return len(self.dataset)
