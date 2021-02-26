@@ -281,12 +281,12 @@ def load_state(model, weights_file: Union[str, os.PathLike], device: torch.devic
     if device is not None:
         state = torch.load(weights_file, map_location=device)
     else:
-        try:
-            state = torch.load(weights_file)
-        except RuntimeError as e:
-            log.exception(e)
-            log.info('loading onto cpu...')
-            state = torch.load(weights_file, map_location='cpu')
+        # try:
+        state = torch.load(weights_file, map_location='cpu')
+        # except RuntimeError as e:
+        #     log.exception(e)
+        #     log.info('loading onto cpu...')
+        #     state = torch.load(weights_file, map_location='cpu')
 
     is_pure_weights = not 'epoch' in list(state.keys())
     # load params
