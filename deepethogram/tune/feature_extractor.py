@@ -7,6 +7,7 @@ try:
     from ray import tune
     from ray.tune import CLIReporter
     from ray.tune.schedulers import ASHAScheduler
+    from ray.tune.suggest.hyperopt import HyperOptSearch
 except ImportError:
     print('To use the deepethogram.tune module, you must `pip install \'ray[tune]`')
     raise
@@ -66,14 +67,29 @@ def tune_feature_extractor(project_path, cfg: DictConfig=None):
     # this converts what's in our cfg to a dictionary containing the search space of our hyperparameters
     tune_experiment_cfg = generate_tune_cfg(cfg)
     
+    if cfg.tune.search == 'hyperopt':
+        # https://docs.ray.io/en/master/tune/api_docs/suggestion.html#tune-hyperopt
+        current_best = {}
+        for key, value in cfg.tune.hparams.items():
+            current_best[key] = value.current_best
+        # hyperopt wants this to be a list of dicts
+        current_best = [current_best]
+        search = HyperOptSearch(metric=cfg.tune.key_metric, 
+                                mode='max', 
+                                points_to_evaluate=current_best)
+    elif cfg.tune.search == 'random':
+        search = None
+    else: 
+        raise NotImplementedError
+    
+    
     analysis = tune.run(
         tune.with_parameters(
             run_ray_experiment, 
             project_path=project_path, 
             cfg=cfg,
         ), 
-        resources_per_trial={'cpu': 8, 
-                             'gpu': 1}, 
+        resources_per_trial=OmegaConf.to_container(cfg.tune.resources_per_trial), 
         metric='val_f1_class_mean', 
         mode='max', 
         config=tune_experiment_cfg,
@@ -81,7 +97,8 @@ def tune_feature_extractor(project_path, cfg: DictConfig=None):
         scheduler=scheduler, 
         progress_reporter=reporter, 
         name=cfg.tune.name, 
-        local_dir=os.path.join(project_path, 'models')
+        local_dir=os.path.join(project_path, 'models'), 
+        search_alg=search
     )
     print("Best hyperparameters found were: ", analysis.best_config)
     analysis.results_df.to_csv(os.path.join(project_path, 'models', 'ray_results.csv'))

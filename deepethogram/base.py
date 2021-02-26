@@ -138,14 +138,18 @@ class BaseLightningModule(pl.LightningModule):
             return
 
         # weights are inversely proportional to fraction of positive examples
-        pos_fraction = np.mean(dataset.labels, axis=0)
-        weights = 1/pos_fraction
-        # mat-mult by labels to get sampling weights per datapoint
-        # highest probability: multiple rare classes
-        # lowest probability: one common class
-        weights_per_sample = dataset.labels @ weights
-        sampler = WeightedRandomSampler(weights = weights_per_sample, 
-                                        num_samples=len(dataset), replacement=False)
+        # pos_fraction = np.mean(dataset.labels, axis=0)
+        # weights = 1/pos_fraction
+        # # mat-mult by labels to get sampling weights per datapoint
+        # # highest probability: multiple rare classes
+        # # lowest probability: one common class
+        # weights_per_sample = dataset.labels @ weights
+        # sampler = WeightedRandomSampler(weights = weights_per_sample, 
+        #                                 num_samples=len(dataset), replacement=False)
+        
+        # above is experimental! for now, ignore 
+        sampler = None
+        
         return sampler
         
         
