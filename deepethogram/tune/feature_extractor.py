@@ -41,7 +41,7 @@ def generate_tune_cfg(cfg):
     return tune_cfg
 
 
-def tune_feature_extractor(project_path, cfg: DictConfig=None):    
+def tune_feature_extractor(cfg: DictConfig):    
     # tune_cfg = {
     #     'feature_extractor.dropout_p': tune.uniform(0.0, 0.9), 
     #     'train.regularization.alpha': tune.uniform(1e-5, 0.01), 
@@ -50,8 +50,8 @@ def tune_feature_extractor(project_path, cfg: DictConfig=None):
     #     'train.loss_weight_exp': tune.uniform(0.0, 1.0)
     # }
     
-    if cfg is None:
-        cfg = load_config_by_name('tune')
+    # if cfg is None:
+    #     cfg = load_config_by_name('tune')
     
     scheduler = ASHAScheduler(
         max_t=cfg.train.num_epochs, # epochs
@@ -86,7 +86,6 @@ def tune_feature_extractor(project_path, cfg: DictConfig=None):
     analysis = tune.run(
         tune.with_parameters(
             run_ray_experiment, 
-            project_path=project_path, 
             cfg=cfg,
         ), 
         resources_per_trial=OmegaConf.to_container(cfg.tune.resources_per_trial), 
@@ -97,14 +96,14 @@ def tune_feature_extractor(project_path, cfg: DictConfig=None):
         scheduler=scheduler, 
         progress_reporter=reporter, 
         name=cfg.tune.name, 
-        local_dir=os.path.join(project_path, 'models'), 
+        local_dir=cfg.project.model_path, 
         search_alg=search
     )
     print("Best hyperparameters found were: ", analysis.best_config)
-    analysis.results_df.to_csv(os.path.join(project_path, 'models', 'ray_results.csv'))
+    analysis.results_df.to_csv(os.path.join(cfg.project.model_path, 'ray_results.csv'))
 
 
-def run_ray_experiment(ray_cfg, project_path, cfg): 
+def run_ray_experiment(ray_cfg, cfg): 
     # cfg = make_feature_extractor_train_cfg(project_path, use_command_line=False, preset='deg_f')
     # tune_cfg = load_config_by_name('tune')
     
@@ -118,20 +117,16 @@ def run_ray_experiment(ray_cfg, project_path, cfg):
     # cfg.compute.batch_size = 64
     # cfg.train.steps_per_epoch.train = 20
     # cfg.train.steps_per_epoch.val = 20
-    cfg.notes = f'{cfg.tune.name}_{tune.get_trial_id()}'
+    if cfg.notes is None:
+        cfg.notes = f'{cfg.tune.name}_{tune.get_trial_id()}'
+    else:
+        cfg.notes += f'{cfg.tune.name}_{tune.get_trial_id()}'
     feature_extractor_train(cfg)
     
 if __name__ == '__main__':
     # USAGE
     # to run locally, type `ray start --head --port 6385`, then run this script
-    # asyncio error message: TypeError: __init__() got an unexpected keyword argument 'loop'
-    # install aiohttp 3.6.0
-    # https://github.com/ray-project/ray/issues/8749
-    # for bugs like "could not terminate"
-    # "/usr/bin/redis-server 127.0.0.1:6379" "" "" "" "" "" "" ""` due to psutil.AccessDenied (pid=56271, name='redis-server')
-    # sudo /etc/init.d/redis-server stop
-    # if you have a GPU you can't use for training (e.g. I have a tiny, old GPU just for my monitors) exclude that
-    # using command line arguments. e.g. CUDA_VISIBLE_DEVICES=0,1 ray start --head
+    
     ray.init(address='auto')  #num_gpus=1
     
     config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor', 'tune']
@@ -142,6 +137,6 @@ if __name__ == '__main__':
     cfg = make_config(project_path=project_path, config_list=config_list, run_type=run_type, model=model, 
                       use_command_line=True)
     
-    tune_feature_extractor(project_path, cfg)
+    tune_feature_extractor(cfg)
     
     

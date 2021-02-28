@@ -7,37 +7,39 @@ tune:
     - val_reg_loss
     - val_f1_class_mean_nobg
   key_metric: val_f1_class_mean_nobg
-  num_trials: 3 # number of runs
+  num_trials: 256 # number of runs
   name: tune_feature_extractor
   grace_period: 2 # number of epochs
-  search: random # either random or hyperopt
+  search: hyperopt # either random or hyperopt
   resources_per_trial:
-    gpu: 1
-    cpu: 8
+    gpu: 0.5
+    cpu: 3
   hparams:
     feature_extractor.dropout_p: # each hparam key should be an attribute in a valid configuration
       min: 0.0 # min: minimum of range
       max: 0.9 # max: maximum of range
       space: uniform # space: how to sample
       short: dropout # a shortened version to view in Ray's command line interface
-      current_best: 0.3 # current best estimate. a moving target. used for initializing search space with hyperopt
+      current_best: 0.25 # current best estimate. a moving target. used for initializing search space with hyperopt
     train.regularization.alpha: 
       min: 1e-5
       max: 0.01
       space: uniform
       short: reg_alpha
-      current_best: 5e-3
+      current_best: 0.00045170
     train.regularization.beta: 
       min: 1e-6
       max: 1e-3
       space: uniform
       short: reg_beta
-      current_best: 5e-4
+      current_best: 0.00074703
     train.loss_gamma:
-      choices: [0, 0.5, 1, 2]
-      space: choice
+      # choices: [0, 0.5, 1, 2]
+      min: 0
+      max: 1
+      space: uniform
       short: gamma
-      current_best: 2
+      current_best: 0.5
     train.loss_weight_exp:
       min: 0.0
       max: 1.0
@@ -61,7 +63,7 @@ train:
   steps_per_epoch:
     train: 1000
     val: 1000
-  num_epochs: 3
+  num_epochs: 20
 compute:
   metrics_workers: 0 # sometimes has a bug in already multiprocessed jobs
   # batch_size: 64 # auto batch sizing takes a long time
