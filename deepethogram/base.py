@@ -272,7 +272,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(
             save_dir=get_trial_dir(), name="", version=".", 
             default_hp_metric=False)
-        refresh_rate = 100
+        refresh_rate = 0
     else:
         tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(os.getcwd())
         refresh_rate = 1
