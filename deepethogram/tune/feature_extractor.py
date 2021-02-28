@@ -136,6 +136,10 @@ if __name__ == '__main__':
     project_path = projects.get_project_path_from_cl(sys.argv)
     cfg = make_config(project_path=project_path, config_list=config_list, run_type=run_type, model=model, 
                       use_command_line=True)
+    cfg = projects.convert_config_paths_to_absolute(cfg)
+    
+    if 'preset' in cfg.keys():
+        cfg.tune.name += '_{}'.format(cfg.preset)
     
     tune_feature_extractor(cfg)
     
