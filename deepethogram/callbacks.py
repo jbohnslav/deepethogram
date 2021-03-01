@@ -198,7 +198,7 @@ class MetricsCallback(Callback):
         for key in pl_module.tune_metrics:
             # have to have a different key, otherwise pytorch lightning will log it twice
             if key in scalar_metrics.keys():
-                hparam_metrics[key + '_hp'] = scalar_metrics[key]
+                hparam_metrics['hp/' + key] = scalar_metrics[key]
             else:
                 log.warning('requested hparam metric {} not found in metrics: {}'.format(
                     key, list(scalar_metrics.keys())
