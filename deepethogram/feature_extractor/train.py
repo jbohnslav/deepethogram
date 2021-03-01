@@ -326,7 +326,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         # add the individual components of the loss to the metrics buffer
         self.metrics.buffer.append('train', loss_dict)
         # need to use the native logger for lr scheduling, etc.
-        self.log('train_loss', loss.detach().cpu())
+        self.log('train/loss', loss.detach().cpu())
         return loss
 
     def validation_step(self, batch: dict, batch_idx: int):
@@ -344,7 +344,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         self.metrics.buffer.append('val', loss_dict)
         # need to use the native logger for lr scheduling, etc.
         # TESTING
-        self.log('val_loss', loss.detach().cpu())
+        self.log('val/loss', loss.detach().cpu())
 
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
