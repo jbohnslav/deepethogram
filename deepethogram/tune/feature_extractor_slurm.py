@@ -174,7 +174,7 @@ if __name__ == '__main__':
         cfg.train.num_epochs = 3
         cfg.tune.name = 'tune_feature_extractor_debug'
     else:
-        cfg.tune.name = 'tune_feature_extractor_deg_m_random'
+        cfg.tune.name = 'tune_feature_extractor_{}_random_l2spfix'.format(args.preset)
         cfg.tune.num_trials = 100
     # CUSTOM EDITS HERE
     cfg.compute.batch_size=32

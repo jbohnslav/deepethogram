@@ -1,11 +1,11 @@
 tune:
   use: True
   metrics:
-    - val_loss
-    - val_f1_class_mean
-    - val_data_loss
-    - val_reg_loss
-    - val_f1_class_mean_nobg
+    - val/loss
+    - val/f1_class_mean
+    - val/data_loss
+    - val/reg_loss
+    - val/f1_class_mean_nobg
   key_metric: val_f1_class_mean_nobg
   num_trials: 256 # number of runs
   name: tune_feature_extractor
