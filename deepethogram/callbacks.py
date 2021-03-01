@@ -168,8 +168,8 @@ def log_metrics(pl_module, split):
             if value.size == 1:
                 value = value.squeeze()[0]
         if np.isscalar(value):
-            pl_module.log(split + '_' + key, value, on_epoch=True)
-            scalar_metrics[split + '_' + key] = value
+            pl_module.log(split + '/' + key, value, on_epoch=True)
+            scalar_metrics[split + '/' + key] = value
             
     return scalar_metrics
 
