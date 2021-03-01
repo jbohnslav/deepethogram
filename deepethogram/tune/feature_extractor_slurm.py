@@ -13,6 +13,9 @@ log = logging.getLogger(__name__)
 try:
     slurm_job_id = os.environ['SLURM_JOB_ID']
     slurm = True
+    # hack
+    # https://github.com/ray-project/ray/issues/10995
+    # os.environ["SLURM_JOB_NAME"] = "bash"
 except:
     slurm = False
 
@@ -165,17 +168,24 @@ if __name__ == '__main__':
     cfg.feature_extractor.weights = 'pretrained'
     
     if debug:
-        # cfg.tune.num_trials=3
+        cfg.tune.num_trials=3
         cfg.train.steps_per_epoch.train = 100
         cfg.train.steps_per_epoch.val = 100
+        cfg.train.num_epochs = 3
+        cfg.tune.name = 'tune_feature_extractor_debug'
+    else:
+        cfg.tune.name = 'tune_feature_extractor_deg_m_random'
+        cfg.tune.num_trials = 100
     # CUSTOM EDITS HERE
     cfg.compute.batch_size=32
+    cfg.tune.search = 'random'
+    
     # cfg.tune.grace_period = 5
     # cfg.train.num_epochs = 40
     # cfg.tune.search = 'hyperopt'
     # cfg.tune.name = 'tune_feature_extractor_longhyperopt'
     
-    cfg.tune.name = 'tune_feature_extractor_{}'.format(args.preset)
+    # cfg.tune.name = 'tune_feature_extractor_{}'.format(args.preset)
     
     tune_feature_extractor(cfg) 
 
