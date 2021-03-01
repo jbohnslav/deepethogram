@@ -1,0 +1,9 @@
+train:
+  steps_per_epoch:
+    train: 50
+    val: 50
+    test: 50
+  num_epochs: 3
+tune:
+  num_trials: 3
+debug: True
