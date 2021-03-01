@@ -157,7 +157,7 @@ if __name__ == '__main__':
     # project_path = projects.get_project_path_from_cl(sys.argv)
     
     cfg = make_config(project_path=project_dir, config_list=config_list, run_type=run_type, model=model, 
-                      use_command_line=False, preset=args.preset)
+                      use_command_line=False, preset=args.preset, debug=args.debug)
     # make the pretrained path on our persistent location
     cfg.project.pretrained_path = pretrained_dir_remote
     # save our models to persistent location so jobs can be killed without rsyncing
@@ -167,15 +167,15 @@ if __name__ == '__main__':
     cfg.flow_generator.weights = 'latest'
     cfg.feature_extractor.weights = 'pretrained'
     
-    if debug:
-        cfg.tune.num_trials=3
-        cfg.train.steps_per_epoch.train = 100
-        cfg.train.steps_per_epoch.val = 100
-        cfg.train.num_epochs = 3
-        cfg.tune.name = 'tune_feature_extractor_debug'
-    else:
-        cfg.tune.name = 'tune_feature_extractor_{}_random_l2spfix'.format(args.preset)
-        cfg.tune.num_trials = 100
+    # if debug:
+    #     cfg.tune.num_trials=3
+    #     cfg.train.steps_per_epoch.train = 100
+    #     cfg.train.steps_per_epoch.val = 100
+    #     cfg.train.num_epochs = 3
+    #     cfg.tune.name = 'tune_feature_extractor_debug'
+    # # else:
+    cfg.tune.name = 'tune_feature_extractor_{}_random_l2spfix'.format(args.preset)
+    # cfg.tune.num_trials = 100
     # CUSTOM EDITS HERE
     cfg.compute.batch_size=32
     cfg.tune.search = 'random'
