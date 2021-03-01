@@ -94,8 +94,8 @@ class L2_SP(nn.Module):
     def forward(self, model):
         towards_pretrained, towards_0 = 0, 0
         
-        model_state = model.state_dict()
-        pretrained_state = self.state_dict()
+        model_state = model.state_dict(keep_vars=True)
+        pretrained_state = self.state_dict(keep_vars=True)
 
         for key in self.pretrained_keys:
             model_param = model_state[key]
