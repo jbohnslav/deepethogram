@@ -6,11 +6,11 @@ tune:
     - val/data_loss
     - val/reg_loss
     - val/f1_class_mean_nobg
-  key_metric: val_f1_class_mean_nobg
+  key_metric: val/f1_class_mean_nobg
   num_trials: 256 # number of runs
   name: tune_feature_extractor
   grace_period: 2 # number of epochs
-  search: hyperopt # either random or hyperopt
+  search: random # either random or hyperopt
   resources_per_trial:
     gpu: 0.5
     cpu: 3

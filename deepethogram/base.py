@@ -168,7 +168,7 @@ class BaseLightningModule(pl.LightningModule):
         log.info('learning rate: {}'.format(self.lr))
         scheduler = initialize_scheduler(optimizer, self.hparams, mode=self.scheduler_mode,
                                          reduction_factor=self.hparams.train.reduction_factor)
-        monitor_key = 'val_' + self.metrics.key_metric
+        monitor_key = 'val/' + self.metrics.key_metric
         return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': monitor_key}
 
 

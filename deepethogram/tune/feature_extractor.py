@@ -89,7 +89,7 @@ def tune_feature_extractor(cfg: DictConfig):
             cfg=cfg,
         ), 
         resources_per_trial=OmegaConf.to_container(cfg.tune.resources_per_trial), 
-        metric='val_f1_class_mean', 
+        metric=cfg.tune.key_metric, 
         mode='max', 
         config=tune_experiment_cfg,
         num_samples=cfg.tune.num_trials, # how many experiments to run
@@ -135,11 +135,13 @@ if __name__ == '__main__':
     
     project_path = projects.get_project_path_from_cl(sys.argv)
     cfg = make_config(project_path=project_path, config_list=config_list, run_type=run_type, model=model, 
-                      use_command_line=True)
+                      use_command_line=True, debug=True)
     cfg = projects.convert_config_paths_to_absolute(cfg)
     
     if 'preset' in cfg.keys():
         cfg.tune.name += '_{}'.format(cfg.preset)
+    if 'debug' in cfg.keys():
+        cfg.tune.name += '_debug'
     
     tune_feature_extractor(cfg)
     

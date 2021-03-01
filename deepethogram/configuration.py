@@ -21,7 +21,7 @@ def load_config_by_name(string, config_path=None):
 
 
 def make_config(project_path: Union[str, os.PathLike], config_list: list, run_type: str, model: str, 
-               use_command_line: bool=False, preset: str=None) -> DictConfig:
+               use_command_line: bool=False, preset: str=None, debug: bool=False) -> DictConfig:
     
     # config_path = os.path.join(os.path.dirname(deepethogram.__file__), 'conf')
     
@@ -44,6 +44,9 @@ def make_config(project_path: Union[str, os.PathLike], config_list: list, run_ty
     if preset is not None:
         assert preset in ['deg_f', 'deg_m', 'deg_s']
         config_list.append('preset/' + preset)
+        
+    if debug:
+        config_list.append('debug')
     # config_files = [config_string_to_path(config_path, i) for i in config_list]
     
     cfgs = [load_config_by_name(i) for i in config_list]
