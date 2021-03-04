@@ -82,6 +82,8 @@ def tune_feature_extractor(cfg: DictConfig):
     else: 
         raise NotImplementedError
     
+    print('Running hyperparamter tuning with configuration: ')
+    print(OmegaConf.to_yaml(cfg))
     
     analysis = tune.run(
         tune.with_parameters(

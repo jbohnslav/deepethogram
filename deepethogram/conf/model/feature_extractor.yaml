@@ -17,7 +17,7 @@ feature_extractor:
   final_activation: sigmoid
   # the amount of dropout on the 512-d feature vector before the last fully connected layer. 0.9 is already very high.
   # if your model is under-fitting (highly unlikely), reduce this value.
-  dropout_p: 0.9
+  dropout_p: 0.25
   # how many optic flow frames to use as inputs to the flow CNN
   n_flows: 10
   # how many RGB frames to use as inputs to the spatial CNN

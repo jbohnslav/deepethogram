@@ -15,38 +15,34 @@ try:
     slurm = True
     # hack
     # https://github.com/ray-project/ray/issues/10995
-    # os.environ["SLURM_JOB_NAME"] = "bash"
+    os.environ["SLURM_JOB_NAME"] = "bash"
 except:
     slurm = False
 
-tmp_dir = '/tmp/jpb35'
+
 pretrained_dir_remote = '/n/data2/hms/neurobio/harvey/jim/pretrained_models'
 
-project_dirs = {
-    'woolf': os.path.join(tmp_dir, 'woolf_revision_deepethogram'),
-    'niv': os.path.join(tmp_dir, 'niv_revision_deepethogram'),
-    'flies': os.path.join(tmp_dir, 'flies_revision_deepethogram'),
-    'open_field': os.path.join(tmp_dir, 'open_field_revision_deepethogram'),
-    'bohacek_epm': os.path.join(tmp_dir, 'bohacek_EPM_deepethogram'),
-    'bohacek_fst': os.path.join(tmp_dir, 'bohacek_FST_deepethogram'),
-    'bohacek_oft': os.path.join(tmp_dir, 'bohacek_OFT_deepethogram'), 
-    'kc_yd_homecage': os.path.join(tmp_dir, 'kc_yd_homecage_deepethogram'), 
-    'kc_yd_social': os.path.join(tmp_dir, 'kc_yd_social_deepethogram')
+project_keys = {
+    'woolf': 'woolf_revision_deepethogram',
+    'niv':'niv_revision_deepethogram',
+    'flies': 'flies_revision_deepethogram',
+    'open_field': 'open_field_revision_deepethogram',
+    'bohacek_epm': 'bohacek_EPM_deepethogram',
+    'bohacek_fst': 'bohacek_FST_deepethogram',
+    'bohacek_oft': 'bohacek_OFT_deepethogram', 
+    'kc_yd_homecage': 'kc_yd_homecage_deepethogram', 
+    'kc_yd_social': 'kc_yd_social_deepethogram'
 }
 
-remote_dir_base = '/n/data2/hms/neurobio/harvey/jim/deepethogram_revisions'
-remote_dirs = {
-    'woolf': os.path.join(remote_dir_base, 'woolf_revision_deepethogram'),
-    'niv': os.path.join(remote_dir_base, 'niv_revision_deepethogram'),
-    'flies': os.path.join(remote_dir_base, 'flies_revision_deepethogram'),
-    'open_field': os.path.join(remote_dir_base,
-                               'open_field_revision_deepethogram'),
-    'bohacek_epm': os.path.join(remote_dir_base, 'bohacek_EPM_deepethogram'),
-    'bohacek_fst': os.path.join(remote_dir_base, 'bohacek_FST_deepethogram'),
-    'bohacek_oft': os.path.join(remote_dir_base, 'bohacek_OFT_deepethogram'),
-    'kc_yd_homecage': os.path.join(remote_dir_base, 'kc_yd_homecage_deepethogram'), 
-    'kc_yd_social': os.path.join(remote_dir_base, 'kc_yd_social_deepethogram')
-}
+tmp_dir = '/tmp/jpb35'
+project_dirs = {key: os.path.join(tmp_dir, project_keys[key]) for key in project_keys.keys()}
+
+# sync FROM the data only directory, only models are flow
+remote_dirs_src_base = '/n/data2/hms/neurobio/harvey/jim/deepethogram_revisions_dataonly'
+remote_dirs_src = {key: os.path.join(remote_dirs_src_base, project_keys[key]) for key in project_keys.keys()}
+
+remote_dirs_dst_base = '/n/data2/hms/neurobio/harvey/jim/deepethogram_revisions'
+remote_dirs_dst = {key: os.path.join(remote_dirs_dst_base, project_keys[key]) for key in project_keys.keys()}
 
 def rsync(src, dst, exclude=None):
     assert os.path.isdir(src)
@@ -100,7 +96,7 @@ if __name__ == '__main__':
     assert split_num <= 10
     
     project_dir = project_dirs[args.project]
-    remote_dir = remote_dirs[args.project]
+    # remote_dir = remote_dirs[args.project]
     
     # handle debug
     if args.debug == 'True':
@@ -111,7 +107,10 @@ if __name__ == '__main__':
 
     # set up local and remote dir
     project_dir = project_dirs[args.project]
-    remote_dir = remote_dirs[args.project]
+    remote_dir_src = remote_dirs_src[args.project]
+    assert os.path.isdir(remote_dir_src)
+    remote_dir_dst = remote_dirs_dst[args.project]
+    assert os.path.isdir(remote_dir_dst)
 
     # handle split names, strings, and files
     split_string = 'split{:02d}'.format(split_num)
@@ -129,9 +128,9 @@ if __name__ == '__main__':
     if not os.path.isdir(tmp_dir):
         os.makedirs(tmp_dir)
     
-    rsync(remote_dir, tmp_dir, exclude=('*.png', '*.ckpt'))
+    rsync(remote_dir_src, tmp_dir, exclude=('*.png', '*.ckpt'))
     
-    model_path = os.path.join(remote_dir, 'models', split_string)
+    model_path = os.path.join(remote_dir_dst, 'models', split_string)
     assert os.path.isdir(model_path)
     print('model path: {}'.format(model_path))
     assert os.path.isdir(pretrained_dir_remote)
@@ -157,7 +156,7 @@ if __name__ == '__main__':
     # project_path = projects.get_project_path_from_cl(sys.argv)
     
     cfg = make_config(project_path=project_dir, config_list=config_list, run_type=run_type, model=model, 
-                      use_command_line=False, preset=args.preset, debug=args.debug)
+                      use_command_line=False, preset=args.preset, debug=debug)
     # make the pretrained path on our persistent location
     cfg.project.pretrained_path = pretrained_dir_remote
     # save our models to persistent location so jobs can be killed without rsyncing
@@ -174,11 +173,14 @@ if __name__ == '__main__':
     #     cfg.train.num_epochs = 3
     #     cfg.tune.name = 'tune_feature_extractor_debug'
     # # else:
-    cfg.tune.name = 'tune_feature_extractor_{}_random_l2spfix'.format(args.preset)
+    cfg.tune.name = 'tune_feature_extractor_{}_narrow'.format(args.preset)
     # cfg.tune.num_trials = 100
     # CUSTOM EDITS HERE
     cfg.compute.batch_size=32
     cfg.tune.search = 'random'
+    cfg.split.reload = True
+    cfg.split.file = os.path.join(model_path, split_string + '.yaml')
+    assert os.path.isfile(cfg.split.file)
     
     # cfg.tune.grace_period = 5
     # cfg.train.num_epochs = 40

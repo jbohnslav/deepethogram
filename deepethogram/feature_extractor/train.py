@@ -29,6 +29,10 @@ from deepethogram.metrics import Classification
 from deepethogram import projects
 from deepethogram.stoppers import get_stopper
 
+# hack
+# https://github.com/ray-project/ray/issues/10995
+os.environ["SLURM_JOB_NAME"] = "bash"
+
 warnings.filterwarnings(
     'ignore',
     category=UserWarning,
