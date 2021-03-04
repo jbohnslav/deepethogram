@@ -133,9 +133,9 @@ class BaseLightningModule(pl.LightningModule):
     def get_val_sampler(self):
         # get sample weights for validation dataset to up-sample rare classes
         dataset = self.datasets['val']
-        if dataset.labels is None:
-            # self-supervised, e.g. flow generators
-            return
+        # if dataset.labels is None:
+        #     # self-supervised, e.g. flow generators
+        #     return
 
         # weights are inversely proportional to fraction of positive examples
         # pos_fraction = np.mean(dataset.labels, axis=0)
@@ -265,7 +265,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
     callback_list = [FPSCallback(),  # DebugCallback(),# SpeedtestCallback(),
                                     MetricsCallback(), ExampleImagesCallback(), CheckpointCallback(),
                                     StopperCallback(stopper)]
-    if cfg.tune.use and ray: 
+    if 'tune' in cfg and cfg.tune.use and ray: 
         callback_list.append(TuneReportCallback(OmegaConf.to_container(cfg.tune.metrics), 
                                                 on='validation_end'))
         # https://docs.ray.io/en/master/tune/tutorials/tune-pytorch-lightning.html
