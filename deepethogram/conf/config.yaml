@@ -28,7 +28,7 @@ compute:
   # not implemented: for nvidia dali dataloading
   dali: false
   # whether or not to use multiprocessing to run metrics computation
-  metrics_workers: 4
+  metrics_workers: 0
 # for reloading model weights
 reload:
   # not used: overwrite specified config with the loaded one
