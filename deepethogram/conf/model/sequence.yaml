@@ -25,7 +25,7 @@ sequence:
   # Length (in time) per TGM filter
   filter_length: 15
   # dropout the input features before concatentating again to the smoothed features. paper: 0.5
-  input_dropout: 0.4
+  input_dropout: 0.5
    # Number of filters to use per TGM layer
   n_filters: 8
   # How to reduce tgm stack N x C_out x D x T -> N x D x T. choices=['max', 'mean', 'conv1x1']  Paper: max
@@ -35,9 +35,9 @@ sequence:
   # How many representations of DxT per TGM layer. Paper: 8
   c_out: 8
   # whether to use soft attention or 1d conv to reduce C_in x D x T -> 1 x D x T
-  soft_attn: false
+  soft_attn: true
   # how many features in final layer before logits. paper: 512 (too many parameters for our case)
-  num_features: 64
+  num_features: 128
   # rnn parameters
   # should RNNs run bidirectionally, adds a lot of time
   bidirectional: false
@@ -52,7 +52,7 @@ sequence:
   # if False, go straight from N x D x T to N x num_classes x T
   nonlinear_classification: False
   # use a batch normalization layer on the outputs
-  final_bn: true
+  final_bn: False
   # what kinds of inputs to use for the sequence model. choices: ['features', 'keypoints']
   input_type: features
 train:
