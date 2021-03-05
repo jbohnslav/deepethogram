@@ -290,7 +290,11 @@ def main(cfg: DictConfig):
     metrics_file = os.path.join(os.path.dirname(feature_extractor_weights), 'classification_metrics.h5')
     assert os.path.isfile(metrics_file)
     with h5py.File(metrics_file, 'r') as f:
-        thresholds = f['threshold_curves']['val']['optimum'][:]
+        try: 
+            thresholds = f['val']['metrics_by_threshold']['optimum'][-1, :]
+        except KeyError:
+            # backwards compatibility
+            thresholds = f['threshold_curves']['val']['optimum'][-1, :]
         log.info('thresholds: {}'.format(thresholds))
     class_names = list(cfg.project.class_names)
     # class_names = projects.get_classes_from_project(cfg)
