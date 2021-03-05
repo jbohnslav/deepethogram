@@ -1170,6 +1170,7 @@ def visualize_logger_multilabel_classification(logger_file):
         # no test set yet
         log.debug('error in test set viz: {}'.format(e))
         # pass
+    plt.close('all')
 
 
 def make_learning_curves_figure_opticalflow(logger_file, fig=None):
