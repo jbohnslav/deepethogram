@@ -61,6 +61,8 @@ train:
     style: l2
   # overwrite patience: because of Nonoverlapping, train epochs can be very low
   patience: 5
+  # overwrite num epochs. due to nonoverlapping, one epoch takes only a minute or two
+  num_epochs: 50 
 compute:
   min_batch_size: 2
   max_batch_size: 64 # sequence can get weird when batch sizes are too high

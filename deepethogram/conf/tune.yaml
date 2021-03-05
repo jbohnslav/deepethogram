@@ -7,13 +7,13 @@ tune:
     - val/reg_loss
     - val/f1_class_mean_nobg
   key_metric: val/f1_class_mean_nobg
-  num_trials: 128 # number of runs
+  num_trials: 64 # number of runs
   name: tune_feature_extractor
-  grace_period: 2 # number of epochs
+  grace_period: 4 # number of epochs
   search: random # either random or hyperopt
   resources_per_trial:
-    gpu: 0.25
-    cpu: 2
+    gpu: 0.5
+    cpu: 3
   hparams:
     # feature_extractor.dropout_p: # each hparam key should be an attribute in a valid configuration
     #   min: 0.0 # min: minimum of range
