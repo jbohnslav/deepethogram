@@ -2,9 +2,12 @@ inference:
   # list of DeepEthogram directories with video files and labels. See docs/file_structure.md
   # bracketed separated by commas. e.g. inference.directory_list=[path/to/vid1,path/to/vid2]
   # to extract features from all videos, use 'all'
-  directory_list: null
+  directory_list: all
   # if true, when an error is encountered, inference will attempt to continue to the next video without stopping
   ignore_error: true
   # if the group sequence.latent_name already exists in the HDF5 file, will overwrite it.
   # if false, that file would be skipped
   overwrite: false
+  # if True, overwrite settings in the config file with the one loaded from disk. E.g. if you try to configure 
+  # inference dropout_p to be 0.9 but in the trained model it was 0.5, it will set dropout to 0.5
+  use_loaded_model_cfg: true
