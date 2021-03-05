@@ -52,7 +52,7 @@ train:
   # in practice I find this is too strong an up-weighting. Instead, I will weight by
   # the proportion of pos examples ** loss_weight_exp
   # if only 1% of data ==1, and loss_weight_exp=0.5, the weight value will be 10
-  loss_weight_exp: 1.0
+  loss_weight_exp: 0.25
   # focal loss gamma for feature extractor and sequence models
   # gamma == 0: BCELoss
   # the higher the gamma, the more the model "focuses" on mis-classified points near 0.5, and not trying to increase
@@ -60,6 +60,6 @@ train:
   loss_gamma: 0.0
   regularization:
     style: l2_sp
-    alpha: 0.0001
-    beta: 0.0001
+    alpha: 1e-5
+    beta: 5e-4
 
