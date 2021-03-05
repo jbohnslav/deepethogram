@@ -386,10 +386,22 @@ def feature_extractor_inference(cfg: DictConfig):
     for record in records:
         rgb.append(record['rgb'])
 
+    feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
+    assert os.path.isfile(feature_extractor_weights)
+    if cfg.inference.use_loaded_model_cfg:
+        loaded_config_file = os.path.join(os.path.dirname(feature_extractor_weights), 'config.yaml')
+        loaded_model_cfg = OmegaConf.load(loaded_config_file).feature_extractor
+        current_model_cfg = cfg.feature_extractor
+        model_cfg = OmegaConf.merge(current_model_cfg, loaded_model_cfg)
+        cfg.feature_extractor = model_cfg
+        # we don't want to use the weights that the trained model was initialized with, but the weights after training
+        # therefore, overwrite the loaded configuration with the current weights
+        cfg.feature_extractor.weights = feature_extractor_weights
+    
     model_components = build_feature_extractor(cfg)
     _, _, _, _, model = model_components
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
-    feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
+    
     metrics_file = os.path.join(os.path.dirname(feature_extractor_weights), 'classification_metrics.h5')
 
     assert os.path.isfile(metrics_file)

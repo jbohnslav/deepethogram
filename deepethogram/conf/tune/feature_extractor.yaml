@@ -1,19 +1,5 @@
 tune:
-  use: True
-  metrics:
-    - val/loss
-    - val/f1_class_mean
-    - val/data_loss
-    - val/reg_loss
-    - val/f1_class_mean_nobg
-  key_metric: val/f1_class_mean_nobg
-  num_trials: 64 # number of runs
   name: tune_feature_extractor
-  grace_period: 4 # number of epochs
-  search: random # either random or hyperopt
-  resources_per_trial:
-    gpu: 0.5
-    cpu: 3
   hparams:
     # feature_extractor.dropout_p: # each hparam key should be an attribute in a valid configuration
     #   min: 0.0 # min: minimum of range
@@ -26,13 +12,13 @@ tune:
       max: 1e-1
       space: log
       short: reg_alpha
-      current_best: 0.00045170
+      current_best: 1e-5
     train.regularization.beta: 
       min: 1e-4
       max: 1e-1
       space: log
       short: reg_beta
-      current_best: 0.00074703
+      current_best: 5e-4
     train.loss_gamma:
       # choices: [0, 0.5, 1, 2]
       min: 0
@@ -52,18 +38,9 @@ tune:
     #   space: log
     #   short: lr
     #   current_best: 1e-4
-    feature_extractor.final_bn:
-      choices: [True, False]
-      space: choice
-      short: final_bn
-      current_best: True
+    # feature_extractor.final_bn:
+    #   choices: [True, False]
+    #   space: choice
+    #   short: final_bn
+    #   current_best: False
 # use these to overwrite default configuration parameters only when running tune jobs
-train:
-  viz_examples: False # don't spend time and space making example images 
-  steps_per_epoch:
-    train: 1000
-    val: 1000
-  num_epochs: 20
-compute:
-  metrics_workers: 0 # sometimes has a bug in already multiprocessed jobs
-  # batch_size: 64 # auto batch sizing takes a long time

@@ -13,7 +13,7 @@ from omegaconf import DictConfig, OmegaConf
 import deepethogram.projects
 from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
 from deepethogram import utils, projects, viz
-from deepethogram.configuration import make_sequence_inference_cfg
+from deepethogram.configuration import make_sequence_train_cfg
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.feature_extractor.train import get_metrics, get_stopper, get_criterion
 from deepethogram.schedulers import initialize_scheduler
@@ -51,7 +51,7 @@ def sequence_train(cfg: DictConfig) -> nn.Module:
 
     metrics = get_metrics(os.getcwd(), data_info['num_classes'],
                           num_parameters=utils.get_num_parameters(model), key_metric='f1_class_mean',
-                          num_workers=cfg.compute.num_workers)
+                          num_workers=cfg.compute.metrics_workers)
     criterion = get_criterion(cfg, model, data_info)
     lightning_module = SequenceLightning(model, cfg, datasets, metrics, criterion)
     # change auto batch size parameters because large sequences can overflow RAM
@@ -208,6 +208,6 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
 
 if __name__ == '__main__':
     project_path = projects.get_project_path_from_cl(sys.argv)
-    cfg = make_sequence_inference_cfg(project_path, use_command_line=True)
+    cfg = make_sequence_train_cfg(project_path, use_command_line=True)
     
     sequence_train(cfg)

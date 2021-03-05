@@ -9,7 +9,7 @@ feature_extractor:
   # deprecated: used to over-sample rare classes
   sampler: null
   # use batchnorm in the final layer, just before sigmoid / softmax
-  final_bn: true
+  final_bn: false
   # deprecated: how much to over-sample
   sampling_ratio: null
   # The activation function on the final layer. options include sigmoid, softmax. Use softmax for mutually-exclusive

@@ -216,6 +216,8 @@ def build_model_from_cfg(cfg: DictConfig,
         cfg, 'feature_extractor')
     num_classes = len(cfg.project.class_names)
 
+    log.info('feature extractor weightfile: {}'.format(feature_extractor_weights))
+
     in_channels = cfg.feature_extractor.n_rgb * 3 if '3d' not in cfg.feature_extractor.arch else 3
     reload_imagenet = feature_extractor_weights is None
     if cfg.feature_extractor.arch == 'resnet3d_34':
