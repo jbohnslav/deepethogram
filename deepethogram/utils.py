@@ -704,7 +704,7 @@ def load_feature_extractor_components(model, checkpoint_file: Union[str, os.Path
 
     if not os.path.isdir(subdir):
         log.warning('{} directory not found in {}'.format(component, directory))
-        state = torch.load(checkpoint_file)
+        state = torch.load(checkpoint_file, map_location='cpu')
         state_dict = state['state_dict']
         params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
         # import pdb; pdb.set_trace()
