@@ -13,11 +13,12 @@ except ImportError:
     raise
 
 from deepethogram.configuration import make_config, load_config_by_name
-from deepethogram import feature_extractor_train
+from deepethogram import sequence_train
 from deepethogram import projects
 from deepethogram.tune.utils import dict_to_dotlist, generate_tune_cfg
 
-def tune_feature_extractor(cfg: DictConfig):    
+
+def tune_sequence(cfg: DictConfig):    
     # tune_cfg = {
     #     'feature_extractor.dropout_p': tune.uniform(0.0, 0.9), 
     #     'train.regularization.alpha': tune.uniform(1e-5, 0.01), 
@@ -99,7 +100,7 @@ def run_ray_experiment(ray_cfg, cfg):
         cfg.notes = f'{cfg.tune.name}_{tune.get_trial_id()}'
     else:
         cfg.notes += f'{cfg.tune.name}_{tune.get_trial_id()}'
-    feature_extractor_train(cfg)
+    sequence_train(cfg)
     
 if __name__ == '__main__':
     # USAGE
@@ -107,20 +108,21 @@ if __name__ == '__main__':
     
     ray.init(address='auto')  #num_gpus=1
     
-    config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor', 'tune']
+    config_list = ['config','model/feature_extractor', 'train', 'model/sequence',
+                   'tune/tune', 'tune/sequence']
     run_type = 'train'
-    model = 'feature_extractor'
+    model = 'sequence'
     
     project_path = projects.get_project_path_from_cl(sys.argv)
     cfg = make_config(project_path=project_path, config_list=config_list, run_type=run_type, model=model, 
-                      use_command_line=True, debug=True)
+                      use_command_line=True, debug=False)
     cfg = projects.convert_config_paths_to_absolute(cfg)
     
-    if 'preset' in cfg.keys():
-        cfg.tune.name += '_{}'.format(cfg.preset)
+    cfg.tune.name = 'tune_sequence_2'
+    
     if 'debug' in cfg.keys():
         cfg.tune.name += '_debug'
     
-    tune_feature_extractor(cfg)
+    tune_sequence(cfg)
     
     
