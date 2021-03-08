@@ -4,4 +4,4 @@ run:
 # path to the video file to z-score
 videofile: null
 # every STRIDE frames will be read and statistics computed
-stride: 10
+stride: 100

@@ -107,7 +107,8 @@ if __name__ == '__main__':
     
     ray.init(address='auto')  #num_gpus=1
     
-    config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor', 'tune']
+    config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor', 
+                   'tune/tune', 'tune/feature_extractor']
     run_type = 'train'
     model = 'feature_extractor'
     

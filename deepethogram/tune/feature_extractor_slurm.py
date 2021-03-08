@@ -149,7 +149,8 @@ if __name__ == '__main__':
     
     ray.init(address='auto')  #num_gpus=1
     
-    config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor', 'tune']
+    config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor', 
+                   'tune/tune', 'tune/feature_extractor']
     run_type = 'train'
     model = 'feature_extractor'
     
@@ -173,10 +174,10 @@ if __name__ == '__main__':
     #     cfg.train.num_epochs = 3
     #     cfg.tune.name = 'tune_feature_extractor_debug'
     # # else:
-    cfg.tune.name = 'tune_feature_extractor_{}_narrow'.format(args.preset)
+    cfg.tune.name = 'tune_feature_extractor_{}_narrower'.format(args.preset)
     # cfg.tune.num_trials = 100
     # CUSTOM EDITS HERE
-    cfg.compute.batch_size=32
+    cfg.compute.batch_size = 32
     cfg.tune.search = 'random'
     cfg.split.reload = True
     cfg.split.file = os.path.join(model_path, split_string + '.yaml')
