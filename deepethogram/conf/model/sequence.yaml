@@ -14,7 +14,7 @@ sequence:
   # the dropout to be placed on the penultimate layer before the 1d convolution with K (# behaviors) output features
   dropout_p: 0.5
   # number of layers in RNN, 1d cnn, or TGM models. typically 1-3
-  num_layers: 1
+  num_layers: 3
    # for RNNs or CNNs. For CNNs, only 1 hidden layer by default.
   hidden_size: 64
   # if true, only loads data in non-overlapping chunks of length `filter_length`. E.g., the first batch of your dataset
@@ -50,15 +50,16 @@ sequence:
   # Inputs to TGM model: N x D x T features. This is smoothed to a new N x D x T tensor. If true, use conv1d to reduce
   # to N x num_features x T, before another conv1d to N x num_classes x T.
   # if False, go straight from N x D x T to N x num_classes x T
-  nonlinear_classification: False
+  nonlinear_classification: True
   # use a batch normalization layer on the outputs
-  final_bn: False
+  final_bn: True
   # what kinds of inputs to use for the sequence model. choices: ['features', 'keypoints']
   input_type: features
 train:
   regularization:
     # can't use l2_sp regularization because we are not pretraining sequence models
     style: l2
+    alpha: 0.01
   # overwrite patience: because of Nonoverlapping, train epochs can be very low
   patience: 5
 compute:
