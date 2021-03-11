@@ -106,6 +106,9 @@ class L2_SP(nn.Module):
             model_param = model_state[key]
             towards_0 += model_param.pow(2).sum()*0.5
             
+        if towards_pretrained != towards_pretrained or towards_0 != towards_0:
+            msg = 'invalid loss in L2-SP: loss: {}'.format(loss)
+            raise ValueError(msg)
         # alternate method. same result, ~50% slower
         #         towards_pretrained, towards_0 = 0, 0
 
