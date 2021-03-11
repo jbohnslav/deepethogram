@@ -34,4 +34,7 @@ train:
   # overwrite default steps per epoch: ideally we would not limit train steps at all. However, with very large datasets
   # this can be infeasible
   steps_per_epoch:
+    train: 1000
+    val: 1000
     test: null
+  num_epochs: 20

@@ -22,7 +22,7 @@ tune:
     train.loss_gamma:
       # choices: [0, 0.5, 1, 2]
       min: 0
-      max: 1
+      max: 2
       space: uniform
       short: gamma
       current_best: 0.5
@@ -32,6 +32,12 @@ tune:
       space: uniform
       short: loss_weight_exp
       current_best: 0.25
+    train.label_smoothing:
+      min: 0.0
+      max: 0.2
+      space: uniform
+      short: label_smoothing
+      current_best: 0.0
     # train.lr:
     #   min: 1e-5
     #   max: 1e-3
