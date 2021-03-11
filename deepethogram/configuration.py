@@ -63,7 +63,7 @@ def make_config(project_path: Union[str, os.PathLike], config_list: list, run_ty
     return cfg
 
 def make_flow_generator_train_cfg(project_path: Union[str, os.PathLike], **kwargs) -> DictConfig: 
-    config_list = ['config','augs','model/flow_generator','train']
+    config_list = ['config','augs','train', 'model/flow_generator']
     run_type = 'train'
     model = 'flow_generator'
     
@@ -73,7 +73,7 @@ def make_flow_generator_train_cfg(project_path: Union[str, os.PathLike], **kwarg
     return cfg
 
 def make_feature_extractor_train_cfg(project_path: Union[str, os.PathLike], **kwargs) -> DictConfig: 
-    config_list = ['config','augs','model/flow_generator','train', 'model/feature_extractor']
+    config_list = ['config','augs','train','model/flow_generator','model/feature_extractor']
     run_type = 'train'
     model = 'feature_extractor'
     
