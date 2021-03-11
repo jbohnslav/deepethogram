@@ -44,6 +44,7 @@ remote_dirs_src = {key: os.path.join(remote_dirs_src_base, project_keys[key]) fo
 remote_dirs_dst_base = '/n/data2/hms/neurobio/harvey/jim/deepethogram_revisions'
 remote_dirs_dst = {key: os.path.join(remote_dirs_dst_base, project_keys[key]) for key in project_keys.keys()}
 
+
 def rsync(src, dst, exclude=None):
     assert os.path.isdir(src)
     assert os.path.isdir(dst)
@@ -174,7 +175,7 @@ if __name__ == '__main__':
     #     cfg.train.num_epochs = 3
     #     cfg.tune.name = 'tune_feature_extractor_debug'
     # # else:
-    cfg.tune.name = 'tune_feature_extractor_{}_narrower'.format(args.preset)
+    cfg.tune.name = 'tune_feature_extractor_{}_labelsmoothing'.format(args.preset)
     # cfg.tune.num_trials = 100
     # CUSTOM EDITS HERE
     cfg.compute.batch_size = 32
