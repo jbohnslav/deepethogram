@@ -173,6 +173,10 @@ def feature_extractor_train(cfg) -> nn.Module:
     stopper = get_stopper(cfg)
     cfg.compute.batch_size = original_batch_size
     cfg.train.lr = original_lr
+    
+    # log.warning('SETTING ANAOMALY DETECTION TO TRUE! WILL SLOW DOWN.')
+    # torch.autograd.set_detect_anomaly(True)
+    
     lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics,
                                                 criterion)
 
@@ -317,6 +321,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         # use the forward function
         # return the image tensor so we can visualize after gpu transforms
         images, outputs = self(batch, 'train')
+            
         probabilities = self.activation(outputs)
 
         loss, loss_dict = self.criterion(outputs, batch['labels'], self.model)
@@ -418,12 +423,20 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         images = batch['images']
         # no-grad should work in the apply_gpu_transforms method; adding here just in case
         with torch.no_grad():
-            images = self.apply_gpu_transforms(images, mode)
+            gpu_images = self.apply_gpu_transforms(images, mode)
+        
+        if torch.sum(gpu_images != gpu_images) > 0 or torch.sum(torch.isinf(gpu_images)) > 0:
+            print('nan in gpu augs')
+            import pdb; pdb.set_trace()
+        
+        outputs = self.model(gpu_images)
+        self.log_image_statistics(gpu_images)
+        
+        if torch.sum(outputs != outputs) > 0:
+            print('nan in model outputs')
+            import pdb; pdb.set_trace()
 
-        outputs = self.model(images)
-        self.log_image_statistics(images)
-
-        return images, outputs
+        return gpu_images, outputs
 
     def log_image_statistics(self, images):
         if not self.has_logged_channels and log.isEnabledFor(logging.DEBUG):
@@ -492,7 +505,8 @@ def get_criterion(cfg: DictConfig, model, data_info: dict, device=None):
             pos_weight = torch.from_numpy(pos_weight)
             pos_weight = pos_weight.to(
                 device) if device is not None else pos_weight
-        data_criterion = BinaryFocalLoss(pos_weight=pos_weight, gamma=cfg.train.loss_gamma)
+        data_criterion = BinaryFocalLoss(pos_weight=pos_weight, gamma=cfg.train.loss_gamma, 
+                                         label_smoothing=cfg.train.label_smoothing)
     else:
         raise NotImplementedError
     
