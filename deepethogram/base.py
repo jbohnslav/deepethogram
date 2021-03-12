@@ -181,6 +181,30 @@ default_tune_dict = {
 }
 
 def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: str = None) -> pl.Trainer:
+    """Gets a PyTorch Lightning Trainer from a configuration
+
+    Supports:
+        automatic batch sizing
+        Automatic learning rate finding (experimental)
+        Callback instantiation
+        Logging, both to disk and with TensorBoard
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        configuration
+    lightning_module : pl.LightningModule
+        Lightning model to train
+    stopper : callable
+        Method to stop training. Must be passed so that figuring out batch size does not "count" towards stopping
+    profiler : str, optional
+        https://pytorch-lightning.readthedocs.io/en/latest/advanced/profiler.html, by default None
+
+    Returns
+    -------
+    pl.Trainer
+        https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html
+    """
     steps_per_epoch = cfg.train.steps_per_epoch
     for split in ['train', 'val', 'test']:
         steps_per_epoch[split] = steps_per_epoch[split] if steps_per_epoch[split] is not None else 1.0

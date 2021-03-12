@@ -1,13 +1,27 @@
 import logging
 import os
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import pandas as pd
 
 log = logging.getLogger(__name__)
 
-def interpolate_bad_values(keypoint, threshold: float = 0.9) -> np.ndarray:
+def interpolate_bad_values(keypoint: np.ndarray, threshold: float = 0.9) -> np.ndarray:
+    """Interpolates keypoints with low confidence
+
+    Parameters
+    ----------
+    keypoint : np.ndarray
+        [T, n_keypoints, 3] array. Last dimension: height, width, confidence
+    threshold : float, optional
+        Values below this threshold will be linearly interpolated, by default 0.9
+
+    Returns
+    -------
+    np.ndarray
+        Keypoint array with height and width interpolated if conf < threshold
+    """
     assert keypoint.ndim == 3
     T, kp, _ = keypoint.shape
     assert keypoint.shape[2] == 3
@@ -34,7 +48,24 @@ def interpolate_bad_values(keypoint, threshold: float = 0.9) -> np.ndarray:
     return keypoint_interped
 
 
-def normalize_keypoints(keypoints, H, W):
+def normalize_keypoints(keypoints: np.ndarray, H: int, W: int) -> np.ndarray:
+    """Normalizes keypoints from range [(0, H), (0, W)] to range [(-1, 1), (-1, 1)]. 
+    Non-square images will use the maximum side length in the denominator.
+
+    Parameters
+    ----------
+    keypoints : np.ndarray
+        [T, n_keypoints, 2] array. Last dimension: height, width
+    H : int
+        Image height
+    W : int
+        Image width
+
+    Returns
+    -------
+    np.ndarray
+        Normalized keypoint array
+    """
     side_length = max(H, W)
     keypoints = 2 * ((keypoints / side_length) - 0.5)
 
@@ -42,6 +73,23 @@ def normalize_keypoints(keypoints, H, W):
 
 
 def denormalize_keypoints(keypoints, H, W):
+    """Un-normalizes keypoints from range [(-1, 1), (-1, 1)] to range [(0, H), (0, W)]. 
+    Non-square images will use the maximum side length.
+
+    Parameters
+    ----------
+    keypoints : np.ndarray
+        [T, n_keypoints, 2] array. Last dimension: height, width
+    H : int
+        Image height
+    W : int
+        Image width
+
+    Returns
+    -------
+    np.ndarray
+        Un-normalized keypoint array
+    """
     side_length = max(H, W)
     keypoints = (keypoints * 0.5 + 0.5) * side_length
     return keypoints
@@ -49,7 +97,6 @@ def denormalize_keypoints(keypoints, H, W):
 
 def slow_alignment(keypoints, rotmats, origins):
     aligned = []
-
     for i in range(len(keypoints)):
         keypoint = keypoints[i]
         sub = keypoint - origins[i]
@@ -59,16 +106,57 @@ def slow_alignment(keypoints, rotmats, origins):
     return aligned
 
 
-def compute_distance(arr1, arr2) -> np.ndarray:
+def compute_distance(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
+    """Computes euclidean distance along the final dimension of two input arrays. 
+
+    Parameters
+    ----------
+    arr1 : np.ndarray
+    arr2 : np.ndarray
+
+    Returns
+    -------
+    np.ndarray
+        distance
+    """
     return np.sqrt(((arr1 - arr2) ** 2).sum(axis=-1))
 
-def poly_area(x, y):
-    # https://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates
-    # REQUIRES POINTS TO BE IN CLOCKWISE ORDER!!
+def poly_area(x: np.ndarray, y: np.ndarray):
+    """Returns area of the polygon specified by X and Y coordinates. 
+    REQUIRES POINTS TO BE IN CLOCKWISE ORDER!!
+    
+    https://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates
+
+    Parameters
+    ----------
+    x : np.ndarray
+        x position
+    y : np.ndarray
+        y position
+
+    Returns
+    -------
+    float
+        Area of the polygon
+    """
     return 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
 
 
-def load_dlcfile(dlcfile) -> Tuple[np.ndarray, list, pd.DataFrame]:
+def load_dlcfile(dlcfile: Union[str, os.PathLike]) -> Tuple[np.ndarray, list, pd.DataFrame]:
+    """Loads data from DeepLabCut (without using the package as a requirement)
+
+    Parameters
+    ----------
+    dlcfile : Union[str, os.PathLike]
+        Path to deeplabcut file
+        
+    Returns
+    -------
+    Tuple[np.ndarray, list, pd.DataFrame]
+        Keypoint array
+        List of names of bodyparts
+        Pandas dataframe
+    """
     assert os.path.isfile(dlcfile)
     # TODO: make function to load HDF5s
     ending = os.path.splitext(dlcfile)[1]
@@ -93,6 +181,20 @@ def load_dlcfile(dlcfile) -> Tuple[np.ndarray, list, pd.DataFrame]:
 
 
 def stack_features_in_time(features: np.ndarray, frames_before_and_after: int=15) -> np.ndarray:
+    """For an array of keypoints, stack the frames before and after the current frame into one single vector.
+
+    Parameters
+    ----------
+    features : np.ndarray
+        T x K array of features
+    frames_before_and_after : int, optional
+        Number of frames before and after the current one to stack, by default 15
+
+    Returns
+    -------
+    np.ndarray
+        Stacked features
+    """
     assert features.ndim == 2
     stacked_features = []
     N = features.shape[0]

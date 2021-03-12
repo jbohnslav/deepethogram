@@ -22,8 +22,39 @@ log = logging.getLogger(__name__)
 
 def infer(model: Type[nn.Module], device: Union[str, torch.device],
           activation_function: Union[str, Type[nn.Module]],
-          dataloader: Union[str, os.PathLike], latent_name, sequence_length: int = 180,
+          dataloader: Union[str, os.PathLike], latent_name: str, sequence_length: int = 180,
           is_two_stream: bool = True):
+    """Runs inference of the sequence model
+
+    Parameters
+    ----------
+    model : Type[nn.Module]
+        sequence model
+    device : Union[str, torch.device]
+        Device on which to run inference. e.g. ('cpu', 'cuda:0')
+    activation_function : Union[str, Type[nn.Module]]
+        Either sigmoid or softmax
+    dataloader : Union[str, os.PathLike]
+        Poorly named path to a feature vector HDF5 file
+    latent_name : str
+        Group name in HDF5 file
+    sequence_length : int, optional
+        Number of feature vectors in each batch element, by default 180
+    is_two_stream : bool, optional
+        If True, load both image and flow features as input, by default True
+
+    Returns
+    -------
+    logits: np.ndarray
+        outputs before activation
+    probabilities: np.ndarray
+        outputs after activation
+
+    Raises
+    ------
+    ValueError
+        Check that activation is either sigmoid or softmax
+    """
     assert (latent_name is not None)
 
     gen = FeatureVectorDataset(dataloader, labelfile=None, h5_key=latent_name,

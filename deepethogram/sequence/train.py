@@ -27,6 +27,18 @@ plt.switch_backend('agg')
 
 
 def sequence_train(cfg: DictConfig) -> nn.Module:
+    """Trains sequence models from a configuration. 
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        Configuration, e.g. that returned by deepethogram.configration.make_sequence_train_cfg
+
+    Returns
+    -------
+    nn.Module
+        Trained sequence model
+    """
     cfg = projects.setup_run(cfg)
     log.info('args: {}'.format(' '.join(sys.argv)))
     

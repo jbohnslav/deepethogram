@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 import time
-from typing import Type
+from typing import Type, Union
 
 import h5py
 import numpy as np
@@ -127,12 +127,55 @@ def print_debug_statement(images, logits, spatial_features, flow_features, proba
     log.info('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
 
 
-def predict_single_video(videofile, model, activation_function: nn.Module,
-                         fusion: str,
-                         num_rgb: int, mean_by_channels: np.ndarray,
-                         device: str = 'cuda:0',
+def predict_single_video(videofile: Union[str, os.PathLike], model: nn.Module, activation_function: nn.Module,
+                         fusion: str,num_rgb: int, mean_by_channels: np.ndarray, device: str = 'cuda:0',
                          cpu_transform=None, gpu_transform=None,
-                         should_print: bool = False, num_workers: int = 1, batch_size: int = 1):
+                         should_print: bool = False, num_workers: int = 1, batch_size: int = 16):
+    """Runs inference on one input video, caching the output probabilities and image and flow feature vectors
+
+    Parameters
+    ----------
+    videofile : Union[str, os.PathLike]
+        Path to input video
+    model : nn.Module
+        Hidden two-stream model
+    activation_function : nn.Module
+        Either sigmoid or softmax
+    fusion : str
+        How features are fused. Needed for extracting them from the model architecture
+    num_rgb : int
+        How many images are input to the model
+    mean_by_channels : np.ndarray
+        Image channel mean for z-scoring
+    device : str, optional
+        Device on which to run inference, by default 'cuda:0'. Options: ['cuda:N', 'cpu']
+    cpu_transform : callable, optional
+        CPU transforms to perform, e.g. center cropping / resizing, by default None
+    gpu_transform : callable, optional
+        GPU augmentations. For inference, should just be conversion to float and z-scoring, by default None
+    should_print : bool, optional
+        If true, print more debug statements, by default False
+    num_workers : int, optional
+        Number of workers to read the video in parallel, by default 1
+    batch_size : int, optional
+        Batch size for inference. Values above 1 will be much faster. by default 16
+
+    Returns
+    -------
+    dict
+        keys: values
+        probabilities: torch.Tensor, T x K probabilities of each behavior
+        logits: torch.Tensor, T x K outputs for each behavior, before activation function
+        spatial_features: T x 512 feature vectors from images
+        flow_features: T x 512 feature vectors from optic flow
+        debug: T x 1 tensor storing the number of times each frame was read. Should be full of ones and only ones
+
+    Raises
+    ------
+    ValueError
+        If input from dataloader is not a dict or a Tensor, raises
+    """
+
     model.eval()
     model.set_mode('inference')
 
@@ -198,7 +241,25 @@ def predict_single_video(videofile, model, activation_function: nn.Module,
     return buffer
 
 
-def check_if_should_run_inference(h5file, mode, latent_name, overwrite):
+def check_if_should_run_inference(h5file: Union[str, os.PathLike], mode: str, latent_name: str, overwrite: bool):
+    """If latent name not in the file, or if we are overwriting, return True
+
+    Parameters
+    ----------
+    h5file : Union[str, os.PathLike]
+        Path to HDF5 file containing image features
+    mode : str
+        Specifier for file opening type. Should be 'r'
+    latent_name : str
+        an HDF5 group with this name will be in your output HDF5 file.
+    overwrite : bool
+        If True, delete existing group and return True
+
+    Returns
+    -------
+    bool
+        If True, run inference for this video
+    """
     should_run = True
     with h5py.File(h5file, mode) as f:
 
@@ -335,7 +396,21 @@ def extract(rgbs: list,
         f.close()
 
 
-def feature_extractor_inference(cfg: DictConfig):    
+def feature_extractor_inference(cfg: DictConfig):
+    """Runs inference on the feature extractor from an OmegaConf configuration. 
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        Configuration, e.g. that returned by deepethogram.configuration.make_feature_extractor_inference_cfg
+
+    Raises
+    ------
+    ValueError
+        cfg.inference.directory_list must contain a list of input directories, or 'all'
+    ValueError
+        Checks directory list types
+    """
     cfg = projects.setup_run(cfg)
     # turn "models" in your project configuration to "full/path/to/models"
     log.info('args: {}'.format(' '.join(sys.argv)))
@@ -431,10 +506,6 @@ def feature_extractor_inference(cfg: DictConfig):
             class_names=class_names,
             num_workers=cfg.compute.num_workers,
             batch_size=cfg.compute.batch_size)
-
-    # update each record file in the subdirectory to add our new output files
-    # projects.write_all_records(cfg.project.data_path)
-
 
 if __name__ == '__main__':
     project_path = projects.get_project_path_from_cl(sys.argv)

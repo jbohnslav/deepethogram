@@ -18,17 +18,18 @@ from deepethogram import projects
 from deepethogram.tune.utils import dict_to_dotlist, generate_tune_cfg
 
 def tune_feature_extractor(cfg: DictConfig):    
-    # tune_cfg = {
-    #     'feature_extractor.dropout_p': tune.uniform(0.0, 0.9), 
-    #     'train.regularization.alpha': tune.uniform(1e-5, 0.01), 
-    #     'train.regularization.beta': tune.uniform(1e-6, 1e-3), 
-    #     'train.loss_gamma': tune.choice([0, 0.5, 1, 2, 5]), 
-    #     'train.loss_weight_exp': tune.uniform(0.0, 1.0)
-    # }
-    
-    # if cfg is None:
-    #     cfg = load_config_by_name('tune')
-    
+    """Tunes feature extractor hyperparameters. 
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        Configuration, with a 'tune' key
+
+    Raises
+    ------
+    NotImplementedError
+        Checks that search method is either 'random' or 'hyperopt'
+    """
     scheduler = ASHAScheduler(
         max_t=cfg.train.num_epochs, # epochs
         grace_period=cfg.tune.grace_period,
@@ -82,19 +83,11 @@ def tune_feature_extractor(cfg: DictConfig):
 
 
 def run_ray_experiment(ray_cfg, cfg): 
-    # cfg = make_feature_extractor_train_cfg(project_path, use_command_line=False, preset='deg_f')
-    # tune_cfg = load_config_by_name('tune')
     
     ray_cfg = OmegaConf.from_dotlist(dict_to_dotlist(ray_cfg))
     
     cfg = OmegaConf.merge(cfg, ray_cfg)
-    # cfg.tune.use = True
-    
-    # cfg.flow_generator.weights = 'latest'
-    # cfg.feature_extractor.weights = '/media/jim/DATA_SSD/niv_revision_deepethogram/models/pretrained_models/200415_125824_hidden_two_stream_kinetics_degf/checkpoint.pt'
-    # cfg.compute.batch_size = 64
-    # cfg.train.steps_per_epoch.train = 20
-    # cfg.train.steps_per_epoch.val = 20
+
     if cfg.notes is None:
         cfg.notes = f'{cfg.tune.name}_{tune.get_trial_id()}'
     else:

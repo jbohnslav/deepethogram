@@ -97,65 +97,6 @@ def remove_cnn_classifier_layer(cnn):
     cnn = nn.Sequential(*module_list)
     return cnn, in_features
 
-
-# def replace_final_layers(model, model_name: str, num_classes: int):
-#     model_classes = get_num_classes(model)
-#     if num_classes == model_classes:
-#         return model
-#
-#     if model_name.startswith('resnet'):
-#         in_features = model.fc.in_features
-#         # should happen when you want the final features of the model to be returned
-#         if num_classes == 0:
-#             model.fc = nn.Identity()
-#         else:
-#             model.fc = nn.Linear(in_features, num_classes)
-#
-#     elif model_name == 'alexnet':
-#         in_features = model.classifier[6].in_features
-#         if num_classes == 0:
-#             model.classifier[6] = nn.Identity()
-#         else:
-#             model.classifier[6] = nn.Linear(in_features, num_classes)
-#     elif model_name.startswith('vgg'):
-#         in_features = model.classifier[6].in_features
-#         if num_classes == 0:
-#             model.classifier[6] = nn.Identity()
-#         else:
-#             model.classifier[6] = nn.Linear(in_features, num_classes)
-#
-#     elif model_name.startswith('squeezenet'):
-#         if num_classes == 0:
-#             model.classifier[1] = nn.Identity()
-#         else:
-#             model.classifier[1] = nn.Conv2d(512, num_classes, kernel_size=(1, 1), stride=(1, 1))
-#             model.num_classes = num_classes
-#
-#     elif model_name.startswith('densenet'):
-#         in_features = model.classifier.in_features
-#         model.classifier = nn.Linear(in_features, num_classes)
-#         if num_classes == 0:
-#             model.classifier = nn.Identity()
-#         else:
-#             model.classifier = nn.Linear(in_features, num_classes)
-#     elif model_name.startswith('inception'):
-#         # handle auxiliary network
-#         in_features = model.AuxLogits.fc.in_features
-#         if num_classes == 0:
-#             model.AuxLogits.fc = nn.Identity()
-#         else:
-#             model.AuxLogits.fc = nn.Linear(in_features, num_classes)
-#         # handle primary network
-#         in_features = model.fc.in_features
-#         if num_classes == 0:
-#             model.fc = nn.Identity()
-#         else:
-#             model.fc = nn.Linear(in_features, num_classes)
-#     else:
-#         raise ValueError('%s is not a valid model name' % (model_name))
-#     return model
-
-
 class Fusion(nn.Module):
     """ Module for fusing spatial and flow features and passing through Linear layer """
 
@@ -197,21 +138,6 @@ class Fusion(nn.Module):
             return self.fc(features)
         elif self.style == 'weighted_average':
             return self.flow_weight * flow_features + (1 - self.flow_weight) * spatial_features
-
-
-# def get_num_classes(model):
-#     classes = []
-#
-#     def get_linear_children(modulelist):
-#         if len(modulelist) > 0:
-#             for module in modulelist:
-#                 if isinstance(module, torch.nn.Linear):
-#                     classes.append(module.out_features)
-#                 else:
-#                     get_linear_children(list(module.children()))
-#
-#     get_linear_children(list(model.children()))
-#     return classes
 
 
 # from TResNet: https://arxiv.org/abs/2003.13630

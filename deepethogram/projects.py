@@ -890,8 +890,7 @@ def import_outputfile(project_dir: Union[str, os.PathLike],
         if len(ind) == 1:
             indices.append(ind[0])
     indices = np.array(indices).squeeze()
-    log.debug('indices: {} type: {} shape: '.format(indices, type(indices),
-                                                    indices.shape))
+    log.debug('indices: {} type: {} shape: {}'.format(indices, type(indices), indices.shape))
     if not indices.shape:
         raise ValueError(
             'Class names not found in file. Loaded: {} Requested: {}'.format(
@@ -1235,7 +1234,10 @@ def load_config(path_to_config: Union[str, os.PathLike]) -> dict:
 
 
 def load_default(conf_name: str) -> dict:
-    """ Loads default configs from deepethogram install path """
+    """ Loads default configs from deepethogram install path
+    DEPRECATED. 
+    TODO: replace with configuration.load_config_by_name
+    """
     log.debug(
         'project loc for loading default: {}'.format(projects_file_directory))
     defaults_file = os.path.join(projects_file_directory, 'conf',
@@ -1247,8 +1249,18 @@ def load_default(conf_name: str) -> dict:
     defaults = utils.load_yaml(defaults_file)
     return defaults
 
-def convert_all_videos(config_file: Union[str, os.PathLike],
-                       movie_format='hdf5') -> None:
+def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5') -> None:
+    """Converts all videos in a project from one filetype to another. 
+    
+    Note: If using movie_format other than 'directory' or 'hdf5', will re-compress images!
+
+    Parameters
+    ----------
+    config_file : Union[str, os.PathLike]
+        Path to a project configuration file
+    movie_format : str, optional
+        See file_io.convert_video, by default 'hdf5'
+    """
     assert os.path.isfile(config_file)
     project_config = utils.load_yaml(config_file)
 
@@ -1335,6 +1347,9 @@ def get_project_path_from_cl(argv: list) -> str:
     raise ValueError('project path or file not in args: {}'.format(argv))
 
 def make_config(project_path: Union[str, os.PathLike], config_list: list, run_type: str, model: str) -> DictConfig:
+    """DEPRECATED
+    TODO: replace with configuration.make_config
+    """
     config_path = os.path.join(os.path.dirname(deepethogram.__file__), 'conf')
     
     def config_string_to_path(config_path, string): 
@@ -1372,10 +1387,28 @@ def make_config(project_path: Union[str, os.PathLike], config_list: list, run_ty
     return cfg
     
 def make_config_from_cli(argv, *args, **kwargs):
+    """DEPRECATED
+    TODO: replace with configuration.make_config
+    """
     project_path = get_project_path_from_cl(argv)
     return make_config(project_path, *args, **kwargs)
 
-def configure_run_directory(cfg: DictConfig) -> None:
+def configure_run_directory(cfg: DictConfig) -> str:
+    """Makes a run directory from a configuration
+
+    Name: date-time_model-type_run-type_notes
+    e.g. 20210311_011800_feature_extractor_train_testing_dropout
+    
+    Parameters
+    ----------
+    cfg : DictConfig
+        see deepethogram/configuration.py
+
+    Returns
+    -------
+    str
+        path to run directory
+    """
     datestring = datetime.now().strftime('%Y%m%d_%H%M%S')
     if cfg.run.type == 'gui':
         path = cfg.project.path if cfg.project.path is not None else os.getcwd()
@@ -1391,6 +1424,13 @@ def configure_run_directory(cfg: DictConfig) -> None:
     return directory
     
 def configure_logging(cfg: DictConfig) -> None:
+    """Sets up python logging to use a specific format, and also save to disk
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        see deepethogram.configuration
+    """
     # assume current directory is run directory
     assert cfg.log.level in ['debug', 'info', 'warning', 'error', 'critical']
     
@@ -1410,7 +1450,21 @@ def configure_logging(cfg: DictConfig) -> None:
                             logging.StreamHandler()
                         ])
     
-def setup_run(cfg):
+def setup_run(cfg: DictConfig) -> DictConfig:
+    """Makes a run directory and configures logging.
+
+    See projects.configure_run_directory and projects.configure_logging
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        see deepethogram.configuration
+
+    Returns
+    -------
+    DictConfig
+        see deepethogram.configuration
+    """
     cfg = deepethogram.projects.convert_config_paths_to_absolute(cfg)
     directory = configure_run_directory(cfg)
     cfg.run.dir = directory

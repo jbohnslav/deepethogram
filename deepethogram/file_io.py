@@ -58,7 +58,20 @@ def read_label_hdf5(labelfile: Union[str, os.PathLike]) -> np.ndarray:
     return (label)
 
 
-def read_label_csv(labelfile):
+def read_label_csv(labelfile: Union[str, os.PathLike]) -> np.ndarray:
+    """Reads CSV of labels into a numpy array
+
+    Parameters
+    ----------
+    labelfile : Union[str, os.PathLike]
+        Path to label .csv
+
+    Returns
+    -------
+    np.ndarray
+        T x K binary array of labels
+    """
+
     df = pd.read_csv(labelfile, index_col=0)
     label = df.values.astype(np.int64)
     if label.ndim == 1:
@@ -68,6 +81,25 @@ def read_label_csv(labelfile):
 
 def convert_video(videofile: Union[str, os.PathLike], movie_format: str, *args,
                   **kwargs) -> None:
+    """Converts videos from one file format to another using VidIO
+
+    Parameters
+    ----------
+    videofile : Union[str, os.PathLike]
+        Path to a video file
+    movie_format : str
+        One of ['ffmpeg', 'opencv', 'hdf5', 'directory']
+        ffmpeg: converts to libx264 using ffmpeg
+        OpenCV: converts to MJPG (by default) 
+        HDF5: converts to an HDF5 file or PNG bytestrings. Lossless compression. Compromise between fastest reading
+            (PNG directory), and ease of transferring across filesystems (e.g. to a server)
+        directory: explodes into directory of PNG files
+
+    Raises
+    ------
+    ValueError
+        If movie format is not one of above, raise
+    """
     with VideoReader(videofile) as reader:
         basename = os.path.splitext(videofile)[0]
         if movie_format == 'ffmpeg':

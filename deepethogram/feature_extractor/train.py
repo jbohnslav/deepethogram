@@ -47,7 +47,19 @@ log = logging.getLogger(__name__)
 
 
 # @profile
-def feature_extractor_train(cfg) -> nn.Module:
+def feature_extractor_train(cfg: DictConfig) -> nn.Module:
+    """Trains feature extractor models from a configuration. 
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        Configuration, e.g. that returned by deepethogram.configration.make_feature_extractor_train_cfg
+
+    Returns
+    -------
+    nn.Module
+        Trained feature extractor
+    """
     # rundir = os.getcwd()  # done by hydra
     cfg = projects.setup_run(cfg)
     
