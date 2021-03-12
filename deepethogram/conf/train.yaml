@@ -57,10 +57,10 @@ train:
   # gamma == 0: BCELoss
   # the higher the gamma, the more the model "focuses" on mis-classified points near 0.5, and not trying to increase
   # the p(y=1) from 0.8 ->0.99, for example
-  loss_gamma: 0.5
-  label_smoothing: 0.0
+  loss_gamma: 1.0
+  label_smoothing: 0.05
   regularization:
     style: l2_sp
     alpha: 1e-5
-    beta: 5e-4
+    beta: 5e-3
 
