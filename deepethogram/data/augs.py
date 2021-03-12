@@ -26,6 +26,8 @@ def get_normalization_layer(mean: list, std: list, num_images: int = 1, mode: st
 
 
 class Transpose:
+    """Module to transpose image stacks.
+    """
     def __call__(self, images: np.ndarray) -> np.ndarray:
         shape = images.shape
         if len(shape) == 4:
@@ -40,6 +42,8 @@ class Transpose:
 
 
 class NormalizeVideo(nn.Module):
+    """Z-scores input video sequences
+    """
     def __init__(self, mean, std):
         super().__init__()
 
@@ -65,6 +69,8 @@ class NormalizeVideo(nn.Module):
 
 
 class DenormalizeVideo(nn.Module):
+    """Un-z-scores input video sequences
+    """
     def __init__(self, mean, std):
         super().__init__()
 
@@ -91,6 +97,8 @@ class DenormalizeVideo(nn.Module):
 
 
 class ToFloat(nn.Module):
+    """Module for converting input uint8 tensors to floats, dividing by 255
+    """
     def __init__(self):
         super().__init__()
 
@@ -102,8 +110,29 @@ class ToFloat(nn.Module):
 
 
 class RandomColorJitterVideo(nn.Module):
+    """Wrapper for applying random color jitter to video clips
+    """
     def __init__(self, brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, return_transform=False,
                  same_on_batch=False, p=0.5):
+        """Constructor for gpu augmentations for color jittering
+
+        Parameters
+        ----------
+        brightness : float, optional
+            Strength of brightness augmentation, by default 0.1
+        contrast : float, optional
+            Strength of contrast augmentation, by default 0.1
+        saturation : float, optional
+            Strength of saturation augmentation, by default 0.1
+        hue : float, optional
+            Strength of hue augmentation, by default 0.1
+        return_transform : bool, optional
+            If True, returns transformation matrix, which will always be identity, by default False
+        same_on_batch : bool, optional
+            If True, applies the same augmentation to every batch element, by default False
+        p : float, optional
+            Probability of applying any augmentation to a given batch example, by default 0.5
+        """
         super().__init__()
         self.p = p
         self.jitter_2d = K.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation,
@@ -164,6 +193,8 @@ class RandomColorJitterVideo(nn.Module):
 
 
 class RandomGrayscaleVideo(nn.Module):
+    """Wrapper to apply grayscaling to video clips on GPU
+    """
     def __init__(self, p=0.5):
         super().__init__()
         self.p = p
@@ -191,6 +222,8 @@ class RandomGrayscaleVideo(nn.Module):
 
 
 class StackClipInChannels(nn.Module):
+    """Module to convert image from N,C,T,H,W -> N,C*T,H,W
+    """
     def __init__(self):
         super().__init__()
 
@@ -202,6 +235,8 @@ class StackClipInChannels(nn.Module):
 
 
 class UnstackClip(nn.Module):
+    """Module to convert image from N,C*T,H,W -> N,C,T,H,W
+    """
     def __init__(self):
         super().__init__()
 
@@ -212,7 +247,20 @@ class UnstackClip(nn.Module):
         return torch.stack(torch.chunk(tensor, T, dim=1), dim=2)
 
 
-def get_cpu_transforms(augs):
+def get_cpu_transforms(augs: DictConfig) -> dict:
+    """Makes CPU augmentations from the aug section of a configuration. 
+
+    Parameters
+    ----------
+    augs : DictConfig
+        augmentation parameters
+
+    Returns
+    -------
+    xform : dict
+        keys: ['train', 'val', 'test']. Values: a composed OpenCV augmentation pipeline callable. 
+        Example: auged_images = xform['train'](images)
+    """
     train_transforms = []
     val_transforms = []
     # order here matters a lot!!
@@ -241,8 +289,22 @@ def get_cpu_transforms(augs):
 
 
 def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
-    # input is a tensor of shape N x C x F x H x W
+    """Makes GPU augmentations from the augs section of a configuration.
 
+    Parameters
+    ----------
+    augs : DictConfig
+        Augmentation parameters
+    mode : str, optional
+        If '2d', stacks clip in channels. If 3d, returns 5-D tensor, by default '2d'
+
+    Returns
+    -------
+    xform : dict
+        keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations. 
+        Example: auged_images = xform['train'](images)
+    """
+    # input is a tensor of shape N x C x F x H x W
     train_transforms = [ToFloat()]
     val_transforms = [ToFloat()]
     if augs.LR > 0:
@@ -292,7 +354,22 @@ def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
     return gpu_transforms
 
 
-def get_gpu_transforms_inference(augs: DictConfig, mode: str = '2d', num_images:int=11) -> dict:
+def get_gpu_transforms_inference(augs: DictConfig, mode: str = '2d') -> dict:
+    """Gets GPU transforms needed for inference
+
+    Parameters
+    ----------
+    augs : DictConfig
+        Augmentation parameters
+    mode : str, optional
+        If '2d', stacks clip in channels. If 3d, returns 5-D tensor, by default '2d'
+
+    Returns
+    -------
+    xform : dict
+        keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations. 
+        Example: auged_images = xform['val'](images)
+    """
     # sequential iterator already handles casting to float, dividing by 255, and stacking in channel dimension
     # import pdb; pdb.set_trace()
     # norm = get_normalization_layer(np.array(augs.normalization.mean), np.array(augs.normalization.std),
@@ -307,71 +384,17 @@ def get_gpu_transforms_inference(augs: DictConfig, mode: str = '2d', num_images:
     return gpu_transforms
 
 
-def get_empty_gpu_transforms():
+def get_empty_gpu_transforms() -> dict:
+    """Placeholder for GPU transforms that actually does nothing. Useful for debugging
+
+    Returns
+    -------
+    xform : dict
+        keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations. 
+        Example: auged_images = xform['train'](images)
+    """
     gpu_transforms = dict(train=nn.Identity(),
                           val=nn.Identity(),
                           test=nn.Identity(),
                           denormalize=nn.Identity())
     return gpu_transforms
-
-
-def get_transforms(augs: DictConfig, input_images: int = 1, mode: str = '2d') -> dict:
-    """ Make train, validation, and test transforms from a OmegaConf DictConfig with augmentation parameters
-
-    Parameters
-    ----------
-    augs: DictConfig
-        configuration with augmentation parameters. Example keys
-            crop_size: how large to crop
-            resize: how to resize after cropping
-        for more info, see deepethogram/conf/augs.yaml
-    input_images: int
-        Number of input images. Used to figure out how to z-score across channels
-    mode: str
-        either 2d or 3d. Used to figure out how to z-score across channels
-
-    Returns
-    -------
-    xform: dict
-        dictionary of composed Transforms, for train, validation, and test
-    """
-    # augs = cfg.augs # convenience
-    spatial_transforms = []
-    common = []
-    # order here matters a lot!!
-    if augs.crop_size is not None:
-        spatial_transforms.append(transforms.RandomCrop(augs.crop_size))
-        common.append(transforms.CenterCrop(augs.crop_size))
-    if augs.resize is not None:
-        spatial_transforms.append(transforms.Resize(augs.resize))
-        common.append(transforms.Resize(augs.resize))
-    if augs.pad is not None:
-        spatial_transforms.append(transforms.Pad(augs.pad))
-        common.append(transforms.Pad(augs.pad))
-    if augs.LR > 0:
-        spatial_transforms.append(transforms.RandomHorizontalFlip(p=augs.LR))
-    if augs.UD > 0:
-        spatial_transforms.append(transforms.RandomVerticalFlip(p=augs.UD))
-    if augs.degrees > 0:
-        spatial_transforms.append(transforms.RandomRotation(augs.degrees))
-
-    color_transforms = [transforms.ColorJitter(brightness=augs.brightness, contrast=augs.contrast)]
-    xform = {}
-
-    color_transforms.append(transforms.ToTensor())
-    common.append(transforms.ToTensor())
-    if augs.normalization is not None:
-        mean = list(augs.normalization.mean)
-        std = list(augs.normalization.std)
-
-        norm_layer = get_normalization_layer(mean, std, input_images, mode)
-        color_transforms.append(norm_layer)
-        common.append(norm_layer)
-
-    xform['train'] = transforms.Compose(spatial_transforms + color_transforms)
-    xform['val'] = transforms.Compose(common)
-    xform['test'] = transforms.Compose(common)
-    log.info(' ~~~ augmentations ~~~')
-    log.info(pformat(xform))
-    # pprint.pprint(xform)
-    return xform

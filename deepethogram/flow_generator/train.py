@@ -51,6 +51,18 @@ log = logging.getLogger(__name__)
 
 
 def flow_generator_train(cfg: DictConfig) -> nn.Module:
+    """Trains flow generator models from a configuration. 
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        Configuration, e.g. that returned by deepethogram.configration.make_flow_generator_train_cfg
+
+    Returns
+    -------
+    nn.Module
+        Trained flow generator
+    """
     cfg = projects.setup_run(cfg)
     log.info('args: {}'.format(' '.join(sys.argv)))
     # only two custom overwrites of the configuration file

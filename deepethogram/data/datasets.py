@@ -19,7 +19,7 @@ from vidio import VideoReader
 
 # from deepethogram.dataloaders import log
 from deepethogram import projects
-from deepethogram.data.augs import get_transforms, get_cpu_transforms
+from deepethogram.data.augs import get_cpu_transforms
 from deepethogram.data.utils import purge_unlabeled_videos, get_video_metadata, extract_metadata, find_labelfile, \
     read_all_labels, get_split_from_records, remove_invalid_records_from_split_dictionary, \
     make_loss_weight
@@ -32,8 +32,33 @@ log = logging.getLogger(__name__)
 
 # https://pytorch.org/docs/stable/data.html
 class VideoIterable(data.IterableDataset):
-    def __init__(self, videofile, transform, sequence_length=11, num_workers: int = 0,
+    """Highly optimized Dataset for running inference on videos. 
+    
+    Features: 
+        - Data is only read sequentially
+        - Each frame is only read once
+        - The input video is divided into NUM_WORKERS segments. Each worker reads its segment in parallel
+        - Each clip is read with stride = 1. If sequence_length==3, the first clips would be frames [0, 1, 2], 
+            [1, 2, 3], [2, 3, 4], ... etc
+    """
+    def __init__(self, videofile: Union[str, os.PathLike], transform, 
+                 sequence_length:int=11, num_workers:int=0,
                  mean_by_channels: Union[list, np.ndarray] = [0, 0, 0]):
+        """Cosntructor for video iterable
+
+        Parameters
+        ----------
+        videofile : Union[str, os.PathLike]
+            Path to video file
+        transform : callable
+            CPU transforms (cropping, resizing)
+        sequence_length : int, optional
+            Number of images in one clip, by default 11
+        num_workers : int, optional
+            [description], by default 0
+        mean_by_channels : Union[list, np.ndarray], optional
+            [description], by default [0, 0, 0]
+        """
         super().__init__()
 
         assert os.path.isfile(videofile) or os.path.isdir(videofile)
@@ -165,70 +190,6 @@ class VideoIterable(data.IterableDataset):
 
     def __del__(self):
         self.close()
-
-
-class MultiMovieIterator:
-    """Reads short clips of images sequentially from a list of videos
-
-    Examples:
-        iterator = MultiMovieIterator(['movie1.avi', 'movie2.avi'])
-        for batch in iterator:
-            outputs = model(batch)
-    """
-
-    def __init__(self, videofiles: list, *args, **kwargs) -> None:
-        """Initializes a MultiMovieIterator object.
-
-        Args:
-            videofiles: list of videos. Can be avis, mp4s, or jpg-encoded hdf5 files
-            *args, **kwargs: see SequentialIterator
-        """
-        for video in videofiles:
-            assert (os.path.isfile(video))
-
-        self.videos = videofiles
-        self.N = len(videofiles)
-        self.args = args
-        self.kwargs = kwargs
-        self.N_batches = self.get_num_batches()
-        print('Total batches: {}'.format(self.N_batches))
-        self.count = 0
-
-    def initialize_iterator(self, videofile: Union[str, bytes, os.PathLike]):
-        """Returns a single movie iterator from a video file"""
-        iterator = iter(SequentialIterator(videofile, *self.args, **self.kwargs))
-        return (iterator)
-
-    def get_num_batches(self) -> int:
-        """Gets total number of batches"""
-        total = 0
-        for video in self.videos:
-            iterator = self.initialize_iterator(video)
-            total += len(iterator)
-            iterator.end()
-        return total
-
-    def __len__(self):
-        return (self.N_batches)
-
-    def __next__(self):
-        """Gets the next clip of images (and possibly labels) from list of movies"""
-        if not hasattr(self, 'iterator'):
-            self.iterator = iter(SequentialIterator(self.videos[0], *self.args, **self.kwargs))
-        try:
-            batch = next(self.iterator)
-        except StopIteration:
-            if self.count >= self.N:
-                raise
-            else:
-                self.count += 1
-                self.iterator.end()
-                self.iterator = iter(SequentialIterator(self.videos[self.count], *self.args, **self.kwargs))
-                batch = next(self.iterator)
-        return (batch)
-
-    def __iter__(self):
-        return self
 
 
 class SingleVideoDataset(data.Dataset):
@@ -404,7 +365,7 @@ class SingleVideoDataset(data.Dataset):
 
 class VideoDataset(data.Dataset):
     """ Simple wrapper around SingleVideoDataset for smoothly loading multiple videos """
-
+    
     def __init__(self, videofiles: list, labelfiles: list, *args, **kwargs):
         datasets, labels = [], []
         for i in range(len(videofiles)):
@@ -607,8 +568,37 @@ class SingleSequenceDataset(data.Dataset):
     
             
 class KeypointDataset(SingleSequenceDataset):
-    def __init__(self, data_file, labelfile, videofile, expansion_method='sturman', confidence_threshold: float=0.9, 
+    """Dataset for reading keypoints (e.g. from deeplabcut) and performing basis function expansion. 
+    
+    Currently, only an edited variant of Sturman et al.'s basis expansion is implemented
+    Sturman, O., von Ziegler, L., Schläppi, C. et al. Deep learning-based behavioral analysis reaches human 
+        accuracy and is capable of outperforming commercial solutions. Neuropsychopharmacol. 45, 1942–1952 (2020). 
+        https://doi.org/10.1038/s41386-020-0776-y
+    """
+    def __init__(self, data_file: Union[str, os.PathLike], labelfile: Union[str, os.PathLike], 
+                 videofile: Union[str, os.PathLike], expansion_method: str='sturman', confidence_threshold: float=0.9, 
                  *args, **kwargs):
+        """Constructor
+
+        Parameters
+        ----------
+        data_file : Union[str, os.PathLike]
+            Path to datafile, e.g. HDF5 or CSV with keypoints
+        labelfile : Union[str, os.PathLike]
+            CSV file containing binary labels
+        videofile : Union[str, os.PathLike]
+            Path to raw video. Needed for normalizing keypoints by height and width
+        expansion_method : str, optional
+            Defines how to perform basis function expansion, by default 'sturman'
+        confidence_threshold : float, optional
+            Values lower than this will be linearly interpolated, by default 0.9
+
+        Raises
+        ------
+        NotImplementedError
+            For basis function expansion. Currently, only 'sturman' is implemented: 
+            
+        """
         if expansion_method == 'sturman':
             self.expansion_func = expand_features_sturman
         else:
@@ -659,6 +649,8 @@ class KeypointDataset(SingleSequenceDataset):
     
     
 class FeatureVectorDataset(SingleSequenceDataset):
+    """Reads image and flow feature vectors from HDF5 files. 
+    """
     def __init__(self, data_file, labelfile, h5_key: str, store_in_ram=False, is_two_stream: bool=True, *args, **kwargs):
         
         self.is_two_stream = is_two_stream

@@ -19,16 +19,18 @@ from deepethogram.tune.utils import dict_to_dotlist, generate_tune_cfg
 
 
 def tune_sequence(cfg: DictConfig):    
-    # tune_cfg = {
-    #     'feature_extractor.dropout_p': tune.uniform(0.0, 0.9), 
-    #     'train.regularization.alpha': tune.uniform(1e-5, 0.01), 
-    #     'train.regularization.beta': tune.uniform(1e-6, 1e-3), 
-    #     'train.loss_gamma': tune.choice([0, 0.5, 1, 2, 5]), 
-    #     'train.loss_weight_exp': tune.uniform(0.0, 1.0)
-    # }
-    
-    # if cfg is None:
-    #     cfg = load_config_by_name('tune')
+    """Tunes sequence model hyperparameters
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        configuration
+
+    Raises
+    ------
+    NotImplementedError
+        Checks that search method is either 'random' or 'hyperopt'
+    """
     
     scheduler = ASHAScheduler(
         max_t=cfg.train.num_epochs, # epochs

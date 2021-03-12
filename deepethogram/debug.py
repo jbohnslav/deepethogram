@@ -14,11 +14,29 @@ log = logging.getLogger(__name__)
 
 
 def print_models(model_path: Union[str, os.PathLike]) -> None:
+    """Prints all models found in the model path
+
+    Parameters
+    ----------
+    model_path : Union[str, os.PathLike]
+        Absolute path to models directory
+    """
     trained_models = projects.get_weights_from_model_path(model_path)
     log.info('Trained models: {}'.format(pprint.pformat(trained_models)))
     
 
 def print_dataset_info(datadir: Union[str, os.PathLike]) -> None:
+    """Prints information about your dataset. 
+    
+    - video path
+    - number of unlabeled rows in a video
+    - number of examples of each behavior in each video
+
+    Parameters
+    ----------
+    datadir : Union[str, os.PathLike]
+        [description]
+    """
     records = projects.get_records_from_datadir(datadir)
     
     for key, record in records.items():
@@ -37,7 +55,17 @@ def print_dataset_info(datadir: Union[str, os.PathLike]) -> None:
                 class_counts = label.sum(axis=0)
                 log.info('Labels with counts: {}'.format(class_counts))
                 
-def try_load_all_frames(datadir):
+def try_load_all_frames(datadir: Union[str, os.PathLike]):
+    """Attempts to read every image from every video. 
+    
+    Useful for debugging corrupted videos, e.g. if saving to disk was aborted improperly during acquisition
+    If there is an error reading a frame, it will print the video name and frame number
+    
+    Parameters
+    ----------
+    datadir : Union[str, os.PathLike]
+        absolute path to the project/DATA directory
+    """
     log.info('Iterating through all frames of all movies to test for frame reading bugs')
     records = projects.get_records_from_datadir(datadir)
     for key, record in tqdm(records.items()):

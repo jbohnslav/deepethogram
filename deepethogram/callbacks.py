@@ -63,54 +63,9 @@ class DebugCallback(Callback):
     def on_keyboard_interrupt(self, trainer, pl_module):
         log.info('on keyboard interrupt')
 
-# class FPSCallback(Callback):
-#     def on_init_start(self, trainer):
-#         self.times = {'train': 0.0, 'val': 0.0, 'test': 0.0, 'speedtest': 0.0}
-#         self.n_images = {'train': 0, 'val': 0, 'test': 0, 'speedtest': 0}
-#         self.fps = {'train': 0.0, 'val': 0.0, 'test': 0.0, 'speedtest': 0.0}
-#         # print('Starting to init trainer!')
-#         pass
-#
-#     def get_num_images(self, batch):
-#         keys = list(batch.keys())
-#         batch_size = batch[keys[0]].shape[0]
-#         return batch_size
-#
-#     def on_train_epoch_start(self, trainer, pl_module):
-#         self.times['train'] = time.time()
-#
-#     def on_validation_epoch_start(self, trainer, pl_module):
-#         self.times['val'] = time.time()
-#
-#     def on_test_epoch_start(self, trainer, pl_module):
-#         self.times['test'] = time.time()
-#
-#     def get_fps(self, split):
-#         elapsed = time.time() - self.times[split]
-#         n_images = self.n_images[split]
-#         return n_images / elapsed
-#
-#     def on_train_epoch_end(self, trainer, pl_module, outputs):
-#         pl_module.metrics.buffer.append('train', {'fps': self.get_fps('train')})
-#         # import pdb; pdb.set_trace()
-#
-#     def on_validation_epoch_end(self, trainer, pl_module):
-#         pl_module.metrics.buffer.append('val', {'fps': self.get_fps('val')})
-#
-#     def on_test_epoch_end(self, trainer, pl_module):
-#         pl_module.metrics.buffer.append('test', {'fps': self.get_fps('test')})
-#
-#     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-#         self.n_images['train'] += self.get_num_images(batch)
-#
-#     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-#         self.n_images['val'] += self.get_num_images(batch)
-#
-#     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-#         self.n_images['test'] += self.get_num_images(batch)
-
-
 class FPSCallback(Callback):
+    """Measures frames per second in training and inference
+    """
     def __init__(self):
         super().__init__()
         self.times = {'train': 0.0, 'val': 0.0, 'test': 0.0, 'speedtest': 0.0}
@@ -175,6 +130,8 @@ def log_metrics(pl_module, split):
 
 
 class MetricsCallback(Callback):
+    """Uses the lightning module to log metrics and hyperparameters, e.g. for tensorboard
+    """
     def __init__(self):
         super().__init__()
 
