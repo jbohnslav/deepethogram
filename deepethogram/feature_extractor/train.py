@@ -101,7 +101,7 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
         cfg.run.dir,
         num_classes=num_classes,
         num_parameters=utils.get_num_parameters(spatial_classifier), 
-        key_metric='f1_class_mean', 
+        key_metric='f1_class_mean_nobg', 
         num_workers=cfg.compute.metrics_workers)
 
     # cfg.compute.batch_size will be changed by the automatic batch size finder, possibly. store here so that
