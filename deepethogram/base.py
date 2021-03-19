@@ -286,9 +286,21 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
             lightning_module.gpu_transforms = original_gpu_transforms
             log.debug('reverted: {}'.format(lightning_module.gpu_transforms))
 
-    callback_list = [FPSCallback(),  # DebugCallback(),# SpeedtestCallback(),
-                                    MetricsCallback(), ExampleImagesCallback(), CheckpointCallback(),
-                                    StopperCallback(stopper)]
+    key_metric = lightning_module.metrics.key_metric
+    mode = 'min' if 'loss' in key_metric else 'max'
+    monitor = f'val/{key_metric}'
+    dirpath = os.path.join(cfg.run.dir, 'lightning_checkpoints')
+    callback_list = [FPSCallback(), 
+                     MetricsCallback(), 
+                     ExampleImagesCallback(), 
+                     CheckpointCallback(), 
+                     StopperCallback(stopper),
+                    pl.callbacks.ModelCheckpoint(dirpath=dirpath, 
+                                                save_top_k=1, 
+                                                save_last=True, 
+                                                mode=mode, 
+                                                monitor=monitor, 
+                                                save_weights_only=True)]
     if 'tune' in cfg and cfg.tune.use and ray: 
         callback_list.append(TuneReportCallback(OmegaConf.to_container(cfg.tune.metrics), 
                                                 on='validation_end'))
