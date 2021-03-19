@@ -955,6 +955,42 @@ def sort_runs_by_date(runs: list) -> list:
     return sorted_runs
 
 
+def get_weightfiles_from_rundir(rundir: Union[os.PathLike, str]) -> dict:
+    subfiles = utils.get_subfiles(rundir, 'file')
+
+    deg_checkpoint = None
+    for subfile in subfiles:
+        if subfile.endswith('checkpoint.pt'):
+            deg_checkpoint = subfile
+
+    subdirs = utils.get_subfiles(rundir, 'directory')
+    last, best = None, None
+    for subdir in subdirs:
+        if subdir.endswith('lightning_checkpoints'):
+            subfiles = utils.get_subfiles(subdir, 'file')
+            for subfile in subfiles:
+                if subfile.endswith('last.ckpt'):
+                    last = subfile
+                else:
+                    basename = os.path.basename(subfile)
+                    if 'epoch' in basename and basename.endswith('.ckpt'):
+                        best = subfile
+    return dict(deg=deg_checkpoint, last=last, best=best)
+
+
+def get_weightfile_from_rundir(rundir: Union[os.PathLike, str]) -> str:
+    weightfiles = get_weightfiles_from_rundir(rundir)
+    # default to BEST weights
+    if weightfiles['best'] is not None:
+        return weightfiles['best']
+    elif weightfiles['last'] is not None:
+        return weightfiles['last']
+    elif weightfiles['deg'] is not None:
+        return weightfiles['deg']
+    else:
+        return None
+
+
 def get_weights_from_model_path(model_path: Union[str, os.PathLike]) -> dict:
     """ Finds absolute path to weight files for each model type and architecture
 
@@ -1027,8 +1063,8 @@ def get_weights_from_model_path(model_path: Union[str, os.PathLike]) -> dict:
 
         # architecture = params[model_type]['arch']
 
-        weightfile = os.path.join(rundir, 'checkpoint.pt')
-        if os.path.isfile(weightfile):
+        weightfile = get_weightfile_from_rundir(rundir)# os.path.join(rundir, 'checkpoint.pt')
+        if weightfile is not None and os.path.isfile(weightfile):
             if arch in model_weights[model_type].keys():
                 model_weights[model_type][arch].append(weightfile)
             else:
@@ -1409,7 +1445,7 @@ def configure_run_directory(cfg: DictConfig) -> str:
     str
         path to run directory
     """
-    datestring = datetime.now().strftime('%Y%m%d_%H%M%S')
+    datestring = datetime.now().strftime('%y%m%d_%H%M%S')
     if cfg.run.type == 'gui':
         path = cfg.project.path if cfg.project.path is not None else os.getcwd()
         directory = os.path.join(path, 'gui_logs', datestring)
