@@ -62,5 +62,5 @@ train:
   regularization:
     style: l2_sp
     alpha: 1e-5
-    beta: 5e-3
+    beta: 1e-3
 
