@@ -253,36 +253,8 @@ def load_state_from_dict(model, state_dict):
     return (model)
 
 
-def load_state(model, weights_file: Union[str, os.PathLike], device: torch.device = None, distributed: bool = False):
-    """"Reload model and optimizer weights from a checkpoint.pt file.
-
-    TODO: refactor this loading for pytorch 1.4+. This was written many versions ago
-
-    Args:
-        model: instance of torch.nn.Module class
-        weights_file: checkpoint containing at least a state_dict, and optionally an epoch, optimizer_dict, and
-            arguments
-        distributed: if true, will prepend "module" to parameter names, which for some reason PyTorch does (or did)
-    Returns:
-        model: model with pretrained weights
-        optimizer_dict: recent history of gradients from an optimizer
-        start_epoch: last epoch from pretrained model
-        args: SimpleNamespace containing hyperparameters
-            TODO: change args to a config dictionary
-    """
-    # fullfile = os.path.join(model_dir,run_dir, fname)
-    # state is a dictionary
-    # Keys:
-    #  epoch: final epoch number from training
-    #  state_dict: weights
-    #  args: hyperparameters
-    log.info('loading from checkpoint file {}...'.format(weights_file))
-
-    if device is not None:
-        state = torch.load(weights_file, map_location=device)
-    else:
-        # try:
-        state = torch.load(weights_file, map_location='cpu')
+def load_state_dict_from_file(weights_file, distributed: bool=False):
+    state = torch.load(weights_file, map_location='cpu')
         # except RuntimeError as e:
         #     log.exception(e)
         #     log.info('loading onto cpu...')
@@ -296,7 +268,7 @@ def load_state(model, weights_file: Union[str, os.PathLike], device: torch.devic
     else:
         start_epoch = state['epoch']
         state_dict = state['state_dict']
-        optimizer_dict = state['optimizer']
+        optimizer_dict = None # state['optimizer']
 
     first_key = next(iter(state_dict.items()))[0]
     trained_on_dataparallel = first_key[:7] == 'module.'
@@ -326,9 +298,6 @@ def load_state(model, weights_file: Union[str, os.PathLike], device: torch.devic
                 name = k
             new_state_dict[name] = v
         state_dict = new_state_dict
-    # LOAD PARAMS
-    model = load_state_from_dict(model, state_dict)
-
     if not is_pure_weights:
         if 'hyperparameters' in list(state.keys()):
             args = state['hyperparameters']
@@ -337,7 +306,40 @@ def load_state(model, weights_file: Union[str, os.PathLike], device: torch.devic
     else:
         d = {}
         args = SimpleNamespace(**d)
-    return (model, optimizer_dict, start_epoch, args)
+    return state_dict, start_epoch, args
+
+
+def load_state(model, weights_file: Union[str, os.PathLike], device: torch.device = None, distributed: bool = False):
+    """"Reload model and optimizer weights from a checkpoint.pt file.
+
+    TODO: refactor this loading for pytorch 1.4+. This was written many versions ago
+
+    Args:
+        model: instance of torch.nn.Module class
+        weights_file: checkpoint containing at least a state_dict, and optionally an epoch, optimizer_dict, and
+            arguments
+        distributed: if true, will prepend "module" to parameter names, which for some reason PyTorch does (or did)
+    Returns:
+        model: model with pretrained weights
+        optimizer_dict: recent history of gradients from an optimizer
+        start_epoch: last epoch from pretrained model
+        args: SimpleNamespace containing hyperparameters
+            TODO: change args to a config dictionary
+    """
+    # fullfile = os.path.join(model_dir,run_dir, fname)
+    # state is a dictionary
+    # Keys:
+    #  epoch: final epoch number from training
+    #  state_dict: weights
+    #  args: hyperparameters
+    log.info('loading from checkpoint file {}...'.format(weights_file))
+
+    state_dict, start_epoch, args = load_state_dict_from_file(weights_file, distributed=distributed)
+    # LOAD PARAMS
+    model = load_state_from_dict(model, state_dict)
+    optimizer_dict = None
+    
+    return model, optimizer_dict, start_epoch, args
 
 
 def print_gpus():
@@ -624,12 +626,14 @@ def load_feature_extractor_components(model, checkpoint_file: Union[str, os.Path
     # log.info('device: {}'.format(device))
     log.info('loading component {} from file {}'.format(component, checkpoint_file))
 
-    state = torch.load(checkpoint_file, map_location=device)
-    state_dict = state['state_dict']
+    state_dict, _, _ = load_state_dict_from_file(checkpoint_file)
+    
+    # state = torch.load(checkpoint_file, map_location=device)
+    # state_dict = state['state_dict']
     params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
     # import pdb; pdb.set_trace()
     model = load_state_from_dict(model, params)
-
+    # import pdb; pdb.set_trace()
     # if not os.path.isdir(subdir):
     #     log.warning('{} directory not found in {}'.format(component, directory))
     #     state = torch.load(checkpoint_file, map_location=device)

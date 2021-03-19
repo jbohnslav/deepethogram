@@ -7,6 +7,7 @@ from typing import Type, Union
 
 import h5py
 import numpy as np
+from sklearn.metrics import f1_score
 import torch
 from torch.utils.data import DataLoader
 from omegaconf import DictConfig, OmegaConf, ListConfig
@@ -18,6 +19,8 @@ from deepethogram.configuration import make_feature_extractor_inference_cfg
 from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms_inference, get_gpu_transforms
 from deepethogram.data.datasets import VideoIterable
 from deepethogram.feature_extractor.train import build_model_from_cfg as build_feature_extractor
+from deepethogram.file_io import read_labels
+from deepethogram.postprocessing import get_postprocessor_from_cfg
 
 log = logging.getLogger(__name__)
 
@@ -177,7 +180,7 @@ def predict_single_video(videofile: Union[str, os.PathLike], model: nn.Module, a
     """
 
     model.eval()
-    model.set_mode('inference')
+    # model.set_mode('inference')
 
     if type(device) != torch.device:
         device = torch.device(device)
@@ -192,6 +195,7 @@ def predict_single_video(videofile: Union[str, os.PathLike], model: nn.Module, a
     buffer = {}
 
     has_printed = False
+    # log.debug('model training mode: {}'.format(model.training))
     for i, batch in enumerate(tqdm(dataloader, leave=False)):
         if isinstance(batch, dict):
             images = batch['images']
@@ -203,11 +207,12 @@ def predict_single_video(videofile: Union[str, os.PathLike], model: nn.Module, a
         if images.device != device:
             images = images.to(device)
         # images = batch['images']
-        images = gpu_transform(images)
+        with torch.no_grad():
+            images = gpu_transform(images)
 
-        logits = model(images)
-        spatial_features = activation['spatial']
-        flow_features = activation['flow']
+            logits = model(images)
+            spatial_features = activation['spatial']
+            flow_features = activation['flow']
         # because we are using iterable datasets, each batch will be a consecutive chunk of frames from one worker
         # but they might be from totally different chunks of the video. therefore, we return the frame numbers,
         # and use this to store into our buffer in the right location
@@ -346,6 +351,8 @@ def extract(rgbs: list,
 
     class_names = [n.encode("ascii", "ignore") for n in class_names]
 
+    postprocessor = get_postprocessor_from_cfg(cfg, thresholds)
+    
     log.debug('model training mode: {}'.format(model.training))
     # iterate over movie files
     for i in tqdm(range(len(rgbs))):
@@ -383,6 +390,19 @@ def extract(rgbs: list,
             else:
                 has_worked = True
 
+        try:
+            
+            predictions = postprocessor(outputs['probabilities'].detach().cpu().numpy())
+            labelfile = projects.find_labelfiles(os.path.dirname(rgb))[0]
+            labels = read_labels(labelfile)
+            f1 = f1_score(labels, predictions, average='micro')
+            log.info('micro F1: {}'.format(f1))
+        except Exception as e:
+            log.warning('error calculating f1: {}'.format(e))
+            # since this is just for debugging, ignore
+            pass
+            
+        
         # these assignments are where it's actually saved to disk
         group = f.create_group(latent_name)
         group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
@@ -498,6 +518,7 @@ def feature_extractor_inference(cfg: DictConfig):
 
     assert os.path.isfile(metrics_file)
     best_epoch = utils.get_best_epoch_from_weightfile(feature_extractor_weights)
+    # best_epoch = -1
     log.info('best epoch from loaded file: {}'.format(best_epoch))
     with h5py.File(metrics_file, 'r') as f:
         try: 

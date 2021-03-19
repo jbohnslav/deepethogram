@@ -215,7 +215,7 @@ def make_feature_extractor_inference_cfg(project_path: Union[str, os.PathLike], 
     DictConfig
         feature extractor inference config
     """
-    config_list = ['config','augs','model/feature_extractor', 'model/flow_generator', 'inference']
+    config_list = ['config','augs','model/feature_extractor', 'model/flow_generator', 'inference', 'postprocessor']
     run_type = 'inference'
     model = 'feature_extractor'
     

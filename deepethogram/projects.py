@@ -1168,7 +1168,7 @@ def get_weightfile_from_cfg(cfg: DictConfig,
         if cfg[model_type].weights is not None and cfg[model_type].weights != 'latest':
             path_to_weights = get_weight_file_absolute_or_relative(cfg, cfg[model_type].weights)
             assert os.path.isfile(path_to_weights)
-            log.info('loading specified weights')
+            log.info('loading specified weights: {}'.format(path_to_weights))
             return path_to_weights
         elif cfg.reload.latest or cfg[model_type].weights == 'latest':
             # print(trained_models)
