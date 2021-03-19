@@ -35,5 +35,5 @@ setuptools.setup(
                       'scipy',
                       'tqdm', 
                       'vidio', 
-                      'pytorch_lightning>=1.1.6']
+                      'pytorch_lightning<=1.1.8']
 )
