@@ -960,14 +960,25 @@ def make_learning_curves_figure_multilabel_classification(logger_file, fig=None)
 
         # F1 score!
         ax = fig.add_subplot(4, 2, 6)
+        data = OrderedDict(train=f['train/f1_overall'][:],
+                           train_class_mean=f['train/f1_class_mean'][:],
+                           train_class_mean_nobg=f['train/f1_class_mean_nobg'][:],
+                           val=f['val/f1_overall'][:],
+                           val_class_mean=f['val/f1_class_mean'][:], 
+                           val_class_mean_nobg=f['val/f1_class_mean_nobg'][:])
         # we'll reuse these for the following figures
+        plot_args = {'train_class_mean': {'linestyle': '--'},
+                     'train_class_mean_nobg': {'linestyle': 'dotted'},
+                     'val_class_mean': {'linestyle': '--'},
+                     'val_class_mean_nobg': {'linestyle': 'dotted'},}
+        color_inds = [0, 0, 0, 1, 1, 1]
+        # data = get_data_from_file(f, 'f1')
+        plot_metric(data, 'F1', ax, True, plot_args, color_inds)
+
+        # AUROC
         plot_args = {'train_class_mean': {'linestyle': '--'},
                      'val_class_mean': {'linestyle': '--'}}
         color_inds = [0, 0, 1, 1]
-        data = get_data_from_file(f, 'f1')
-        plot_metric(data, 'F1', ax, False, plot_args, color_inds)
-
-        # AUROC
         ax = fig.add_subplot(4, 2, 7)
         data = get_data_from_file(f, 'auroc')
         plot_metric(data, 'AUROC', ax, False, plot_args, color_inds)
