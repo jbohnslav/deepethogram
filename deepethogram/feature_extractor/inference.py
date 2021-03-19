@@ -368,7 +368,7 @@ def extract(rgbs: list,
             for k, v in outputs.items():
                 log.info('{}: {}'.format(k, v.shape))
                 if k == 'debug':
-                    log.info('All should be 1.0: min: {:.4f} mean {:.4f} max {:.4f}'.format(
+                    log.debug('All should be 1.0: min: {:.4f} mean {:.4f} max {:.4f}'.format(
                         v.min(), v.mean(), v.max()
                     ))
 
@@ -394,6 +394,22 @@ def extract(rgbs: list,
         group.create_dataset('class_names', data=class_names, dtype=dt)
         del outputs
         f.close()
+
+def get_run_files_from_weights(weightfile: Union[str, os.PathLike]):
+    loaded_config_file = os.path.join(os.path.dirname(weightfile), 'config.yaml')
+    if not os.path.isfile(loaded_config_file):
+        # weight file should be at most one-subdirectory-down from rundir
+        loaded_config_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 'config.yaml')
+        assert os.path.isfile(loaded_config_file), 'no associated config file for weights! {}'.format(
+            weightfile)
+        
+    metrics_file = os.path.join(os.path.dirname(weightfile), 'classification_metrics.h5')
+    if not os.path.isfile(metrics_file):
+        metrics_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 
+                                    'classification_metrics.h5')
+        assert os.path.isfile(metrics_file), 'no associated metrics file for weights! {}'.format(weightfile)
+    
+    return dict(config_file=loaded_config_file, metrics_file=metrics_file)
 
 
 def feature_extractor_inference(cfg: DictConfig):
@@ -463,8 +479,9 @@ def feature_extractor_inference(cfg: DictConfig):
 
     feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
     assert os.path.isfile(feature_extractor_weights)
+    run_files = get_run_files_from_weights(feature_extractor_weights)
     if cfg.inference.use_loaded_model_cfg:
-        loaded_config_file = os.path.join(os.path.dirname(feature_extractor_weights), 'config.yaml')
+        loaded_config_file = run_files['config_file']
         loaded_model_cfg = OmegaConf.load(loaded_config_file).feature_extractor
         current_model_cfg = cfg.feature_extractor
         model_cfg = OmegaConf.merge(current_model_cfg, loaded_model_cfg)
@@ -477,15 +494,17 @@ def feature_extractor_inference(cfg: DictConfig):
     _, _, _, _, model = model_components
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
     
-    metrics_file = os.path.join(os.path.dirname(feature_extractor_weights), 'classification_metrics.h5')
+    metrics_file = run_files['metrics_file']
 
     assert os.path.isfile(metrics_file)
+    best_epoch = utils.get_best_epoch_from_weightfile(feature_extractor_weights)
+    log.info('best epoch from loaded file: {}'.format(best_epoch))
     with h5py.File(metrics_file, 'r') as f:
         try: 
-            thresholds = f['val']['metrics_by_threshold']['optimum'][-1, :]
+            thresholds = f['val']['metrics_by_threshold']['optimum'][best_epoch, :]
         except KeyError:
             # backwards compatibility
-            thresholds = f['threshold_curves']['val']['optimum'][-1, :]
+            thresholds = f['threshold_curves']['val']['optimum'][best_epoch, :]
         log.info('thresholds: {}'.format(thresholds))
     class_names = list(cfg.project.class_names)
     # class_names = projects.get_classes_from_project(cfg)
