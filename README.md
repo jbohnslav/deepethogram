@@ -25,6 +25,9 @@ In brief:
 * Install PySide2: `conda install -c conda-forge pyside2==5.13.2` 
 * `pip install deepethogram`
 
+## News
+Due to paper revisions, DeepEthogram is going under major re-development. I might take longer than average to respond to your emails / issues on GitHub. However, I'm confident that the ongoing update to DeepEthogram will significantly improve model performance and train / inference time. Thanks for your patience!
+
 ## Pretrained models
 Rather than start from scratch, we will start with model weights pretrained on the Kinetics700 dataset. Go to 
 To download the pretrained weights, please use [this Google Drive link](https://drive.google.com/file/d/1ntIZVbOG1UAiFVlsAAuKEBEVCVevyets/view?usp=sharing).
