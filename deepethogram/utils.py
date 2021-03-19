@@ -320,7 +320,10 @@ def load_state(model, weights_file: Union[str, os.PathLike], device: torch.devic
     if model_prepended:
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
-            name = k[6:]
+            if k[:6] == 'model.':
+                name = k[6:]
+            else:
+                name = k
             new_state_dict[name] = v
         state_dict = new_state_dict
     # LOAD PARAMS
@@ -780,3 +783,21 @@ def get_dotted_from_cfg(cfg, dotted):
         cfg_chunk = cfg_chunk.get(key_list[i])
         
     return cfg_chunk
+
+def get_best_epoch_from_weightfile(weightfile: Union[str, os.PathLike]) -> int:
+    basename = os.path.basename(weightfile)
+    # in the previous version of deepethogram, load the last checkpoint
+    if basename.endswith('.pt'): 
+        return -1
+    assert basename.endswith('.ckpt')
+    basename = os.path.splitext(basename)[0]
+    
+    # if weightfile is the "last"
+    if 'last' in basename:
+        return -1
+
+    components = basename.split('-')
+    component = components[0]
+    assert component.startswith('epoch')
+    best_epoch = component.split('=')[1]
+    return int(best_epoch)
