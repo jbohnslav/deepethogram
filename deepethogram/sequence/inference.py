@@ -15,6 +15,7 @@ from tqdm import tqdm
 from deepethogram import utils, projects
 from deepethogram.configuration import make_sequence_inference_cfg
 from deepethogram.data.datasets import FeatureVectorDataset
+from deepethogram.feature_extractor.inference import get_run_files_from_weights
 from deepethogram.sequence.train import build_model_from_cfg
 
 log = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
     ValueError
         Check that activation is either sigmoid or softmax
     """
-    assert (latent_name is not None)
+    assert latent_name is not None
 
     gen = FeatureVectorDataset(dataloader, labelfile=None, h5_key=latent_name,
                                 sequence_length=sequence_length,
@@ -124,7 +125,7 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
 
 def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: str,
             latent_name: str, output_name: str = 'tgmj', sequence_length: int = 180,
-            is_two_stream: bool = True, device: str = 'cuda:1', ignore_error=True, overwrite=False,
+            is_two_stream: bool = True, device: str = 'cuda:0', ignore_error=True, overwrite=False,
             class_names: list = ['background']):
     torch.backends.cudnn.benchmark = True
 
@@ -143,6 +144,8 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
         activation_function = torch.nn.Softmax(dim=1)
     elif final_activation == 'sigmoid':
         activation_function = torch.nn.Sigmoid()
+    else:
+        raise NotImplementedError
 
     class_names = [n.encode("ascii", "ignore") for n in class_names]
 
@@ -150,16 +153,20 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
         outputfile = outputfiles[i]
         log.info('running inference on {}. latent name: {} output name: {}...'.format(outputfile, latent_name,
                                                                                       output_name))
-        gen = FeatureVectorDataset(outputfile, labelfile=None, h5_key=latent_name,
-                                    sequence_length=sequence_length,
-                                    nonoverlapping=True, store_in_ram=False, is_two_stream=is_two_stream)
-        n_datapoints = gen.shape[1]
-        gen = data.DataLoader(gen, batch_size=1, shuffle=False, num_workers=0, drop_last=False)
-        gen = iter(gen)
+        
+        logits, probabilities = infer(model, device, final_activation, outputfile, latent_name, sequence_length, 
+                                      is_two_stream)
+        
+        # gen = FeatureVectorDataset(outputfile, labelfile=None, h5_key=latent_name,
+        #                             sequence_length=sequence_length,
+        #                             nonoverlapping=True, store_in_ram=False, is_two_stream=is_two_stream)
+        # n_datapoints = gen.shape[1]
+        # gen = data.DataLoader(gen, batch_size=1, shuffle=False, num_workers=0, drop_last=False)
+        # gen = iter(gen)
 
-        log.debug('Making sequence iterator with parameters: ')
-        log.debug('file: {}'.format(outputfile))
-        log.debug('seq length: {}'.format(sequence_length))
+        # log.debug('Making sequence iterator with parameters: ')
+        # log.debug('file: {}'.format(outputfile))
+        # log.debug('seq length: {}'.format(sequence_length))
 
         with h5py.File(outputfile, 'r+') as f:
 
@@ -170,55 +177,11 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
                     log.info('Latent {} already found in file {}, skipping...'.format(output_name, outputfile))
                     continue
             group = f.create_group(output_name)
-
-            for i in tqdm(range(len(gen)), leave=False):
-                # for i in tqdm(range(1000)):
-                with torch.no_grad():
-                    try:
-                        batch = next(gen)
-                        # star means that if batch is a tuple of images, flows, it will pass in as sequential
-                        # positional arguments
-                        features = batch['features'].to(device)
-                        logits = model(features)
-
-                        if not has_printed:
-                            log.debug('logits shape: {}'.format(logits.shape))
-                            has_printed = True
-
-                    except KeyboardInterrupt:
-                        raise
-                    except Exception as e:
-                        # (e)
-                        log.exception('Error on video {}, frame: {}'.format(outputfile, i))
-                        if ignore_error:
-                            log.info('continuing anyway...')
-                            break
-                        else:
-                            raise
-
-                    probabilities = activation_function(logits).detach().cpu().numpy().squeeze().T
-                    logits = logits.detach().cpu().numpy().squeeze().T
-
-                if i == 0:
-                    group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
-                    group.create_dataset('logits', (n_datapoints, logits.shape[1]), dtype=np.float32)
-                    group.create_dataset('P', (n_datapoints, logits.shape[1]), dtype=np.float32)
-                    dt = h5py.string_dtype()
-                    group.create_dataset('class_names', data=class_names, dtype=dt)
-                end = min(i * sequence_length + sequence_length, n_datapoints)
-                indices = range(i * sequence_length, end)
-                # if we've padded the final batch
-                # print('len indices: {} end: {}'.format(len(indices), end))
-                if len(indices) < probabilities.shape[0]:
-                    probabilities = probabilities[:len(indices), :]
-                    logits = logits[:len(indices), :]
-                # print('indices: {}'.format(indices))
-                # print('P: {}'.format(probabilities.shape))
-
-                group['P'][indices, :] = probabilities
-                group['logits'][indices, :] = logits
-
-                del (batch, logits, probabilities)
+            group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
+            group.create_dataset('logits', data=logits, dtype=np.float32)
+            group.create_dataset('P', data=probabilities, dtype=np.float32)
+            dt = h5py.string_dtype()
+            group.create_dataset('class_names', data=class_names, dtype=dt)
 
 
 def sequence_inference(cfg: DictConfig):
@@ -242,6 +205,20 @@ def sequence_inference(cfg: DictConfig):
             latent_name = loaded_cfg['feature_extractor']['arch']
     else:
         latent_name = cfg.sequence.latent_name
+        
+    run_files = get_run_files_from_weights(weights)
+    if cfg.inference.use_loaded_model_cfg:
+        output_name = cfg.sequence.output_name
+        loaded_config_file = run_files['config_file']
+        loaded_model_cfg = OmegaConf.load(loaded_config_file).sequence
+        current_model_cfg = cfg.sequence
+        model_cfg = OmegaConf.merge(current_model_cfg, loaded_model_cfg)
+        cfg.sequence = model_cfg
+        # we don't want to use the weights that the trained model was initialized with, but the weights after training
+        # therefore, overwrite the loaded configuration with the current weights
+        cfg.sequence.weights = weights
+        cfg.sequence.latent_name = latent_name
+        cfg.sequence.output_name = output_name
     log.info('latent name used for running sequence inference: {}'.format(latent_name))
 
     # the output name will be a group in the output hdf5 dataset containing probabilities, etc
@@ -269,16 +246,20 @@ def sequence_inference(cfg: DictConfig):
     log.info('model: {}'.format(model))
 
     model = utils.load_weights(model, weights)
-    metrics_file = os.path.join(os.path.dirname(weights), 'classification_metrics.h5')
+    
+    metrics_file = run_files['metrics_file']
+    assert os.path.isfile(metrics_file)
+    best_epoch = utils.get_best_epoch_from_weightfile(weights)
+    # best_epoch = -1
+    log.info('best epoch from loaded file: {}'.format(best_epoch))
     with h5py.File(metrics_file, 'r') as f:
-        try:
-            thresholds = f['val']['metrics_by_threshold']['optimum'][:]
+        try: 
+            thresholds = f['val']['metrics_by_threshold']['optimum'][best_epoch, :]
         except KeyError:
-            thresholds = f['threshold_curves']['val']['optimum'][:]
-        if thresholds.ndim == 2:
-            thresholds = thresholds[-1, :]
-        
-        log.info('thresholds: {}'.format(thresholds))
+            # backwards compatibility
+            thresholds = f['threshold_curves']['val']['optimum'][best_epoch, :]
+    log.info('thresholds: {}'.format(thresholds))
+    
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
     class_names = cfg.project.class_names
     class_names = np.array(class_names)
