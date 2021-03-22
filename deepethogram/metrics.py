@@ -400,7 +400,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
 
     if thresholds is None:
         # using 200 means that approximated mAP, AUROC is almost exactly the same as exact
-        thresholds = np.linspace(0,1,200)
+        thresholds = np.linspace(1e-4,1,200)
     # log.info('num workers in evaluate thresholds: {}'.format(num_workers))
     # log.debug('probabilities shape in metrics calc: {}'.format(probabilities.shape))
     metrics_by_threshold = {}
