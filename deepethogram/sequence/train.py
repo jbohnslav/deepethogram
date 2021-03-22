@@ -127,7 +127,7 @@ class SequenceLightning(BaseLightningModule):
         images, outputs = self(batch, 'test')
 
     def visualize_batch(self, features, predictions,labels, split: str):
-        if not self.hparams.train.viz:
+        if not self.hparams.train.viz_examples:
             return
         # log.info('current epoch: {}'.format(self.current_epoch))
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
@@ -136,6 +136,7 @@ class SequenceLightning(BaseLightningModule):
         if viz_cnt > 10 or self.current_epoch % 10 != 0:
             return
         fig = plt.figure(figsize=(14, 14))
+        # log.info('visualizing sequence batch')
         viz.visualize_batch_sequence(features, predictions, labels, fig=fig)
         viz.save_figure(fig, 'batch', True, viz_cnt, split)
         # this should happen in the save figure function, but for some reason it doesn't
