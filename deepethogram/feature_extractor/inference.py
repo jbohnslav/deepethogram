@@ -515,7 +515,6 @@ def feature_extractor_inference(cfg: DictConfig):
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
     
     metrics_file = run_files['metrics_file']
-
     assert os.path.isfile(metrics_file)
     best_epoch = utils.get_best_epoch_from_weightfile(feature_extractor_weights)
     # best_epoch = -1
@@ -526,7 +525,8 @@ def feature_extractor_inference(cfg: DictConfig):
         except KeyError:
             # backwards compatibility
             thresholds = f['threshold_curves']['val']['optimum'][best_epoch, :]
-        log.info('thresholds: {}'.format(thresholds))
+    log.info('thresholds: {}'.format(thresholds))
+    
     class_names = list(cfg.project.class_names)
     # class_names = projects.get_classes_from_project(cfg)
     class_names = np.array(class_names)
