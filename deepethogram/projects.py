@@ -968,11 +968,13 @@ def get_weightfiles_from_rundir(rundir: Union[os.PathLike, str]) -> dict:
     for subdir in subdirs:
         if subdir.endswith('lightning_checkpoints'):
             subfiles = utils.get_subfiles(subdir, 'file')
+            subfiles.sort()
             for subfile in subfiles:
                 if subfile.endswith('last.ckpt'):
                     last = subfile
                 else:
                     basename = os.path.basename(subfile)
+                    # the last, alphabetically, checkpoint with epoch in the name is assumed to be the best
                     if 'epoch' in basename and basename.endswith('.ckpt'):
                         best = subfile
     return dict(deg=deg_checkpoint, last=last, best=best)
