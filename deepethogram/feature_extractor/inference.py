@@ -395,8 +395,8 @@ def extract(rgbs: list,
             predictions = postprocessor(outputs['probabilities'].detach().cpu().numpy())
             labelfile = projects.find_labelfiles(os.path.dirname(rgb))[0]
             labels = read_labels(labelfile)
-            f1 = f1_score(labels, predictions, average='micro')
-            log.info('micro F1: {}'.format(f1))
+            f1 = f1_score(labels, predictions, average='macro')
+            log.info('macro F1: {}'.format(f1))
         except Exception as e:
             log.warning('error calculating f1: {}'.format(e))
             # since this is just for debugging, ignore
