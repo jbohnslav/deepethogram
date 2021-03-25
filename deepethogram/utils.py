@@ -709,6 +709,11 @@ def print_hdf5(h5py_obj, level=-1, print_full_name: bool = False, print_attrs: b
         tree = '|' + '-' * (n_spaces - 2) + ' '
         return prepend + tree
 
+    if isinstance(h5py_obj, str) or isinstance(h5py_obj, os.PathLike):
+        with h5py.File(h5py_obj, 'r') as f:
+            print_hdf5(f)
+            return
+
     for key in h5py_obj.keys():
         entry = h5py_obj[key]
         name = entry.name if print_full_name else os.path.basename(entry.name)
