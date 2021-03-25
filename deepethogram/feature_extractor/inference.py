@@ -294,8 +294,10 @@ def main(cfg: DictConfig):
             thresholds = f['val']['metrics_by_threshold']['optimum'][-1, :]
         except KeyError:
             # backwards compatibility
-            thresholds = f['threshold_curves']['val']['optimum'][-1, :]
-        log.info('thresholds: {}'.format(thresholds))
+            thresholds = f['threshold_curves']['val']['optimum'][:]
+    if thresholds.ndim > 1:
+        thresholds = thresholds[-1, :]
+    log.info('thresholds: {}'.format(thresholds))
     class_names = list(cfg.project.class_names)
     # class_names = projects.get_classes_from_project(cfg)
     class_names = np.array(class_names)
