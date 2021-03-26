@@ -236,6 +236,10 @@ def load_state_from_dict(model, state_dict):
     model_dict = model.state_dict()
     pretrained_dict = {}
     for k, v in state_dict.items():
+        if 'criterion' in k:
+            # we might have parameters from the loss function in our loaded weights. we don't want to reload these; 
+            # we will specify them for whatever we are currently training. 
+            continue
         if k not in model_dict:
             log.warning('{} not found in model dictionary'.format(k))
         else:
