@@ -15,7 +15,7 @@ from PySide2.QtCore import Slot
 from PySide2.QtWidgets import (QMainWindow, QFileDialog, QInputDialog)
 from omegaconf import DictConfig, OmegaConf
 
-from deepethogram import projects, utils
+from deepethogram import projects, utils, configuration
 from deepethogram.file_io import VideoReader
 from deepethogram.postprocessing import get_postprocessor_from_cfg
 from deepethogram.gui.custom_widgets import UnclickButtonOnPipeCompletion, SubprocessChainer
@@ -1007,11 +1007,11 @@ class MainWindow(QMainWindow):
         seq_default = projects.load_default('model/sequence')
         default_archs['sequence'] = {'arch': seq_default['sequence']['arch']}
 
-        if self.cfg.feature_extractor.arch is not None:
+        if 'feature_extractor' in self.cfg and self.cfg.feature_extractor.arch is not None:
             default_archs['feature_extractor']['arch'] = self.cfg.feature_extractor.arch
-        if self.cfg.flow_generator.arch is not None:
+        if 'flow_generator' in self.cfg and self.cfg.flow_generator.arch is not None:
             default_archs['flow_generator']['arch'] = self.cfg.flow_generator.arch
-        if self.cfg.sequence.arch is not None:
+        if 'sequence' in self.cfg and 'arch' in self.cfg.sequence and self.cfg.sequence.arch is not None:
             default_archs['sequence']['arch'] = self.cfg.sequence.arch 
         self.default_archs = default_archs
         log.debug('default archs: {}'.format(default_archs))
@@ -1188,14 +1188,25 @@ def run() -> None:
     run_type = 'gui'
     model = None
     
-    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
+    project_path = projects.get_project_path_from_cl(sys.argv, error_if_not_found=False)
+    if project_path is not None:
+        cfg = configuration.make_config(project_path, config_list, run_type, model, use_command_line=True)
+    else:
+        command_line_cfg = OmegaConf.from_cli()
+        if 'preset' in command_line_cfg:
+            config_list.append('preset/' + command_line_cfg.preset)
+        cfgs = [configuration.load_config_by_name(i) for i in config_list]
+        cfg = OmegaConf.merge(*cfgs, command_line_cfg)
+
     try:
         cfg = projects.setup_run(cfg)
     except Exception:
         pass
+    
+    # OmegaConf.set_struct(cfg, False)
         
     log.info('CWD: {}'.format(os.getcwd()))
-    log.info('Configuration used: {}'.format(cfg.pretty()))
+    log.info('Configuration used: {}'.format(OmegaConf.to_yaml(cfg)))
     app = QtWidgets.QApplication(sys.argv)
 
     app = set_style(app)
