@@ -9,6 +9,8 @@ each frame of a video.
 Example use cases:
 * Measuring itching or scratching behaviors to assess the differences between wild-type and mutant animals
 * Measuring the amount of time animals spend courting, and comparing between experimental conditions
+* Counting licks from video for appetite measurement
+* Measuring reach onset times for alignment with neural activity
 
 DeepEthogram uses state-of-the-art algorithms for *temporal action detection*. We build on the following previous machine 
 learning research into action detection:
@@ -22,8 +24,10 @@ For full installation instructions, see [this readme file](docs/installation.md)
 
 In brief: 
 * [Install PyTorch](https://pytorch.org/) 
-* Install PySide2: `conda install -c conda-forge pyside2==5.13.2` 
 * `pip install deepethogram`
+
+## News
+DeepEthogram is now in Beta, version 0.1! There are major changes to the codebase and to model training and inference. Model performance, measured by F1, accuracy, etc. should be higher in version 0.1. Model training times and inference times should be dramatically reduced. For full information, see [the DeepEthogram Beta docs](docs/beta.md)
 
 ## Licensing
 Copyright (c) 2020 - President and Fellows of Harvard College. All rights reserved.
@@ -37,7 +41,9 @@ Development (hms_otd@harvard.edu) with cc to Dr. Chris Harvey. For details, see 
 
 ## Dependencies
 The major dependencies for DeepEthogram are as follows: 
-* PyTorch, torchvision: all the neural networks, training, and inference pipelines were written in PyTorch
+* pytorch, torchvision: all the neural networks, training, and inference pipelines were written in PyTorch
+* pytorch-lightning: for nice model training base classes
+* kornia: for GPU-based image augmentations
 * pyside2: for the GUI
 * opencv: for video and image reading and writing
 * opencv_transforms: for fast image augmentation
@@ -45,15 +51,13 @@ The major dependencies for DeepEthogram are as follows:
 * matplotlib: plotting metrics and neural network outputs
 * pandas: reading and writing CSVs
 * h5py: saving inference outputs as HDF5 files
-* hydra: for smoothly integrating configuration files and command line inputs
-* tifffile: for writing neural network outputs as tiff stacks
+* omegaconf: for smoothly integrating configuration files and command line inputs
 * tqdm: for nice progress bars
 
 ## Hardware requirements
-For GUI usage, we expect that the users will be working on a local workstation with a good NVIDIA graphics card. For 
-training via a cluster, you can use the CLI yourself. 
+For GUI usage, we expect that the users will be working on a local workstation with a good NVIDIA graphics card. For training via a cluster, you can use the command line interface. 
 
-* CPU: 8 cores or more for parallel data loading
+* CPU: 4 cores or more for parallel data loading
 * Hard Drive: SSD at minimum, NVMe drive is better.
 * GPU: DeepEthogram speed is directly related to GPU performance. An NVIDIA GPU is absolutely required, as PyTorch uses 
 CUDA, while AMD does not. 
@@ -63,5 +67,6 @@ Recommended GPUs: `RTX 3090`, `RTX 3080`, `Titan RTX`, `2080 Ti`, `2080 super`, 
 Some older ones might also be fine, like a `1080` or even `1070 Ti`/ `1070`. 
 
 ## Changelog
+* 0.1: deepethogram beta! See above for details. 
 * 0.0.1.post1: bug fixes and video conversion scripts added
 * 0.0.1: initial version
