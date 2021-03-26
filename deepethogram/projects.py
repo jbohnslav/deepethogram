@@ -1154,7 +1154,7 @@ def get_weightfile_from_cfg(cfg: DictConfig,
 
     architecture = cfg[model_type].arch
 
-    if cfg[model_type].weights is not None and cfg[model_type].weights == 'pretrained':
+    if model_type in cfg and cfg[model_type].weights is not None and cfg[model_type].weights == 'pretrained':
         assert model_type in ['flow_generator', 'feature_extractor']
         pretrained_models = get_weights_from_model_path(cfg.project.pretrained_path)
         assert len(pretrained_models[model_type][architecture]) > 0
@@ -1167,7 +1167,7 @@ def get_weightfile_from_cfg(cfg: DictConfig,
             assert len(trained_models['feature_extractor'][architecture]) > 0
             return trained_models['feature_extractor'][architecture][-1]
     else:
-        if cfg[model_type].weights is not None and cfg[model_type].weights != 'latest':
+        if model_type in cfg and cfg[model_type].weights is not None and cfg[model_type].weights != 'latest':
             path_to_weights = get_weight_file_absolute_or_relative(cfg, cfg[model_type].weights)
             assert os.path.isfile(path_to_weights)
             log.info('loading specified weights: {}'.format(path_to_weights))
@@ -1249,7 +1249,7 @@ def convert_config_paths_to_absolute(project_cfg: DictConfig) -> DictConfig:
         except ValueError as e:
             error_string = 'pretrained directory does not exist! {}\nSee instructions '.format(pretrained_path) + \
             'on the project GitHub for downloading weights: https://github.com/jbohnslav/deepethogram'
-            print(error_string)
+            log.error(error_string)
             raise
         
     
@@ -1287,7 +1287,7 @@ def load_default(conf_name: str) -> dict:
     defaults = utils.load_yaml(defaults_file)
     return defaults
 
-def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5') -> None:
+def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5', **kwargs) -> None:
     """Converts all videos in a project from one filetype to another. 
     
     Note: If using movie_format other than 'directory' or 'hdf5', will re-compress images!
@@ -1307,7 +1307,7 @@ def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5'
     for key, record in tqdm(records.items(), desc='converting videos'):
         videofile = record['rgb']
         try:
-            convert_video(videofile, movie_format=movie_format)
+            convert_video(videofile, movie_format=movie_format, **kwargs)
         except ValueError as e:
             print(e)
 
@@ -1369,7 +1369,7 @@ def get_config_file_from_project_path(project_path):
 #
 #         assert os.path.isfile(cfg.reload.weights)
 #     return cfg
-def get_project_path_from_cl(argv: list) -> str:
+def get_project_path_from_cl(argv: list, error_if_not_found=True) -> str:
     for arg in argv:
         if 'project.config_file' in arg:
             key, path = arg.split('=')
@@ -1382,7 +1382,10 @@ def get_project_path_from_cl(argv: list) -> str:
             key, path = arg.split('=')
             assert os.path.isdir(path)
             return path
-    raise ValueError('project path or file not in args: {}'.format(argv))
+    if error_if_not_found:
+        raise ValueError('project path or file not in args: {}'.format(argv))
+    else:
+        return None
 
 def make_config(project_path: Union[str, os.PathLike], config_list: list, run_type: str, model: str) -> DictConfig:
     """DEPRECATED
@@ -1424,12 +1427,12 @@ def make_config(project_path: Union[str, os.PathLike], config_list: list, run_ty
     cfg.run = {'type': run_type, 'model': model}
     return cfg
     
-def make_config_from_cli(argv, *args, **kwargs):
-    """DEPRECATED
-    TODO: replace with configuration.make_config
-    """
-    project_path = get_project_path_from_cl(argv)
-    return make_config(project_path, *args, **kwargs)
+# def make_config_from_cli(argv, *args, **kwargs):
+#     """DEPRECATED
+#     TODO: replace with configuration.make_config
+#     """
+#     project_path = get_project_path_from_cl(argv)
+#     return make_config(project_path, *args, **kwargs)
 
 def configure_run_directory(cfg: DictConfig) -> str:
     """Makes a run directory from a configuration
@@ -1461,8 +1464,10 @@ def configure_run_directory(cfg: DictConfig) -> str:
     os.chdir(directory)
     return directory
     
-def configure_logging(cfg: DictConfig) -> None:
+def configure_logging(cfg: DictConfig = None) -> None:
     """Sets up python logging to use a specific format, and also save to disk
+
+    If no config is passed, simply log to the command line. 
 
     Parameters
     ----------
@@ -1470,8 +1475,16 @@ def configure_logging(cfg: DictConfig) -> None:
         see deepethogram.configuration
     """
     # assume current directory is run directory
-    assert cfg.log.level in ['debug', 'info', 'warning', 'error', 'critical']
-    
+    if cfg is None:
+        log_level = 'info'
+        handlers = [logging.StreamHandler()]
+    else:
+        assert cfg.log.level in ['debug', 'info', 'warning', 'error', 'critical']
+        log_level = cfg.log.level
+        handlers=[
+            logging.FileHandler(cfg.log.level + '.log'), 
+            logging.StreamHandler()
+            ]    
     # https://docs.python.org/3/library/logging.html#logging-levels
     log_lookup = {'critical': 50,
                   'error': 40, 
@@ -1481,12 +1494,9 @@ def configure_logging(cfg: DictConfig) -> None:
     logger = logging.getLogger()
     while logger.hasHandlers():
         logger.removeHandler(logger.handlers[0])
-    logging.basicConfig(level=log_lookup[cfg.log.level], 
+    logging.basicConfig(level=log_lookup[log_level], 
                         format='[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s',
-                        handlers=[
-                            logging.FileHandler(cfg.log.level + '.log'), 
-                            logging.StreamHandler()
-                        ])
+                        handlers=handlers)
     
 def setup_run(cfg: DictConfig) -> DictConfig:
     """Makes a run directory and configures logging.
@@ -1503,6 +1513,8 @@ def setup_run(cfg: DictConfig) -> DictConfig:
     DictConfig
         see deepethogram.configuration
     """
+    # set up logging in case we get bugs between now and the real logging setup. otherwise nothing will print
+    configure_logging()
     cfg = deepethogram.projects.convert_config_paths_to_absolute(cfg)
     directory = configure_run_directory(cfg)
     cfg.run.dir = directory
