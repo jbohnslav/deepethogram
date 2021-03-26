@@ -54,8 +54,6 @@ class BaseLightningModule(pl.LightningModule):
 
         self.optimizer = None  # will be overridden in configure_optimizers
         self.hparams.weight_decay = None
-        if 'feature_extractor' in self.hparams.keys():
-            self.hparams.weight_decay = self.hparams.feature_extractor.weight_decay
 
         self.scheduler_mode = 'min' if self.metrics.key_metric == 'loss' else 'max'
         # need to move this to top-level for lightning's learning rate finder
@@ -160,7 +158,7 @@ class BaseLightningModule(pl.LightningModule):
 
     def configure_optimizers(self):
 
-        weight_decay = 0 if self.hparams.weight_decay is None else self.hparams.weight_decay
+        weight_decay = 0 # if self.hparams.weight_decay is None else self.hparams.weight_decay
 
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.lr,
                                weight_decay=weight_decay)
