@@ -17,8 +17,10 @@ limitations under the License.
 Changes: 2D -> 3D. changed filter sizes, number of input images, number of layers... only kept their naming
 convention and overall structure
 """
+import logging
+
 from .components import *
-import warnings
+# import warnings
 
 class TinyMotionNet3D(nn.Module):
     def __init__(self, num_images=11, input_channels=3, batchnorm=True, flow_div=1,
@@ -33,7 +35,7 @@ class TinyMotionNet3D(nn.Module):
         # self.out_channels = int((num_images-1)*2)
         self.batchnorm = batchnorm
         bias = not self.batchnorm
-        warnings.warn('ignoring flow div value of {}: setting to 1 instead'.format(flow_div))
+        logging.debug('ignoring flow div value of {}: setting to 1 instead'.format(flow_div))
         self.flow_div = 1
 
         self.channels = [channel_base * (2 ** i) for i in range(0, 3)]

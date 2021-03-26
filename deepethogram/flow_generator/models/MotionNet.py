@@ -40,7 +40,7 @@ class MotionNet(nn.Module):
         self.out_channels = int((num_images - 1) * 2)
         self.batchNorm = batchNorm
 
-        log.warning('ignoring flow div value of {}: setting to 1 instead'.format(flow_div))
+        log.debug('ignoring flow div value of {}: setting to 1 instead'.format(flow_div))
         self.flow_div = 1
 
         self.conv1 = conv(self.batchNorm, self.num_images * 3, 64)
