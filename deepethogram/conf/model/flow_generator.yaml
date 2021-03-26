@@ -16,7 +16,7 @@ flow_generator:
   # the architecture for the flow generator. Currently supported models: TinyMotionNet, MotionNet, TinyMotionNet3d
   arch: TinyMotionNet
   # path to a checkpoint.pt weight file for reloading.
-  weights: null
+  weights: pretrained
 train:
   # overwrite default steps per epoch: because we don't care about rare classes for optic flow, don't need so much 
   # validation

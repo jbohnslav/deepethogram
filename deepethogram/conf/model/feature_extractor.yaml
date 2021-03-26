@@ -29,7 +29,7 @@ feature_extractor:
   # deprecated
   inputs: both
   # path to a checkpoint.pt file which will reload this model. Should have weights for both spatial and flow streams
-  weights: null
+  weights: pretrained
 train:
   # overwrite default steps per epoch: ideally we would not limit train steps at all. However, with very large datasets
   # this can be infeasible
