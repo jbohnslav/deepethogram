@@ -57,7 +57,7 @@ def sequence_train(cfg: DictConfig) -> nn.Module:
     weights = projects.get_weightfile_from_cfg(cfg, model_type='sequence')
     if weights is not None:
         model = utils.load_weights(model, weights)
-    log.info('model arch: {}'.format(model))
+    log.debug('model arch: {}'.format(model))
     log.info('Total trainable params: {:,}'.format(utils.get_num_parameters(model)))
     stopper = get_stopper(cfg)
 
@@ -186,7 +186,7 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
     deepethogram.sequence.models
     """
     seq = cfg.sequence
-    log.info('model building parameters: {}'.format(seq))
+    log.debug('model building parameters: {}'.format(seq))
     if seq.arch == 'linear':
         model = Linear(num_features, num_classes, kernel_size=1)
     elif seq.arch == 'conv_nonlinear':
