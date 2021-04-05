@@ -81,7 +81,8 @@ def get_bouts(ethogram: np.ndarray) -> list:
     return stats
 
 
-def find_bout_indices(predictions_trace: np.ndarray, bout_length: int, positive: bool = True) -> np.ndarray:
+def find_bout_indices(predictions_trace: np.ndarray, bout_length: int, positive: bool = True,
+                      eps: float=1e-6) -> np.ndarray:
     """ Find indices where a bout of bout-length occurs in a binary vector
 
     Bouts are defined as consecutive sets of 1s (if `positive`) or 0s (if not `positive`).
@@ -103,9 +104,10 @@ def find_bout_indices(predictions_trace: np.ndarray, bout_length: int, positive:
     center = np.ones(bout_length) / bout_length
     filt = np.concatenate([[-bout_length / 2], center, [-bout_length / 2]])
     if not positive:
-        predictions_trace = np.logical_not(predictions_trace).astype(int)
+        predictions_trace = np.logical_not(predictions_trace.copy()).astype(int)
     out = np.convolve(predictions_trace, filt, mode='same')
-    indices = np.where(out == 1)[0]
+    # precision issues: using == 1 here has false negatives in case where out = 0.99999999998 or something
+    indices = np.where(np.abs(out - 1) < eps)[0]
     if len(indices) == 0:
         return np.array([]).astype(int)
     # if even, this corresponds to the center + 0.5 frame in the bout
@@ -232,6 +234,29 @@ class MinBoutLengthPostprocessor(Postprocessor):
     def process(self, probabilities: np.ndarray) -> np.ndarray:
         predictions = self.threshold(probabilities)
         predictions = remove_short_bouts(predictions, self.bout_length)
+        predictions = compute_background(predictions)
+        return predictions
+    
+
+class MinBoutLengthPerBehaviorPostprocessor(Postprocessor):
+    """ Postprocessor that removes bouts of length less than or equal to bout_length """
+    def __init__(self, thresholds: np.ndarray, bout_lengths: list, **kwargs):
+        super().__init__(thresholds, **kwargs)
+        assert len(thresholds) == len(bout_lengths)
+        self.bout_lengths = bout_lengths
+
+    def process(self, probabilities: np.ndarray) -> np.ndarray:
+        T, K = probabilities.shape
+        assert K == len(self.bout_lengths)
+        predictions = self.threshold(probabilities)
+        
+        predictions_smoothed = []
+        for i in range(K):
+            trace = predictions[:, i]
+            trace = remove_short_bouts_from_trace(trace, self.bout_lengths[i])
+            predictions_smoothed.append(trace)
+        predictions = np.stack(predictions_smoothed, axis=1)
+        # predictions = remove_short_bouts(predictions, self.bout_length)
         predictions = compute_background(predictions)
         return predictions
 
