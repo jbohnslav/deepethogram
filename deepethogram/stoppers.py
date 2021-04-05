@@ -148,7 +148,7 @@ def get_stopper(cfg: DictConfig) -> Type[Stopper]:
     """
     # ASSUME WE'RE USING LOSS AS THE KEY METRIC, WHICH IS AN ERROR
     stopping_type = cfg.train.stopping_type
-    log.info('Using stopper type {}'.format(stopping_type))
+    log.debug('Using stopper type {}'.format(stopping_type))
     if stopping_type == 'early':
         return EarlyStopping(start_epoch=0, num_epochs=cfg.train.num_epochs,
                              patience=cfg.train.patience,
