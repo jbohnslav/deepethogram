@@ -41,17 +41,19 @@ def sequence_train(cfg: DictConfig) -> nn.Module:
     """
     cfg = projects.setup_run(cfg)
     log.info('args: {}'.format(' '.join(sys.argv)))
-    
+
     if cfg.sequence.latent_name is None:
         cfg.sequence.latent_name = cfg.feature_extractor.arch
         # allow for editing
     OmegaConf.set_struct(cfg, False)
     log.info('Configuration used: ')
     log.info(OmegaConf.to_yaml(cfg))
-    
+
     datasets, data_info = get_datasets_from_cfg(cfg, 'sequence')
     utils.save_dict_to_yaml(data_info['split'], os.path.join(os.getcwd(), 'split.yaml'))
-    model = build_model_from_cfg(cfg, data_info['num_features'], data_info['num_classes'],
+    model = build_model_from_cfg(cfg,
+                                 data_info['num_features'],
+                                 data_info['num_classes'],
                                  pos=data_info['pos'],
                                  neg=data_info['neg'])
     weights = projects.get_weightfile_from_cfg(cfg, model_type='sequence')
@@ -61,8 +63,10 @@ def sequence_train(cfg: DictConfig) -> nn.Module:
     log.info('Total trainable params: {:,}'.format(utils.get_num_parameters(model)))
     stopper = get_stopper(cfg)
 
-    metrics = get_metrics(os.getcwd(), data_info['num_classes'],
-                          num_parameters=utils.get_num_parameters(model), key_metric='f1_class_mean',
+    metrics = get_metrics(os.getcwd(),
+                          data_info['num_classes'],
+                          num_parameters=utils.get_num_parameters(model),
+                          key_metric='f1_class_mean',
                           num_workers=cfg.compute.metrics_workers)
     criterion = get_criterion(cfg, model, data_info)
     lightning_module = SequenceLightning(model, cfg, datasets, metrics, criterion)
@@ -87,7 +91,6 @@ class SequenceLightning(BaseLightningModule):
             raise NotImplementedError
 
         self.criterion = criterion
-
 
         # self.batch_cnt = 0
         # this will get overridden by the ExampleImagesCallback
@@ -126,7 +129,7 @@ class SequenceLightning(BaseLightningModule):
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
 
-    def visualize_batch(self, features, predictions,labels, split: str):
+    def visualize_batch(self, features, predictions, labels, split: str):
         if not self.hparams.train.viz_examples:
             return
         # log.info('current epoch: {}'.format(self.current_epoch))
@@ -144,13 +147,15 @@ class SequenceLightning(BaseLightningModule):
         plt.close('all')
         del fig
 
-
     def forward(self, batch: dict, mode: str) -> torch.Tensor:
         outputs = self.model(batch['features'])
         return outputs
 
 
-def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, neg: np.ndarray = None,
+def build_model_from_cfg(cfg: DictConfig,
+                         num_features: int,
+                         num_classes: int,
+                         neg: np.ndarray = None,
                          pos: np.ndarray = None):
     """
     Initializes a sequence model from a configuration dictionary.
@@ -190,37 +195,57 @@ def build_model_from_cfg(cfg: DictConfig, num_features: int, num_classes: int, n
     if seq.arch == 'linear':
         model = Linear(num_features, num_classes, kernel_size=1)
     elif seq.arch == 'conv_nonlinear':
-        model = Conv_Nonlinear(num_features, num_classes, hidden_size=seq.hidden_size,
-                               dropout_p=seq.dropout_p)
+        model = Conv_Nonlinear(num_features, num_classes, hidden_size=seq.hidden_size, dropout_p=seq.dropout_p)
     elif seq.arch == 'rnn':
-        model = RNN(num_features, num_classes, style=seq.rnn_style, hidden_size=seq.hidden_size,
-                    dropout=seq.hidden_dropout, num_layers=seq.num_layers,
-                    output_dropout=seq.dropout_p, bidirectional=seq.bidirectional)
+        model = RNN(num_features,
+                    num_classes,
+                    style=seq.rnn_style,
+                    hidden_size=seq.hidden_size,
+                    dropout=seq.hidden_dropout,
+                    num_layers=seq.num_layers,
+                    output_dropout=seq.dropout_p,
+                    bidirectional=seq.bidirectional)
     elif seq.arch == 'tgm':
-        model = TGM(num_features, classes=num_classes, n_filters=seq.n_filters,
-                    filter_length=seq.filter_length, input_dropout=seq.input_dropout,
-                    dropout_p=seq.dropout_p, num_layers=seq.num_layers, reduction=seq.tgm_reduction,
-                    c_in=seq.c_in, c_out=seq.c_out, soft=seq.soft_attn,
+        model = TGM(num_features,
+                    classes=num_classes,
+                    n_filters=seq.n_filters,
+                    filter_length=seq.filter_length,
+                    input_dropout=seq.input_dropout,
+                    dropout_p=seq.dropout_p,
+                    num_layers=seq.num_layers,
+                    reduction=seq.tgm_reduction,
+                    c_in=seq.c_in,
+                    c_out=seq.c_out,
+                    soft=seq.soft_attn,
                     num_features=seq.num_features)
     elif seq.arch == 'tgmj':
-        model = TGMJ(num_features, classes=num_classes, n_filters=seq.n_filters,
-                     filter_length=seq.filter_length, input_dropout=seq.input_dropout,
-                     dropout_p=seq.dropout_p, num_layers=seq.num_layers, reduction=seq.tgm_reduction,
-                     c_in=seq.c_in, c_out=seq.c_out, soft=seq.soft_attn,
-                     num_features=seq.num_features, pos=pos, neg=neg, use_fe_logits=False,
+        model = TGMJ(num_features,
+                     classes=num_classes,
+                     n_filters=seq.n_filters,
+                     filter_length=seq.filter_length,
+                     input_dropout=seq.input_dropout,
+                     dropout_p=seq.dropout_p,
+                     num_layers=seq.num_layers,
+                     reduction=seq.tgm_reduction,
+                     c_in=seq.c_in,
+                     c_out=seq.c_out,
+                     soft=seq.soft_attn,
+                     num_features=seq.num_features,
+                     pos=pos,
+                     neg=neg,
+                     use_fe_logits=False,
                      nonlinear_classification=seq.nonlinear_classification,
                      final_bn=seq.final_bn)
     elif seq.arch == 'mlp':
-        model = MLP(num_features, num_classes, dropout_p=seq.dropout_p,
-                    pos=pos, neg=neg)
+        model = MLP(num_features, num_classes, dropout_p=seq.dropout_p, pos=pos, neg=neg)
     else:
         raise ValueError('arch not found: {}'.format(seq.arch))
-    # print(model)
+    print(model)
     return model
 
 
 if __name__ == '__main__':
     project_path = projects.get_project_path_from_cl(sys.argv)
     cfg = make_sequence_train_cfg(project_path, use_command_line=True)
-    
+
     sequence_train(cfg)
