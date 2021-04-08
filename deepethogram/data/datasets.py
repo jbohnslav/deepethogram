@@ -41,8 +41,11 @@ class VideoIterable(data.IterableDataset):
         - Each clip is read with stride = 1. If sequence_length==3, the first clips would be frames [0, 1, 2], 
             [1, 2, 3], [2, 3, 4], ... etc
     """
-    def __init__(self, videofile: Union[str, os.PathLike], transform, 
-                 sequence_length:int=11, num_workers:int=0,
+    def __init__(self,
+                 videofile: Union[str, os.PathLike],
+                 transform,
+                 sequence_length: int = 11,
+                 num_workers: int = 0,
                  mean_by_channels: Union[list, np.ndarray] = [0, 0, 0]):
         """Cosntructor for video iterable
 
@@ -116,8 +119,7 @@ class VideoIterable(data.IterableDataset):
     def my_iter_func(self, start, end):
         for i in range(start, end):
             self.buffer.append(self.get_current_item())
-            yield {'images': np.stack(self.buffer, axis=1),
-                   'framenum': self.cnt - 1 - self.sequence_length // 2}
+            yield {'images': np.stack(self.buffer, axis=1), 'framenum': self.cnt - 1 - self.sequence_length // 2}
 
     def get_current_item(self):
         worker_info = data.get_worker_info()
@@ -149,7 +151,7 @@ class VideoIterable(data.IterableDataset):
         # print(worker_info)
         iter_end = self.N - self.sequence_length // 2
         if worker_info is None:
-            iter_start = - self.blank_start_frames
+            iter_start = -self.blank_start_frames
             self.readers[0] = VideoReader(self.videofile)
         else:
             per_worker = self.N // self.num_workers
@@ -211,11 +213,15 @@ class SingleVideoDataset(data.Dataset):
         # assuming there are 5 classes in dataset
         # ~5 x 11
     """
-
-    def __init__(self, videofile: Union[str, os.PathLike], labelfile: Union[str, os.PathLike] = None,
+    def __init__(self,
+                 videofile: Union[str, os.PathLike],
+                 labelfile: Union[str, os.PathLike] = None,
                  mean_by_channels: Union[list, np.ndarray] = [0, 0, 0],
-                 frames_per_clip: int = 1, transform=None,
-                 reduce: bool = True, conv_mode: str = '2d', keep_reader_open: bool = False):
+                 frames_per_clip: int = 1,
+                 transform=None,
+                 reduce: bool = True,
+                 conv_mode: str = '2d',
+                 keep_reader_open: bool = False):
         """Initializes a VideoDataset object.
 
         Args:
@@ -270,7 +276,7 @@ class SingleVideoDataset(data.Dataset):
         self.N = self.metadata['framecount']
         self._zeros_image = None
 
-    def get_zeros_image(self, c, h, w, channel_first: bool=True):
+    def get_zeros_image(self, c, h, w, channel_first: bool = True):
         if self._zeros_image is None:
             # ALWAYS ASSUME OUTPUT IS TRANSPOSED
             self._zeros_image = np.zeros((c, h, w), dtype=np.uint8)
@@ -330,8 +336,9 @@ class SingleVideoDataset(data.Dataset):
                 try:
                     image = reader[i + start_frame]
                 except Exception as e:
-                    image = self._zeros_image.copy().transpose(1,2,0)
-                    log.warning('Error {} on frame {} of video {}. Is the video corrupted?'.format(e, index, self.videofile))
+                    image = self._zeros_image.copy().transpose(1, 2, 0)
+                    log.warning('Error {} on frame {} of video {}. Is the video corrupted?'.format(
+                        e, index, self.videofile))
                 if self.transform:
                     random.seed(seed)
                     image = self.transform(image)
@@ -341,11 +348,8 @@ class SingleVideoDataset(data.Dataset):
         images = self.append_with_zeros(images, blank_end_frames)
 
         if log.isEnabledFor(logging.DEBUG):
-            log.debug('idx: {} st: {} blank_start: {} blank_end: {} real: {} total: {}'.format(index,
-                                                                                               start_frame,
-                                                                                               blank_start_frames,
-                                                                                               blank_end_frames,
-                                                                                               real_frames, framecount))
+            log.debug('idx: {} st: {} blank_start: {} blank_end: {} real: {} total: {}'.format(
+                index, start_frame, blank_start_frames, blank_end_frames, real_frames, framecount))
 
         # images are now numpy arrays of shape 3, H, W
         # stacking in the first dimension changes to 3, T, H, W, compatible with Conv3D
@@ -365,7 +369,6 @@ class SingleVideoDataset(data.Dataset):
 
 class VideoDataset(data.Dataset):
     """ Simple wrapper around SingleVideoDataset for smoothly loading multiple videos """
-    
     def __init__(self, videofiles: list, labelfiles: list, *args, **kwargs):
         datasets, labels = [], []
         for i in range(len(videofiles)):
@@ -421,14 +424,16 @@ class SingleSequenceDataset(data.Dataset):
             # assuming there are 5 classes in dataset
             # ~5 x 180
         """
-
-    def __init__(self, data_file: Union[str, os.PathLike], labelfile: Union[str, os.PathLike], N: int,
+    def __init__(self,
+                 data_file: Union[str, os.PathLike],
+                 labelfile: Union[str, os.PathLike],
+                 N: int,
                  sequence_length: int = 60,
                  nonoverlapping: bool = True,
                  store_in_ram: bool = True,
-                 reduce: bool = False, 
-                stack_in_time: bool=False):
-        
+                 reduce: bool = False,
+                 stack_in_time: bool = False):
+
         assert os.path.isfile(data_file)
         if labelfile is not None:
             assert os.path.isfile(labelfile)
@@ -440,7 +445,7 @@ class SingleSequenceDataset(data.Dataset):
             self.num_neg = np.logical_not((self.label == 1)).sum(axis=1)
         else:
             self.supervised = False
-        
+
         self.sequence_length = sequence_length
         self.nonoverlapping = nonoverlapping
         self.reduce = reduce
@@ -449,19 +454,19 @@ class SingleSequenceDataset(data.Dataset):
         # self.num_features = None
         self.N = N
         self.stack_in_time = stack_in_time
-        
+
         self.compute_starts_ends()
         self.verify_dataset()
 
-        tmp_sequence = self.__getitem__(0) # self.read_sequence([0, 1])
+        tmp_sequence = self.__getitem__(0)  # self.read_sequence([0, 1])
         self.num_features = tmp_sequence['features'].shape[0]
-        
-    def read_sequence(self, indices): 
+
+    def read_sequence(self, indices):
         raise NotImplementedError
-        
+
     def verify_dataset(self):
         raise NotImplementedError
-        
+
     def compute_starts_ends(self):
         if self.nonoverlapping:
             self.starts = []
@@ -477,18 +482,18 @@ class SingleSequenceDataset(data.Dataset):
             self.ends = ends
         else:
             inds = np.arange(self.N)
-            self.starts = inds - self.sequence_length//2
-            # if it's odd, should go from 
+            self.starts = inds - self.sequence_length // 2
+            # if it's odd, should go from
             self.ends = inds + self.sequence_length//2 + \
                 self.sequence_length % 2
-    
+
     def __len__(self):
         return len(self.starts)
-    
+
     def compute_indices_and_padding(self, index):
         start = self.starts[index]
         end = self.ends[index]
-        
+
         # sequences close to the 0th frame are padded on the left
         if start < 0:
             pad_left = np.abs(start)
@@ -501,42 +506,44 @@ class SingleSequenceDataset(data.Dataset):
         else:
             pad_left = 0
             pad_right = 0
-        
+
         indices = np.arange(start, end)
-        
+
         pad = (pad_left, pad_right)
-        
-        # stack in time compressed all features to one vector. 
+
+        # stack in time compressed all features to one vector.
         # there's only one label: the one right at the requested index. This is to have temporal features
         # before and after the label as input, e.g. to an MLP
         # therefore, don't pad
         if self.stack_in_time:
-            label_indices = index
-            label_pad = (0,0)
+            label_indices = index  # (end - start) // 2
+            label_pad = (0, 0)
         else:
             label_indices = indices
             label_pad = pad
-        
+
         assert (len(indices) + pad_left + pad_right) == self.sequence_length, \
                 'indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}'.format(
                 len(indices), pad_left, pad_right, self.sequence_length)
-        assert (len(label_indices) + label_pad[0] + label_pad[1]) == self.sequence_length, \
-                'label indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}'.format(
-                len(label_indices), label_pad[0], label_pad[1], self.sequence_length)  
+        # if we are stacking in time, label indices should not be the sequence length
+        if not self.stack_in_time:
+            assert (len(label_indices) + label_pad[0] + label_pad[1]) == self.sequence_length, \
+                    'label indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}'.format(
+                    len(label_indices), label_pad[0], label_pad[1], self.sequence_length)
         return indices, label_indices, pad, label_pad
-    
+
     def __del__(self):
         if hasattr(self, 'sequence'):
             del self.sequence
         if hasattr(self, 'labels'):
             del self.labels
-        
+
     def __getitem__(self, index: int) -> dict:
         indices, label_indices, pad, label_pad = self.compute_indices_and_padding(index)
         # import pdb; pdb.set_trace()
         # dictionary
         data = self.read_sequence(indices)
-        
+
         # can be multiple things in "data", like "image features" and "logits" from feature extractors
         # all will be converted to float32
         output = {}
@@ -547,8 +554,9 @@ class SingleSequenceDataset(data.Dataset):
                 value = value.flatten()
             value = torch.from_numpy(value).float()
             output[key] = value
-            
+
         pad_left, pad_right = label_pad
+        # print(index)
         if self.supervised:
             # print(label_indices)
             labels = self.label[:, label_indices].astype(np.int64)
@@ -560,13 +568,14 @@ class SingleSequenceDataset(data.Dataset):
             labels = labels.squeeze()
             labels = torch.from_numpy(labels).to(torch.long)
             output['labels'] = labels
-            
-            if labels.shape[1] != output['features'].shape[1]:
-                import pdb; pdb.set_trace()
-            
+
+            if labels.ndim > 1 and labels.shape[1] != output['features'].shape[1]:
+                import pdb
+                pdb.set_trace()
+
         return output
-    
-            
+
+
 class KeypointDataset(SingleSequenceDataset):
     """Dataset for reading keypoints (e.g. from deeplabcut) and performing basis function expansion. 
     
@@ -575,9 +584,14 @@ class KeypointDataset(SingleSequenceDataset):
         accuracy and is capable of outperforming commercial solutions. Neuropsychopharmacol. 45, 1942–1952 (2020). 
         https://doi.org/10.1038/s41386-020-0776-y
     """
-    def __init__(self, data_file: Union[str, os.PathLike], labelfile: Union[str, os.PathLike], 
-                 videofile: Union[str, os.PathLike], expansion_method: str='sturman', confidence_threshold: float=0.9, 
-                 *args, **kwargs):
+    def __init__(self,
+                 data_file: Union[str, os.PathLike],
+                 labelfile: Union[str, os.PathLike],
+                 videofile: Union[str, os.PathLike],
+                 expansion_method: str = 'sturman',
+                 confidence_threshold: float = 0.9,
+                 *args,
+                 **kwargs):
         """Constructor
 
         Parameters
@@ -603,59 +617,65 @@ class KeypointDataset(SingleSequenceDataset):
             self.expansion_func = expand_features_sturman
         else:
             raise NotImplementedError
-            
+
         assert os.path.isfile(data_file)
         assert os.path.exists(videofile)
-        
+
         keypoints, bodyparts, _ = load_dlcfile(data_file)
-        
+
         N = keypoints.shape[0]
-        
+
         with VideoReader(videofile) as reader:
             frame = reader[0]
-            H,W = frame.shape[:2]
+            H, W = frame.shape[:2]
             # n_frames = len(reader)
 
         # chop off confidence after this
         keypoints = interpolate_bad_values(keypoints, confidence_threshold)[..., :2]
         features, columns = self.expansion_func(keypoints, bodyparts, H, W)
-        
+
         # assume sequence is of shape Time x N_features
         # we want to return them in N_features x T, consistent with nn.Conv1d, which requires
         # inputs to be of shape N x C x T
-        
+
         self.sequence = features.T
         self.shape = self.sequence.shape
         N = self.shape[1]
-        
+
         # superclass needs to know number of samples, that's why it's down here
         super().__init__(data_file, labelfile, N, *args, **kwargs)
-        
+
         # log.debug('keypoint features: {}'.format(columns))
         # print('keypoint features: {}'.format(columns))
-    
+
     def verify_dataset(self):
         if self.supervised:
             assert self.label.shape[1] == self.sequence.shape[1], 'label {} and sequence {} shape do not match!'.format(
-                self.label.shape, self.sequence.shape
-            )
-        
+                self.label.shape, self.sequence.shape)
+
         assert self.sequence is not None
-    
+
     def read_sequence(self, indices):
         data = {}
         data['features'] = self.sequence[:, indices]
         return data
-    
-    
+
+
 class FeatureVectorDataset(SingleSequenceDataset):
     """Reads image and flow feature vectors from HDF5 files. 
     """
-    def __init__(self, data_file, labelfile, h5_key: str, store_in_ram=False, is_two_stream: bool=True, *args, **kwargs):
-        
+    def __init__(self,
+                 data_file,
+                 labelfile,
+                 h5_key: str,
+                 store_in_ram=False,
+                 is_two_stream: bool = True,
+                 *args,
+                 **kwargs):
+
         self.is_two_stream = is_two_stream
         self.store_in_ram = store_in_ram
-            
+
         assert os.path.isfile(data_file)
         self.key = h5_key
         if self.is_two_stream:
@@ -663,26 +683,25 @@ class FeatureVectorDataset(SingleSequenceDataset):
             self.image_key = self.key + '/spatial_features'
         self.logit_key = self.key + '/logits'
         self.data_file = data_file
-        
+
         self.verify_dataset()
         data = self.read_features_from_disk(None, None)
-                 
+
         features_shape = data['features'].shape
         self.shape = features_shape
         self.N = self.shape[1]
         if self.store_in_ram:
-            self.data = data   
+            self.data = data
         else:
             del data
-        
+
         # superclass needs to know number of samples, that's why it's down here
         super().__init__(data_file, labelfile, self.N, *args, **kwargs)
-        
-        
+
     def verify_dataset(self):
         with h5py.File(self.data_file, 'r') as f:
             assert self.logit_key in f
-            
+
             if self.is_two_stream:
                 assert self.flow_key in f
                 assert self.image_key in f
@@ -694,7 +713,7 @@ class FeatureVectorDataset(SingleSequenceDataset):
                 assert self.key in f
                 shape = f[self.key].shape
                 # self.N = shape[0]
-    
+
     def read_features_from_disk(self, start_ind, end_ind):
         inds = slice(start_ind, end_ind)
         with h5py.File(self.data_file, 'r') as f:
@@ -712,23 +731,26 @@ class FeatureVectorDataset(SingleSequenceDataset):
 
             logits = f[self.logit_key][inds, :].T
         return dict(features=sequence, logits=logits)
-    
+
     def read_sequence(self, indices):
         if self.store_in_ram:
-            data = {'features': self.data['features'][:, indices], 
-                   'logits': self.data['logits'][:, indices]}
+            data = {'features': self.data['features'][:, indices], 'logits': self.data['logits'][:, indices]}
         else:
             # assume indices are in order
             # we use the start and end so that we can slice without knowing the exact size of the dataset
-            data = self.read_features_from_disk(indices[0], indices[-1]+1)
+            data = self.read_features_from_disk(indices[0], indices[-1] + 1)
         return data
-
 
 
 class SequenceDataset(data.Dataset):
     """ Simple wrapper around SingleSequenceDataset for smoothly loading multiple sequences """
-
-    def __init__(self, datafiles: list, labelfiles: list, videofiles: list = None, is_keypoint: bool=False, *args, **kwargs):
+    def __init__(self,
+                 datafiles: list,
+                 labelfiles: list,
+                 videofiles: list = None,
+                 is_keypoint: bool = False,
+                 *args,
+                 **kwargs):
         datasets = []
         for i, (datafile, labelfile) in enumerate(zip(datafiles, labelfiles)):
             if is_keypoint:
@@ -760,13 +782,23 @@ class SequenceDataset(data.Dataset):
 
     def __getitem__(self, index: int):
         return self.dataset[index]
-    
 
-def get_video_datasets(datadir: Union[str, os.PathLike], xform: dict, is_two_stream: bool = False,
-                       reload_split: bool = True, splitfile: Union[str, os.PathLike] = None,
-                       train_val_test: Union[list, np.ndarray] = [0.8, 0.1, 0.1], weight_exp: float = 1.0,
-                       rgb_frames: int = 1, flow_frames: int = 10, supervised=True, reduce=False, flow_max: int = 5,
-                       flow_style: str = 'linear', valid_splits_only: bool = True, conv_mode: str = '2d',
+
+def get_video_datasets(datadir: Union[str, os.PathLike],
+                       xform: dict,
+                       is_two_stream: bool = False,
+                       reload_split: bool = True,
+                       splitfile: Union[str, os.PathLike] = None,
+                       train_val_test: Union[list, np.ndarray] = [0.8, 0.1, 0.1],
+                       weight_exp: float = 1.0,
+                       rgb_frames: int = 1,
+                       flow_frames: int = 10,
+                       supervised=True,
+                       reduce=False,
+                       flow_max: int = 5,
+                       flow_style: str = 'linear',
+                       valid_splits_only: bool = True,
+                       conv_mode: str = '2d',
                        mean_by_channels: list = [0.5, 0.5, 0.5]):
     """ Gets dataloaders for video-based datasets.
 
@@ -861,12 +893,12 @@ def get_video_datasets(datadir: Union[str, os.PathLike], xform: dict, is_two_str
             labelfiles = None
 
         datasets[split] = VideoDataset(rgb,
-                                        labelfiles,
-                                        frames_per_clip=rgb_frames,
-                                        reduce=reduce,
-                                        transform=xform[split],
-                                        conv_mode=conv_mode,
-                                        mean_by_channels=mean_by_channels)
+                                       labelfiles,
+                                       frames_per_clip=rgb_frames,
+                                       reduce=reduce,
+                                       transform=xform[split],
+                                       conv_mode=conv_mode,
+                                       mean_by_channels=mean_by_channels)
     data_info = {'split': split_dictionary}
 
     if supervised:
@@ -884,12 +916,21 @@ def get_video_datasets(datadir: Union[str, os.PathLike], xform: dict, is_two_str
     return datasets, data_info
 
 
-def get_sequence_datasets(datadir: Union[str, os.PathLike], latent_name: str, sequence_length: int = 60,
-                          is_two_stream: bool = True, nonoverlapping: bool = True, splitfile: str = None,
-                          reload_split: bool = True, store_in_ram: bool = False, 
-                          train_val_test: Union[list, np.ndarray] = [0.8, 0.2, 0.0], weight_exp: float = 1.0,
-                          supervised=True, reduce=False, valid_splits_only: bool = True,
-                          is_keypoint: bool=False, stack_in_time: bool=False) -> Tuple[dict, dict]:
+def get_sequence_datasets(datadir: Union[str, os.PathLike],
+                          latent_name: str,
+                          sequence_length: int = 60,
+                          is_two_stream: bool = True,
+                          nonoverlapping: bool = True,
+                          splitfile: str = None,
+                          reload_split: bool = True,
+                          store_in_ram: bool = False,
+                          train_val_test: Union[list, np.ndarray] = [0.8, 0.2, 0.0],
+                          weight_exp: float = 1.0,
+                          supervised=True,
+                          reduce=False,
+                          valid_splits_only: bool = True,
+                          is_keypoint: bool = False,
+                          stack_in_time: bool = False) -> Tuple[dict, dict]:
     """ Gets dataloaders for sequence models assuming DeepEthogram file structure.
 
     Parameters
@@ -1002,21 +1043,31 @@ def get_sequence_datasets(datadir: Union[str, os.PathLike], latent_name: str, se
             labelfiles = [records[i]['label'] for i in split_dictionary[split]]
         else:
             labelfiles = None
-        
+
         # todo: figure out a nice way to be able to pass arguments to one subclass that don't exist in the other
         # example: is_two_stream, latent_name
         if is_keypoint:
-            datasets[split] = SequenceDataset(datafiles, labelfiles, videofiles, sequence_length=sequence_length,
-                                             nonoverlapping=nonoverlapping[split],
-                                            store_in_ram=store_in_ram, reduce=reduce, 
-                                            is_keypoint=is_keypoint, stack_in_time=stack_in_time)
+            datasets[split] = SequenceDataset(datafiles,
+                                              labelfiles,
+                                              videofiles,
+                                              sequence_length=sequence_length,
+                                              nonoverlapping=nonoverlapping[split],
+                                              store_in_ram=store_in_ram,
+                                              reduce=reduce,
+                                              is_keypoint=is_keypoint,
+                                              stack_in_time=stack_in_time)
         else:
-            datasets[split] = SequenceDataset(datafiles, labelfiles, videofiles=videofiles, 
-                                              sequence_length=sequence_length,h5_key=latent_name,
-                                            is_two_stream=is_two_stream, nonoverlapping=nonoverlapping[split],
-                                            store_in_ram=store_in_ram, reduce=reduce, 
-                                            is_keypoint=is_keypoint, stack_in_time=stack_in_time)
-        
+            datasets[split] = SequenceDataset(datafiles,
+                                              labelfiles,
+                                              videofiles=videofiles,
+                                              sequence_length=sequence_length,
+                                              h5_key=latent_name,
+                                              is_two_stream=is_two_stream,
+                                              nonoverlapping=nonoverlapping[split],
+                                              store_in_ram=store_in_ram,
+                                              reduce=reduce,
+                                              is_keypoint=is_keypoint,
+                                              stack_in_time=stack_in_time)
 
     # figure out what our inputs to our model will be (D dimension)
     data_info = {'split': split_dictionary}
@@ -1093,15 +1144,21 @@ def get_datasets_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 
                                                 mean_by_channels=cfg.augs.normalization.mean)
 
     elif model_type == 'sequence':
-        datasets, info = get_sequence_datasets(cfg.project.data_path, cfg.sequence.latent_name,
-                                               cfg.sequence.sequence_length, is_two_stream=True,
-                                               nonoverlapping=cfg.sequence.nonoverlapping, splitfile=cfg.split.file,
-                                               reload_split=True, store_in_ram=False, 
+        datasets, info = get_sequence_datasets(cfg.project.data_path,
+                                               cfg.sequence.latent_name,
+                                               cfg.sequence.sequence_length,
+                                               is_two_stream=True,
+                                               nonoverlapping=cfg.sequence.nonoverlapping,
+                                               splitfile=cfg.split.file,
+                                               reload_split=True,
+                                               store_in_ram=False,
                                                train_val_test=cfg.split.train_val_test,
-                                               weight_exp=cfg.train.loss_weight_exp, supervised=True,
+                                               weight_exp=cfg.train.loss_weight_exp,
+                                               supervised=True,
                                                reduce=cfg.feature_extractor.final_activation == 'softmax',
-                                               valid_splits_only=True, stack_in_time=cfg.sequence.arch=='mlp', 
-                                               is_keypoint=cfg.sequence.input_type=='keypoints')
+                                               valid_splits_only=True,
+                                               stack_in_time=cfg.sequence.arch == 'mlp',
+                                               is_keypoint=cfg.sequence.input_type == 'keypoints')
     else:
         raise ValueError('Unknown model type: {}'.format(model_type))
     return datasets, info
