@@ -16,6 +16,7 @@ from deepethogram.file_io import read_labels
 
 log = logging.getLogger(__name__)
 
+
 def purge_unlabeled_videos(video_list: list, label_list: list) -> Tuple[list, list]:
     """Get rid of any videos that contain unlabeled frames.
     Goes through all label files, loads them. If they contain any -1 values, remove both the video and the label
@@ -39,7 +40,9 @@ def remove_nans_and_infs(array: np.ndarray, set_value: float = 0.0) -> np.ndarra
     return array
 
 
-def make_loss_weight(class_counts: np.ndarray, num_pos: np.ndarray, num_neg: np.ndarray,
+def make_loss_weight(class_counts: np.ndarray,
+                     num_pos: np.ndarray,
+                     num_neg: np.ndarray,
                      weight_exp: float = 1) -> Tuple[np.ndarray, np.ndarray]:
     """ Makes weight for different classes in loss function.
 
@@ -67,7 +70,7 @@ def make_loss_weight(class_counts: np.ndarray, num_pos: np.ndarray, num_neg: np.
     """
 
     pos_weight = num_neg / num_pos
-    pos_weight_transformed = (pos_weight ** weight_exp).astype(np.float32)
+    pos_weight_transformed = (pos_weight**weight_exp).astype(np.float32)
     # don't weight losses if there are no examples
     pos_weight_transformed = remove_nans_and_infs(pos_weight_transformed)
 
@@ -76,7 +79,7 @@ def make_loss_weight(class_counts: np.ndarray, num_pos: np.ndarray, num_neg: np.
     softmax_weight[class_counts == 0] = 0
     # normalize
     softmax_weight = softmax_weight / np.sum(softmax_weight)
-    softmax_weight_transformed = (softmax_weight ** weight_exp).astype(np.float32)
+    softmax_weight_transformed = (softmax_weight**weight_exp).astype(np.float32)
     # don't weight losses if there are no examples
     softmax_weight_transformed = remove_nans_and_infs(softmax_weight_transformed)
 
@@ -157,12 +160,14 @@ def extract_metadata(splitdir, allmovies=None, is_flow=False, num_workers=32):
                     allactions.append(action)
                     action_indices.append(action_index)
 
-    video_data = {'name': allnames,
-                  'action': allactions,
-                  'action_int': action_indices,
-                  'width': widths,
-                  'height': heights,
-                  'framecount': framenums}
+    video_data = {
+        'name': allnames,
+        'action': allactions,
+        'action_int': action_indices,
+        'width': widths,
+        'height': heights,
+        'framecount': framenums
+    }
     df = pd.DataFrame(data=video_data)
     fname = '_metadata.csv'
     if is_flow:
@@ -406,16 +411,19 @@ def update_split(records: dict, split_dictionary: dict) -> dict:
     if len(new_entries) > 0:
         split_p = split_dictionary['metadata']['split']
         N = len(new_entries)
-        new_splits = np.random.choice(splits, size=(N,), p=split_p).tolist()
+        new_splits = np.random.choice(splits, size=(N, ), p=split_p).tolist()
         for i, k in enumerate(new_entries):
             split_dictionary[new_splits[i]].append(k)
             log.info('file {} assigned to split {}'.format(k, new_splits[i]))
     return split_dictionary
 
 
-def get_split_from_records(records: dict, datadir: Union[str, bytes, os.PathLike],
-                           splitfile: Union[str, bytes, os.PathLike] = None, supervised: bool = True,
-                           reload_split: bool = True, valid_splits_only: bool = True,
+def get_split_from_records(records: dict,
+                           datadir: Union[str, bytes, os.PathLike],
+                           splitfile: Union[str, bytes, os.PathLike] = None,
+                           supervised: bool = True,
+                           reload_split: bool = True,
+                           valid_splits_only: bool = True,
                            train_val_test: list = [0.7, 0.15, 0.15]):
     """ Splits the records into train, validation, and test splits
 
@@ -443,6 +451,8 @@ def get_split_from_records(records: dict, datadir: Union[str, bytes, os.PathLike
     """
     if splitfile is None:
         splitfile = os.path.join(datadir, 'split.yaml')
+    else:
+        assert os.path.isfile(splitfile), 'split file does not exist! {}'.format(splitfile)
 
     if supervised and valid_splits_only:
         # this function makes sure that each split has all classes in the dataset
