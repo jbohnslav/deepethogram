@@ -3,7 +3,9 @@ postprocessor:
   # null: the postprocessor will simply threshold, and then compute the background
   # min_bout: the postprocessor will threshold, remove sets of 1s or 0s of length less than
   #           postprocessor.min_bout_length, and then will compute background
-  type: min_bout
+  type: min_bout_per_behavior
   # if type is min_bout, postprocessor will remove any consecutive set of 1s or 0s of less than this length.
+  # if type is min_bout_per_behavior, this will be the PERCENTILE of each behavior's bout length distribution
+  # if value is 5, then all bouts less than the 5th percentile of the label distribution will be removed
   # see deepethogram/postprocessing.py for details
-  min_bout_length: 5
+  min_bout_length: 1

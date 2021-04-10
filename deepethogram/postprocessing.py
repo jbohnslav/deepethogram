@@ -1,8 +1,12 @@
+from collections import defaultdict
 import logging
+import os
 from typing import Type, Tuple
 
 import numpy as np
 from omegaconf import DictConfig
+
+from deepethogram import projects, file_io
 
 log = logging.getLogger(__name__)
 
@@ -261,11 +265,48 @@ class MinBoutLengthPerBehaviorPostprocessor(Postprocessor):
         return predictions
 
 
+def get_bout_length_percentile(label_list: list,  percentile: float) -> dict:
+    
+    bout_lengths = defaultdict(list)
+    
+    for label in label_list:
+        bouts = get_bouts(label)
+        T, K = label.shape
+        for k in range(K):
+            bout_length = bouts[k]['lengths'].tolist()
+            bout_lengths[k].append(bout_length)
+    bout_lengths = {behavior: np.concatenate(value) for behavior, value in bout_lengths.items()}
+    percentiles = {behavior: np.percentile(value, percentile) for behavior, value in bout_lengths.items()}
+    return percentiles
+
 def get_postprocessor_from_cfg(cfg: DictConfig, thresholds: np.ndarray) -> Type[Postprocessor]:
     """ Returns a PostProcessor from an OmegaConf DictConfig returned by a  """
     if cfg.postprocessor.type is None:
         return Postprocessor(thresholds)
     elif cfg.postprocessor.type == 'min_bout':
         return MinBoutLengthPostprocessor(thresholds, cfg.postprocessor.min_bout_length)
+    elif cfg.postprocessor.type == 'min_bout_per_behavior':
+        if not os.path.isdir(cfg.project.data_path):
+            cfg = projects.convert_config_paths_to_absolute(cfg)
+        assert os.path.isdir(cfg.project.data_path)
+        records = projects.get_records_from_datadir(cfg.project.data_path)
+        
+        label_list = []
+        
+        for animal, record in records.items():
+            labelfile = record['label']
+            if labelfile is None:
+                continue
+            label = file_io.read_labels(labelfile)
+            # ignore partially labeled videos
+            if np.any(label==-1):
+                continue
+            label_list.append(label)
+        
+        percentiles = get_bout_length_percentile(label_list, cfg.postprocessor.min_bout_length)
+        # percntiles is a dict: keys are behaviors, values are percentiles
+        # need to round and then cast to int
+        percentiles = np.round(np.array(list(percentiles.values()))).astype(int)
+        return MinBoutLengthPerBehaviorPostprocessor(thresholds, percentiles)
     else:
         raise NotImplementedError
