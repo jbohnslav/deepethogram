@@ -40,6 +40,7 @@ class MLP(nn.Module):
             print(i, neurons[i])
             layers.append(nn.Linear(neurons[i], neurons[i + 1], bias=True))
             if i < len(neurons) - 2:
+                layers.append(nn.ReLU())
                 layers.append(nn.Dropout(p=dropout_p))
 
         # https://www.tensorflow.org/tutorials/structured_data/imbalanced_data
