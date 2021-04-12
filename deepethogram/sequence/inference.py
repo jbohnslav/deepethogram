@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from deepethogram import utils, projects
 from deepethogram.configuration import make_sequence_inference_cfg
-from deepethogram.data.datasets import FeatureVectorDataset
+from deepethogram.data.datasets import FeatureVectorDataset, KeypointDataset
 from deepethogram.feature_extractor.inference import get_run_files_from_weights
 from deepethogram.sequence.train import build_model_from_cfg
 
@@ -23,8 +23,11 @@ log = logging.getLogger(__name__)
 
 def infer(model: Type[nn.Module], device: Union[str, torch.device],
           activation_function: Union[str, Type[nn.Module]],
-          dataloader: Union[str, os.PathLike], latent_name: str, sequence_length: int = 180,
-          is_two_stream: bool = True):
+          data_file: Union[str, os.PathLike], latent_name: str, 
+          videofile: Union[str, os.PathLike],
+          sequence_length: int = 180,
+          is_two_stream: bool = True, is_keypoint:bool=False, 
+         expansion_method:str='sturman', stack_in_time: bool=False):
     """Runs inference of the sequence model
 
     Parameters
@@ -35,15 +38,21 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
         Device on which to run inference. e.g. ('cpu', 'cuda:0')
     activation_function : Union[str, Type[nn.Module]]
         Either sigmoid or softmax
-    dataloader : Union[str, os.PathLike]
-        Poorly named path to a feature vector HDF5 file
+    data_file : Union[str, os.PathLike]
+        Path to a feature vector HDF5 file, or keypoint file (currently only DeepLabCut .csvs)
     latent_name : str
         Group name in HDF5 file
+    videofile: [str, os.PathLike], optional
+        Path to video file. Used in normalizing keypoint features
     sequence_length : int, optional
         Number of feature vectors in each batch element, by default 180
     is_two_stream : bool, optional
         If True, load both image and flow features as input, by default True
-
+    expansion_method: str, optional
+        Method for expanding keypoints into features, by default sturman
+    stack_in_time: bool, optional
+        If True, stacks sequences from T x K features -> T*K features, by default False
+        
     Returns
     -------
     logits: np.ndarray
@@ -56,17 +65,23 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
     ValueError
         Check that activation is either sigmoid or softmax
     """
-    assert latent_name is not None
-
-    gen = FeatureVectorDataset(dataloader, labelfile=None, h5_key=latent_name,
-                                sequence_length=sequence_length,
-                                nonoverlapping=True, store_in_ram=False, is_two_stream=is_two_stream)
+    if not is_keypoint:
+        assert latent_name is not None
+    
+        gen = FeatureVectorDataset(data_file, labelfile=None, h5_key=latent_name,
+                                    sequence_length=sequence_length,
+                                    nonoverlapping=True, store_in_ram=False, is_two_stream=is_two_stream)
+    else:
+        gen = KeypointDataset(data_file, labelfile=None, videofile=videofile, expansion_method=expansion_method, 
+                             sequence_length=sequence_length, stack_in_time=stack_in_time, 
+                             nonoverlapping= not stack_in_time)
+        
     n_datapoints = gen.shape[1]
     gen = data.DataLoader(gen, batch_size=1, shuffle=False, num_workers=0, drop_last=False)
 
     gen = iter(gen)
     log.debug('Making sequence iterator with parameters: ')
-    log.debug('file: {}'.format(dataloader))
+    log.debug('file: {}'.format(data_file))
     log.debug('seq length: {}'.format(sequence_length))
 
     if type(activation_function) == str:
@@ -106,19 +121,25 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
         if not has_printed:
             log.debug('logits shape: {}'.format(logits.shape))
             has_printed = True
-
-        end = min(i * sequence_length + sequence_length, n_datapoints)
-        indices = range(i * sequence_length, end)
-        # get rid of padding in final batch
-        if len(indices) < logits.shape[0]:
-            logits = logits[:len(indices), :]
-            probabilities = probabilities[:len(indices), :]
+        
+        if not stack_in_time:
+            # stacking in time means that we only do one element at a time
+            # therefore, we don't need this indexing logic
+            end = min(i * sequence_length + sequence_length, n_datapoints)
+            indices = range(i * sequence_length, end)
+            # get rid of padding in final batch
+            if len(indices) < logits.shape[0]:
+                logits = logits[:len(indices), :]
+                probabilities = probabilities[:len(indices), :]
 
         all_logits.append(logits)
         all_probabilities.append(probabilities)
-
-    all_logits = np.concatenate(all_logits)
-    all_probabilities = np.concatenate(all_probabilities)
+    if stack_in_time:
+        all_logits = np.stack(all_logits)
+        all_probabilities = np.stack(all_probabilities)
+    else:
+        all_logits = np.concatenate(all_logits)
+        all_probabilities = np.concatenate(all_probabilities)
 
     return all_logits, all_probabilities
 
