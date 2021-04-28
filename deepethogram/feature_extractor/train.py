@@ -203,7 +203,8 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
 
 def build_model_from_cfg(cfg: DictConfig,
                          pos: np.ndarray = None,
-                         neg: np.ndarray = None) -> tuple:
+                         neg: np.ndarray = None, 
+                         num_classes: int = None) -> tuple:
     """ Builds feature extractor from a configuration object.
 
     Parameters
@@ -230,7 +231,8 @@ def build_model_from_cfg(cfg: DictConfig,
     device = 'cpu'
     feature_extractor_weights = projects.get_weightfile_from_cfg(
         cfg, 'feature_extractor')
-    num_classes = len(cfg.project.class_names)
+    if num_classes is None:
+        num_classes = len(cfg.project.class_names)
 
     log.info('feature extractor weightfile: {}'.format(feature_extractor_weights))
 
