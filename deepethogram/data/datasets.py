@@ -105,7 +105,7 @@ class VideoIterable(data.IterableDataset):
             self._zeros_image = np.zeros(self._image_shape, dtype=np.uint8)
             for i in range(3):
                 self._zeros_image[i, ...] = self.mean_by_channels[i]
-        return self._zeros_image
+        return self._zeros_image.copy()
 
     def parse_mean_by_channels(self, mean_by_channels):
         if isinstance(mean_by_channels[0], (float, np.floating)):
@@ -137,6 +137,7 @@ class VideoIterable(data.IterableDataset):
                 print(f'problem reading frame {self.cnt}')
                 raise
             im = self.transform(im)
+            # print(im.dtype)
         self.cnt += 1
         return im
 
