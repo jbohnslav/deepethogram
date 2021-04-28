@@ -75,8 +75,12 @@ class BaseLightningModule(pl.LightningModule):
             self.tune_hparams = {}
             self.tune_metrics = []
             
-        self.val_sampler = self.get_val_sampler()
-        # self.val_sampler = None
+            
+        self.samplers = {
+            'train': self.get_train_sampler(), 
+            'val': self.get_val_sampler(), 
+            'test': None
+        }
             
     def on_train_epoch_start(self, *args, **kwargs):
         # self.viz_cnt['train'] = 0
@@ -93,15 +97,15 @@ class BaseLightningModule(pl.LightningModule):
         # top-level in self.hparams
         batch_size = self.hparams.compute.batch_size if self.hparams.compute.batch_size != 'auto' else \
             self.hparams.batch_size
-        val_shuffle = True if self.val_sampler is None else None
-        shuffles = {'train': True, 'val': val_shuffle, 'test': False}
-        
-        sampler = self.val_sampler if split == 'val' else None
+            
+        shuffles = {'train': self.samplers['train'] is None, 
+                    'val': self.samplers['val'] is None, 
+                    'test': False}
             
         dataloader = DataLoader(self.datasets[split], batch_size=batch_size,
                                 shuffle=shuffles[split], num_workers=self.hparams.compute.num_workers,
                                 pin_memory=torch.cuda.is_available(), drop_last=False, 
-                                sampler=sampler)
+                                sampler=self.samplers[split])
         return dataloader
 
     def train_dataloader(self):
@@ -128,7 +132,28 @@ class BaseLightningModule(pl.LightningModule):
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
     
-    def get_val_sampler(self):
+    def get_train_sampler(self):
+        dataset = self.datasets['train']
+        if dataset.labels is None:
+            # self-supervised, e.g. flow generators
+            return
+        
+        class_counts = dataset.labels.sum(axis=0)
+        class_frac = class_counts / class_counts.sum()
+        sampling_ratio = 1 / (class_frac ** self.hparams.train.oversampling_exp)
+        
+        sample_weights = dataset.labels @ sampling_ratio
+        replacement =  self.hparams.train.oversampling_exp>1e-4
+        
+        log.info('oversampling exp: {}'.format(self.hparams.train.oversampling_exp))
+        log.info('oversampling ratio: {}'.format(sampling_ratio))
+        
+        sampler = WeightedRandomSampler(sample_weights, len(sample_weights), 
+                                replacement=replacement)
+        return sampler
+        
+    
+    def get_val_sampler(self):        
         # get sample weights for validation dataset to up-sample rare classes
         dataset = self.datasets['val']
         # if dataset.labels is None:

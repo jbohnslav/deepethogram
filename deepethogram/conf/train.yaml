@@ -59,6 +59,10 @@ train:
   # the p(y=1) from 0.8 ->0.99, for example
   loss_gamma: 1.0
   label_smoothing: 0.05
+  # how much to oversample rare classes. Formula: 1/(class_proportion ** oversampling_exp)
+  # 0: no oversampling
+  # 1: all classes will be sampled equally
+  oversampling_exp: 0.0
   regularization:
     style: l2_sp
     alpha: 1e-5
