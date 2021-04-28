@@ -6,7 +6,7 @@ tune:
     - val/reg_loss
     - val/f1_class_mean_nobg
   key_metric: val/f1_class_mean_nobg
-  num_trials: 64 # number of runs
+  num_trials: 128 # number of runs
   name: tune
   grace_period: 4 # number of epochs
   search: random # either random or hyperopt
