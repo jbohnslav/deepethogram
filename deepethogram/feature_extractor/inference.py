@@ -105,6 +105,7 @@ def get_penultimate_layer(model: Type[nn.Module]):
 
 
 def print_debug_statement(images, logits, spatial_features, flow_features, probabilities):
+    log.info('images shape: {}'.format(images.shape))
     log.info('logits shape: {}'.format(logits.shape))
     log.info('spatial_features shape: {}'.format(spatial_features.shape))
     log.info('flow_features shape: {}'.format(flow_features.shape))
@@ -281,6 +282,7 @@ def extract(rgbs: list,
             model,
             final_activation: str,
             thresholds: np.ndarray,
+            postprocessor, 
             mean_by_channels,
             fusion: str,
             num_rgb: int, latent_name: str, class_names: list = ['background'],
@@ -351,7 +353,7 @@ def extract(rgbs: list,
 
     class_names = [n.encode("ascii", "ignore") for n in class_names]
 
-    postprocessor = get_postprocessor_from_cfg(cfg, thresholds)
+    
     
     log.debug('model training mode: {}'.format(model.training))
     # iterate over movie files
@@ -453,7 +455,7 @@ def feature_extractor_inference(cfg: DictConfig):
     
     log.info('configuration used in inference: ')
     log.info(OmegaConf.to_yaml(cfg))
-    if cfg.sequence.latent_name is None:
+    if 'sequence' not in cfg.keys() or cfg.sequence.latent_name is None:
         latent_name = cfg.feature_extractor.arch
     else:
         latent_name = cfg.sequence.latent_name
@@ -502,14 +504,17 @@ def feature_extractor_inference(cfg: DictConfig):
     run_files = get_run_files_from_weights(feature_extractor_weights)
     if cfg.inference.use_loaded_model_cfg:
         loaded_config_file = run_files['config_file']
-        loaded_model_cfg = OmegaConf.load(loaded_config_file).feature_extractor
+        loaded_cfg = OmegaConf.load(loaded_config_file)
+        loaded_model_cfg = loaded_cfg.feature_extractor
         current_model_cfg = cfg.feature_extractor
         model_cfg = OmegaConf.merge(current_model_cfg, loaded_model_cfg)
         cfg.feature_extractor = model_cfg
         # we don't want to use the weights that the trained model was initialized with, but the weights after training
         # therefore, overwrite the loaded configuration with the current weights
         cfg.feature_extractor.weights = feature_extractor_weights
+        # num_classes = len(loaded_cfg.project.class_names)
     
+    # log.warning('Overwriting current project classes with loaded classes! REVERT')
     model_components = build_feature_extractor(cfg)
     _, _, _, _, model = model_components
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
@@ -530,10 +535,12 @@ def feature_extractor_inference(cfg: DictConfig):
     class_names = list(cfg.project.class_names)
     # class_names = projects.get_classes_from_project(cfg)
     class_names = np.array(class_names)
+    postprocessor = get_postprocessor_from_cfg(cfg, thresholds)
     extract(rgb,
             model,
             final_activation=cfg.feature_extractor.final_activation,
             thresholds=thresholds,
+            postprocessor=postprocessor, 
             mean_by_channels=cfg.augs.normalization.mean,
             fusion=cfg.feature_extractor.fusion,
             num_rgb=input_images,
