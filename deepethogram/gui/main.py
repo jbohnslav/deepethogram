@@ -200,7 +200,10 @@ class MainWindow(QMainWindow):
             self.n_timepoints = len(self.ui.videoPlayer.videoView.vid)
 
             log.debug('is deg: {}'.format(projects.is_deg_file(videofile)))
-            if projects.is_deg_file(videofile):
+            
+            # print(self.cfg.project.data_path, videofile)
+            
+            if self.cfg.project.data_path in videofile and projects.is_deg_file(videofile):
                 record = projects.get_record_from_subdir(os.path.dirname(videofile))
                 log.info('Record for loaded video: {}'.format(record))
                 labelfile = record['label']
@@ -714,7 +717,7 @@ class MainWindow(QMainWindow):
         self.update()
 
     def finalize(self):
-        if not hasattr(self, 'project_config'):
+        if not hasattr(self, 'cfg'):
             raise ValueError('cant finalize labels without starting or loading a DEG project')
         message = 'Are you sure you want to continue? All non-labeled frames will be labeled as *background*.\n' \
                   'This is not reversible.'
@@ -747,8 +750,7 @@ class MainWindow(QMainWindow):
         if self.saved:
             # do nothing
             return
-
-        log.info('Saving...')
+        log.info('saving...')
         df = self._make_dataframe()
         fname, _ = os.path.splitext(self.videofile)
         label_fname = fname + '_labels.csv'
@@ -1093,7 +1095,7 @@ class MainWindow(QMainWindow):
         self.ui.videoPlayer.videoView.update_frame(x + n)
 
     def _make_dataframe(self):
-        if not hasattr(self, 'project_config'):
+        if not hasattr(self, 'cfg'):
             raise ValueError('attempted to save dataframe without initializing or opening a project')
         label = np.copy(self.ui.labels.label.array).astype(np.int16)
         changed = np.copy(self.ui.labels.label.changed).astype(bool)
