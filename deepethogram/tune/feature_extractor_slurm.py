@@ -175,7 +175,7 @@ if __name__ == '__main__':
     #     cfg.train.num_epochs = 3
     #     cfg.tune.name = 'tune_feature_extractor_debug'
     # # else:
-    cfg.tune.name = 'tune_feature_extractor_{}_labelsmoothing'.format(args.preset)
+    cfg.tune.name = 'tune_feature_extractor_{}_{}'.format(args.preset, args.notes)
     # cfg.tune.num_trials = 100
     # CUSTOM EDITS HERE
     cfg.compute.batch_size = 32
