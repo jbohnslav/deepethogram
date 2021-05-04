@@ -32,7 +32,29 @@ log = logging.getLogger(__name__)
 
 
 class BaseLightningModule(pl.LightningModule):
+    """Base class for all Lightning modules for training
+    """
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics: Metrics, visualization_func):
+        """constructor
+
+        Parameters
+        ----------
+        model : nn.Module
+            CNN or sequence models
+        cfg : DictConfig
+            OmegaConf configuration
+        datasets : dict
+            train, val dataset classes
+        metrics : Metrics
+            deepethogram.metrics.py, for storing, computing, and saving metrics
+        visualization_func : Callable
+            function to visualize an input batch
+
+        Raises
+        ------
+        NotImplementedError
+            if model type is not feature_extractor, flow_generator, or sequence
+        """
         super().__init__()
 
         self.model = model
@@ -75,7 +97,7 @@ class BaseLightningModule(pl.LightningModule):
             self.tune_hparams = {}
             self.tune_metrics = []
             
-            
+        
         self.samplers = {
             'train': self.get_train_sampler(), 
             'val': self.get_val_sampler(), 
@@ -83,7 +105,6 @@ class BaseLightningModule(pl.LightningModule):
         }
             
     def on_train_epoch_start(self, *args, **kwargs):
-        # self.viz_cnt['train'] = 0
         # I couldn't figure out how to make sure that this is called after BOTH train and validation ends
         if self.current_epoch > 0 and self.hparams.train.viz_metrics:
             # all models shall define a visualization function that points to the metrics file on disk
@@ -133,15 +154,23 @@ class BaseLightningModule(pl.LightningModule):
         raise NotImplementedError
     
     def get_train_sampler(self):
+        """gets a WeightedRandomSampler for over-sampling rare classes. Not rigorously evaluated
+        """
         dataset = self.datasets['train']
         if dataset.labels is None:
             # self-supervised, e.g. flow generators
             return
         
+        # total positive examples of each class in our training set
         class_counts = dataset.labels.sum(axis=0)
+        # fraction of examples that are positive
         class_frac = class_counts / class_counts.sum()
+        # weight the sampling ratio based on self.hparams.train.oversampling_exp
+        # if this is 0, don't oversample at all
+        # if this is 1, all classes will be sampled equally, as though we have a uniform input distribution
         sampling_ratio = 1 / (class_frac ** self.hparams.train.oversampling_exp)
         
+        # sampling weight for each input data point
         sample_weights = dataset.labels @ sampling_ratio
         replacement =  self.hparams.train.oversampling_exp>1e-4
         
@@ -336,7 +365,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(os.getcwd())
         refresh_rate = 1
     
-    # tuning fucks with the callbacks
+    # tuning messes with the callbacks
     trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
                          precision=16 if cfg.compute.fp16 else 32,
                          limit_train_batches=steps_per_epoch['train'],

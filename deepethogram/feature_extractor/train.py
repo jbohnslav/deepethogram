@@ -60,7 +60,7 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
     nn.Module
         Trained feature extractor
     """
-    # rundir = os.getcwd()  # done by hydra
+    # rundir = os.getcwd()
     cfg = projects.setup_run(cfg)
     
     log.info('args: {}'.format(' '.join(sys.argv)))
@@ -295,8 +295,25 @@ def build_model_from_cfg(cfg: DictConfig,
 
 
 class HiddenTwoStreamLightning(BaseLightningModule):
+    """Lightning Module for training Feature Extractor models
+    """
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict,
                  metrics, criterion: nn.Module):
+        """constructor
+
+        Parameters
+        ----------
+        model : nn.Module
+            nn.Module, hidden two-stream CNNs
+        cfg : DictConfig
+            omegaconf configuration
+        datasets : dict
+            dictionary containing Dataset classes
+        metrics : [type]
+            metrics object for saving and computing metrics
+        criterion : nn.Module
+            loss function
+        """
         super().__init__(model, cfg, datasets, metrics,
                          viz.visualize_logger_multilabel_classification)
 
@@ -312,13 +329,19 @@ class HiddenTwoStreamLightning(BaseLightningModule):
 
         self.criterion = criterion
 
-        # this will get overridden by the ExampleImagesCallback
-        # self.viz_cnt = None
-
-    # def on_train_epoch_start(self) -> None:
-    #     log.info('buffer on epoch start: {}'.format(self.metrics.buffer.data))
-
     def validate_batch_size(self, batch: dict):
+        """simple check for appropriate batch sizes
+
+        Parameters
+        ----------
+        batch : dict
+            outputs of a DataLoader
+
+        Returns
+        -------
+        batch : dict
+            verified batch dictionary
+        """
         if self.hparams.compute.dali:
             # no idea why they wrap this, maybe they fixed it?
             batch = batch[0]
@@ -332,6 +355,20 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         return batch
 
     def training_step(self, batch: dict, batch_idx: int):
+        """Run forward pass, loss calculation, backward pass, and parameter update
+
+        Parameters
+        ----------
+        batch : dict
+            contains images and other information
+        batch_idx : int
+            index in current epoch
+
+        Returns
+        -------
+        loss : torch.Tensor
+            mean loss for batch for Lightning's backward + update hooks
+        """
         # use the forward function
         # return the image tensor so we can visualize after gpu transforms
         images, outputs = self(batch, 'train')
@@ -342,6 +379,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
 
         self.visualize_batch(images, probabilities, batch['labels'], 'train')
 
+        # save the model outputs to a buffer for various metrics
         self.metrics.buffer.append(
             'train', {
                 'loss': loss.detach(),
@@ -355,6 +393,15 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         return loss
 
     def validation_step(self, batch: dict, batch_idx: int):
+        """runs a single validation step
+
+        Parameters
+        ----------
+        batch : dict
+            images, labels, etc
+        batch_idx : int
+            index in validation epoch
+        """
         images, outputs = self(batch, 'val')
         probabilities = self.activation(outputs)
 
@@ -368,10 +415,18 @@ class HiddenTwoStreamLightning(BaseLightningModule):
             })
         self.metrics.buffer.append('val', loss_dict)
         # need to use the native logger for lr scheduling, etc.
-        # TESTING
         self.log('val/loss', loss.detach().cpu())
 
     def test_step(self, batch: dict, batch_idx: int):
+        """runs test step
+
+        Parameters
+        ----------
+        batch : dict
+            images, labels, etc
+        batch_idx : int
+            index in test epoch
+        """
         images, outputs = self(batch, 'test')
         probabilities = self.activation(outputs)
         loss, loss_dict = self.criterion(outputs, batch['labels'], self.model)
@@ -383,13 +438,28 @@ class HiddenTwoStreamLightning(BaseLightningModule):
             })
         self.metrics.buffer.append('test', loss_dict)
 
-    def visualize_batch(self, images, probs, labels, split: str):
+    def visualize_batch(self, images: torch.Tensor, probs: torch.Tensor, labels: torch.Tensor, split: str):
+        """generates example images of a given batch and saves to disk as a Matplotlib figure
+
+        Parameters
+        ----------
+        images : torch.Tensor
+            input images
+        probs : torch.Tensor
+            output probabilities
+        labels : torch.Tensor
+            human labels
+        split : str
+            train, val, or test
+        """
         if not self.hparams.train.viz_examples:
             return
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]
+        # only save first 10 batches
         if viz_cnt > 10:
             return
+        # this method can be used for sequence models as well
         if hasattr(self.model, 'flow_generator'):
             with torch.no_grad():
                 # re-compute optic flows for this batch for visualization
@@ -432,27 +502,52 @@ class HiddenTwoStreamLightning(BaseLightningModule):
 
     def forward(self, batch: dict,
                 mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
+        """runs forward pass, including GPU-based image augmentations
+
+        Parameters
+        ----------
+        batch : dict
+            images
+        mode : str
+            train or val, used to figure out which gpu augmenations to apply.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            [description]
+        """
         batch = self.validate_batch_size(batch)
         # lightning handles transfer to device
         images = batch['images']
         # no-grad should work in the apply_gpu_transforms method; adding here just in case
         with torch.no_grad():
+            # augment the input images. in training, this will perturb brightness, contrast, etc.
+            # in inference, it will just convert to the right dtype and normalize
             gpu_images = self.apply_gpu_transforms(images, mode)
         
         if torch.sum(gpu_images != gpu_images) > 0 or torch.sum(torch.isinf(gpu_images)) > 0:
-            print('nan in gpu augs')
-            import pdb; pdb.set_trace()
-        
-        outputs = self.model(gpu_images)
+            log.error('nan in gpu augs')
+            raise ValueError('nan in GPU augmentations!')
+        # make sure normalization works, etc.
         self.log_image_statistics(gpu_images)
         
+        # actually compute forward pass
+        outputs = self.model(gpu_images)
+        
         if torch.sum(outputs != outputs) > 0:
-            print('nan in model outputs')
-            import pdb; pdb.set_trace()
+            log.error('nan in model outputs')
+            raise ValueError('nan in model outputs!')
 
         return gpu_images, outputs
 
-    def log_image_statistics(self, images):
+    def log_image_statistics(self, images: torch.Tensor):
+        """logs the min, mean, max, and std deviation of input tensors. useful for debugging
+
+        Parameters
+        ----------
+        images : torch.Tensor
+            4D or 5D input images
+        """
         if not self.has_logged_channels and log.isEnabledFor(logging.DEBUG):
             if len(images.shape) == 4:
                 N, C, H, W = images.shape
@@ -487,23 +582,35 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         log.debug('label max: {}'.format(labels.max()))
         log.debug('label min: {}'.format(labels.min()))
 
-
 def get_criterion(cfg: DictConfig, model, data_info: dict, device=None):
-    """ Get loss function based on final activation.
+    """Get loss function based on final activation.
 
     If final activation is softmax: use cross-entropy loss
-    If final activation is sigmoid: use BCELoss
+    If final activation is sigmoid: use BinaryFocalLoss
 
-    Dataloaders are used to store weights based on dataset statistics, for up-weighting rare classes, etc.
+    data_info are used to store weights based on dataset statistics, for up-weighting rare classes, etc.
 
-    Args:
-        final_activation (str): [softmax, sigmoid]
-        dataloaders (dict): dictionary with keys ['train', 'val', 'test', 'loss_weight', 'pos_weight'], e.g. those
-            returned from deepethogram.data.dataloaders.py # get_dataloaders, get_video_dataloaders, etc.
-        device (str, torch.device): gpu device
+    Parameters
+    ----------
+    cfg : DictConfig
+        configuration
+    model : nn.Module
+        CNN
+    data_info : dict
+        dictionary with keys ['loss_weight', 'pos_weight', etc.], e.g. those
+            returned from deepethogram.data.datasets.get_datasets_from_cfg
+    device : str, torch.Device, optional
+        cpu or GPU, by default None
 
-    Returns:
-        criterion (nn.Module): loss function
+    Returns
+    -------
+    criterion: nn.Module
+        loss function
+
+    Raises
+    ------
+    NotImplementedError
+        if final_activation is not softmax or sigmoid
     """
     final_activation = cfg.feature_extractor.final_activation
     if final_activation == 'softmax':

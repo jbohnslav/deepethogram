@@ -83,7 +83,15 @@ def tune_feature_extractor(cfg: DictConfig):
 
 
 def run_ray_experiment(ray_cfg, cfg): 
-    
+    """trains a model based on the base config and the one generated for this experiment
+
+    Parameters
+    ----------
+    ray_cfg : DictConfig
+        hparam study configuration
+    cfg : DictConfig
+        base configuration with all non-tuned hyperparameters and information
+    """
     ray_cfg = OmegaConf.from_dotlist(dict_to_dotlist(ray_cfg))
     
     cfg = OmegaConf.merge(cfg, ray_cfg)

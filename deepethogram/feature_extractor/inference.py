@@ -70,23 +70,22 @@ def unpack_penultimate_layer(model: Type[nn.Module], fusion: str = 'average'):
     final_spatial_linear.register_forward_hook(get_inputs('spatial'))
     final_flow_linear = get_linear_layers(model.flow_classifier)[-1]
     final_flow_linear.register_forward_hook(get_inputs('flow'))
-
-    # if fusion == 'average':
-    #     get_penultimate_layer(model.spatial_classifier).register_forward_hook(get_inputs('spatial'))
-    #     get_penultimate_layer(model.flow_classifier).register_forward_hook(get_inputs('flow'))
-    # elif fusion == 'concatenate':
-    #     get_penultimate_layer(get_penultimate_layer(
-    #         model.spatial_classifier)).register_forward_hook(get_inputs('spatial'))
-    #     get_penultimate_layer(get_penultimate_layer(
-    #         model.flow_classifier)).register_forward_hook(get_inputs('flow'))
-    # else:
-    #     raise NotImplementedError
-    # list(model.spatial_classifier.children())[-1].register_forward_hook(get_inputs('spatial'))
-    # list(model.flow_classifier.children())[-1].register_forward_hook(get_inputs('flow'))
     return activation
 
 
-def get_linear_layers(model: nn.Module):
+def get_linear_layers(model: nn.Module) -> list:
+    """unpacks the linear layers from a nn.Module, including in all the sequentials
+
+    Parameters
+    ----------
+    model : nn.Module
+        CNN
+
+    Returns
+    -------
+    linear_layers: list
+        ordered list of all the linear layers
+    """
     linear_layers = []
     children = model.children()
     for child in children:
@@ -104,7 +103,28 @@ def get_penultimate_layer(model: Type[nn.Module]):
     return children[-1]
 
 
-def print_debug_statement(images, logits, spatial_features, flow_features, probabilities):
+def print_debug_statement(images: torch.Tensor, logits: torch.Tensor, spatial_features: torch.Tensor, 
+                          flow_features: torch.Tensor, probabilities: torch.Tensor):
+    """prints useful debug information to make sure there are no inference bugs
+
+    Parameters
+    ----------
+    images : torch.Tensor
+        input images
+    logits : torch.Tensor
+        un-normalized logits from the CNNs
+    spatial_features : torch.Tensor
+        512-D features from the spatial CNN
+    flow_features : torch.Tensor
+        512-D features from the flow CNN
+    probabilities : torch.Tensor
+        model outputs
+
+    Raises
+    ------
+    ValueError
+        in case of non 4-d or 5-d input tensors
+    """
     log.info('images shape: {}'.format(images.shape))
     log.info('logits shape: {}'.format(logits.shape))
     log.info('spatial_features shape: {}'.format(spatial_features.shape))
@@ -417,7 +437,20 @@ def extract(rgbs: list,
         del outputs
         f.close()
 
-def get_run_files_from_weights(weightfile: Union[str, os.PathLike]):
+def get_run_files_from_weights(weightfile: Union[str, os.PathLike]) -> dict:
+    """from model weights, gets the configuration for that model and its metrics file
+
+    Parameters
+    ----------
+    weightfile : Union[str, os.PathLike]
+        path to model weights, either .pt or .ckpt
+
+    Returns
+    -------
+    dict
+        config_file: path to config file
+        metrics_file: path to metrics file
+    """
     loaded_config_file = os.path.join(os.path.dirname(weightfile), 'config.yaml')
     if not os.path.isfile(loaded_config_file):
         # weight file should be at most one-subdirectory-down from rundir

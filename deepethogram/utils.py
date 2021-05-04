@@ -798,6 +798,8 @@ def get_dotted_from_cfg(cfg, dotted):
     return cfg_chunk
 
 def get_best_epoch_from_weightfile(weightfile: Union[str, os.PathLike]) -> int:
+    """parses a checkpoint like epoch=15.ckpt to find the number 15
+    """
     basename = os.path.basename(weightfile)
     # in the previous version of deepethogram, load the last checkpoint
     if basename.endswith('.pt'): 

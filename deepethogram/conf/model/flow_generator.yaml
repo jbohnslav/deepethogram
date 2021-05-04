@@ -3,6 +3,7 @@ flow_generator:
   flow_loss: MotionNet
   flow_max: 10
   input_images: 11
+  # if true, add L1 penalty to the flow itself to encourage sparsity
   flow_sparsity: false
   smooth_weight_multiplier: 1.0
   sparsity_weight: 0.0

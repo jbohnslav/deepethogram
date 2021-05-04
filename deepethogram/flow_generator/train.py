@@ -32,22 +32,7 @@ flow_generators = utils.get_models_from_module(models, get_function=False)
 
 plt.switch_backend('agg')
 
-# which GPUs should be available for training? I use 0,1 here manually because GPU2 is a tiny one for my displays
-n_gpus = torch.cuda.device_count()
-# DEVICE_IDS = [i for i in range(n_gpus)]
-# DEVICE_IDS = [0, 1]
-
-
 log = logging.getLogger(__name__)
-
-
-# cudnn.benchmark = True
-# cudnn.deterministic = False
-# log.warning('Using nondeterministic CUDNN, may be slower')
-
-# __all__ = ['build_model_from_cfg', 'train_from_cfg', 'train']
-
-# @hydra.main(config_path='../conf/flow_train.yaml')
 
 
 def flow_generator_train(cfg: DictConfig) -> nn.Module:
@@ -94,15 +79,43 @@ def flow_generator_train(cfg: DictConfig) -> nn.Module:
     
     
 def build_model_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
+    """builds flow generator from an OmegaConf configuration
+
+    Parameters
+    ----------
+    cfg : DictConfig
+
+    Returns
+    -------
+    nn.Module
+        flow generator
+    """
     flow_generator = flow_generators[cfg.flow_generator.arch](num_images=cfg.flow_generator.n_rgb,
                                                               flow_div=cfg.flow_generator.max)
     return flow_generator
 
 
 class OpticalFlowLightning(BaseLightningModule):
+    """Lightning Module for training Optic Flow generator models
+    """
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, visualization_func):
-        super().__init__(model, cfg, datasets, metrics, visualization_func)
+        """constructor
 
+        Parameters
+        ----------
+        model : nn.Module
+            flow generator
+        cfg : DictConfig
+            omegaconf configuration
+        datasets : dict
+            PyTorch Dataset classes for loading train and validation data
+        metrics : Metrics
+            metrics object for computing and saving metrics
+        visualization_func : Callable
+            function that visualizes inputs
+        """
+        super().__init__(model, cfg, datasets, metrics, visualization_func)
+        # uses flow to resample time t+1 to estimate time 0
         self.reconstructor = Reconstructor(self.hparams)
 
         self.has_logged_channels = False
@@ -113,6 +126,8 @@ class OpticalFlowLightning(BaseLightningModule):
         self.viz_cnt = None
 
     def validate_batch_size(self, batch: dict):
+        """simple wrapper to make sure our batch has the right input shape
+        """
         if self.hparams.compute.dali:
             # no idea why they wrap this, maybe they fixed it?
             batch = batch[0]
@@ -126,8 +141,25 @@ class OpticalFlowLightning(BaseLightningModule):
         return batch
 
     def common_step(self, batch: dict, batch_idx: int, split: str):
-        images, outputs = self(batch, split)
+        """forward pass, image reconstruction, and loss computation
 
+        Parameters
+        ----------
+        batch : dict
+            contains images
+        batch_idx : int
+            index in epoch
+        split : str
+            either train or val
+
+        Returns
+        -------
+        loss : torch.Tensor
+            mean loss of input batch for backward pass
+        """
+        # forward pass. images are returned because the forward pass runs augmentations on the gpu as well
+        images, outputs = self(batch, split)
+        # actually reconstruct t0 using t1 and estimated optic flow
         downsampled_t0, estimated_t0, flows_reshaped = self.reconstructor(images, outputs)
         loss, loss_components = self.criterion(batch, downsampled_t0, estimated_t0, flows_reshaped, self.model)
         self.visualize_batch(images, downsampled_t0, estimated_t0, flows_reshaped, split)
@@ -153,7 +185,23 @@ class OpticalFlowLightning(BaseLightningModule):
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
 
-    def visualize_batch(self, images, downsampled_t0, estimated_t0, flows_reshaped, split: str):
+    def visualize_batch(self, images: torch.Tensor, downsampled_t0: torch.Tensor, estimated_t0: torch.Tensor, 
+                        flows_reshaped: torch.Tensor, split: str):
+        """visualizes a batch of inputs and saves as a matplotlib figure PNG to disk
+
+        Parameters
+        ----------
+        images : torch.Tensor
+            input images
+        downsampled_t0 : torch.Tensor
+            images at t0, resized to match the model outputs
+        estimated_t0 : torch.Tensor
+            estimated t0 images, from resampling t1 based on optic flow
+        flows_reshaped : torch.Tensor
+            flow at the correct size
+        split : str
+            train or val
+        """
         if not self.hparams.train.viz_examples:
             return
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
@@ -184,10 +232,22 @@ class OpticalFlowLightning(BaseLightningModule):
         viz.save_figure(fig, 'reconstruction', True, viz_cnt, split)
 
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, list]:
-        # try:
-        #     batch = next(dataiter)
-        # except StopIteration:
-        #     break
+        """actually compute optic flow
+
+        Parameters
+        ----------
+        batch : dict
+            contains images
+        mode : str
+            train or val
+
+        Returns
+        -------
+        images: torch.Tensor
+            input images after gpu augmentations
+        outputs: list
+            list of optic flows at multiple scales
+        """
         batch = self.validate_batch_size(batch)
         # lightning handles transfer to device
         images = batch['images']
@@ -199,6 +259,8 @@ class OpticalFlowLightning(BaseLightningModule):
         return images, outputs
 
     def log_image_statistics(self, images):
+        """convenience method for logging image shape and channel statistics
+        """
         if not self.has_logged_channels and log.isEnabledFor(logging.DEBUG):
             if len(images.shape) == 4:
                 N, C, H, W = images.shape
@@ -228,6 +290,25 @@ class OpticalFlowLightning(BaseLightningModule):
 
 
 def get_criterion(cfg, model):
+    """gets loss function from config and a model
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        OmegaConf configuration
+    model : nn.Module
+        flow generator
+
+    Returns
+    -------
+    criterion : nn.Module
+        loss function
+
+    Raises
+    ------
+    NotImplementedError
+        for losses other than MotionNet
+    """
     regularization_criterion = get_regularization_loss(cfg, model)
     
     if cfg.flow_generator.loss == 'MotionNet':
@@ -242,6 +323,22 @@ def get_criterion(cfg, model):
 
 
 def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_parameters: Union[int, float]):
+    """gets a Metrics object for computing and saving flow quality metrics
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        OmegaConf configuration
+    rundir : Union[str, bytes, os.PathLike]
+        path to directory where metrics file will be saved
+    num_parameters : Union[int, float]
+        number of parameters in the model
+
+    Returns
+    -------
+    metrics: Metrics
+        metrics object. see deepethogram.metrics.py
+    """
     metrics_list = ['SSIM', 'L1', 'smoothness', 'SSIM_full']
     if cfg.flow_generator.flow_sparsity:
         metrics_list.append('flow_sparsity')

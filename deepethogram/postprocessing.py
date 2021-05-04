@@ -266,7 +266,20 @@ class MinBoutLengthPerBehaviorPostprocessor(Postprocessor):
 
 
 def get_bout_length_percentile(label_list: list,  percentile: float) -> dict:
-    
+    """gets the Nth percentile of the bout length distribution for each behavior
+
+    Parameters
+    ----------
+    label_list : list
+        list of binary TxK label arrays
+    percentile : float
+        which percentile. e.g. 1, 5
+
+    Returns
+    -------
+    dict
+        Nth percentile for each behavior
+    """
     bout_lengths = defaultdict(list)
     
     for label in label_list:

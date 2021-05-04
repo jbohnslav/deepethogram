@@ -956,6 +956,22 @@ def sort_runs_by_date(runs: list) -> list:
 
 
 def get_weightfiles_from_rundir(rundir: Union[os.PathLike, str]) -> dict:
+    """from a run directory, finds a dictionary of all the model weights. 
+    
+    Can be either .pt or .ckpt. Can be either the "last" model or the "best" model, according to one's key metric
+
+    Parameters
+    ----------
+    rundir : Union[os.PathLike, str]
+        path to run directory
+
+    Returns
+    -------
+    dict
+        deg: checkpoint.pt
+        last: last.ckpt, most recent lightning file
+        best: .ckpt, best model according to validation metric
+    """
     subfiles = utils.get_subfiles(rundir, 'file')
 
     deg_checkpoint = None
@@ -1079,36 +1095,9 @@ def get_weights_from_model_path(model_path: Union[str, os.PathLike]) -> dict:
     return model_weights
 
 
-# def overwrite_cfg_with_latest_weights(cfg: DictConfig, model_weights: Union[str, os.PathLike, defaultdict],
-#                                       model_type: str) -> DictConfig:
-#     if cfg.reload.weights is not None:
-#         # user has specified specific model weights, don't overwrite with most recent model
-#         return cfg
-#     if type(model_weights) == str or type(model_weights) == os.PathLike:
-#         model_weights = get_weights_from_model_path(model_weights)
-#     if model_type not in model_weights.keys() or len(model_weights[model_type]) == 0:
-#         log.warning('No pretrained {} model found. not loading'.format(model_type))
-#         return cfg
-#     latest_weights = model_weights[model_type][-1]
-#     assert os.path.isfile(latest_weights)
-#     cfg.reload.weights = latest_weights
-#
-#     # let's say you're retraining the feature extractors. For this, since we're using hidden two stream networks, we
-#     # need to have a pretrained flow generator. This will allow us to find the latest weights of each model type.
-#     # in our feature extractor trainer, we can independently load a pretrained feature extractor (e.g. resnet18)
-#     # and a separate flow generator using the below weights
-#     for model in ['flow_generator', 'feature_extractor', 'sequence']:
-#         if model not in model_weights.keys() or len(model_weights[model_type]) == 0:
-#             continue
-#         # if the user has specified certain model weights, don't overwrite them here
-#         if cfg[model].weights is not None:
-#             latest_weights = model_weights[model][-1]
-#             assert (os.path.isfile(latest_weights))
-#             cfg[model].weights = latest_weights
-#     return cfg
-
-
 def get_weight_file_absolute_or_relative(cfg, path_to_weights):
+    """if path_to_weights exists, return. if it doesn't, pre-pend model path
+    """
     if os.path.isfile(path_to_weights):
         return path_to_weights
     else:
@@ -1313,6 +1302,8 @@ def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5'
 
 
 def get_config_from_path(path: Union[str, os.PathLike]) -> str:
+    """gets a config file, with name either path/project.yaml or path/project_config.yaml
+    """
     for cfg_path in ['project', 'project_config']:
         cfg_path = os.path.join(path, cfg_path + '.yaml')
         if os.path.isfile(cfg_path):
@@ -1321,6 +1312,22 @@ def get_config_from_path(path: Union[str, os.PathLike]) -> str:
 
 
 def fix_config_paths(cfg, path_to_config: Union[str, os.PathLike]):
+    """Fixes the path to the project and config file in the configuration itself.
+    
+    This situation could occur if one moved an existing project to another computer or directory
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        configuration
+    path_to_config : Union[str, os.PathLike]
+        path to project config
+
+    Returns
+    -------
+    cfg: DictConfig 
+        configuration with fixed paths
+    """
     error = False
     if cfg['project']['path'] != os.path.dirname(path_to_config):
         log.warning('Erroneous project path in the config file itself, changing...')
@@ -1335,7 +1342,21 @@ def fix_config_paths(cfg, path_to_config: Union[str, os.PathLike]):
     return cfg
 
 
-def get_config_file_from_project_path(project_path):
+def get_config_file_from_project_path(project_path: Union[str, os.PathLike]):
+    """gets a project configuration from a project path
+    
+    Finds the file; loads it; and fixes any relevant config paths
+
+    Parameters
+    ----------
+    project_path : str, os.PathLike 
+        path to a deepethogram project
+
+    Returns
+    -------
+    project_cfg
+        project specific omegaconf configuration
+    """
     assert os.path.isdir(project_path)
     project_path = os.path.abspath(project_path)
     cfg_file = get_config_from_path(project_path)
@@ -1344,32 +1365,26 @@ def get_config_file_from_project_path(project_path):
     return project_cfg
 
 
-# def parse_cfg_paths(cfg: DictConfig) -> DictConfig:
-#     """ Changes config file relative paths to absolute paths. Fixes broken paths, if any """
-#     project = cfg.project
-#
-#     if project.path is None:
-#         return cfg
-#
-#     assert os.path.isdir(project.path)
-#     # whatever's in project.path is the canonical location
-#     cfg_path = get_config_from_path(project.path)
-#     # make sure we save this path to the
-#     cfg_path = fix_config_paths(project, cfg_path)
-#
-#
-#     cfg.project.data_path = os.path.join(cfg.project.path, cfg.project.data_path)
-#     assert os.path.isdir(cfg.project.data_path), 'Data path not found: {}'.format(cfg.project.data_path)
-#     cfg.project.model_path = os.path.join(cfg.project.path, cfg.project.model_path)
-#     assert os.path.isdir(cfg.project.model_path)
-#     if cfg.reload.weights is not None:
-#         # if it's not a file, assume it's a relative path within the model directory
-#         if not os.path.isfile(cfg.reload.weights):
-#             cfg.reload.weights = os.path.join(cfg.project.model_path, cfg.reload.weights)
-#
-#         assert os.path.isfile(cfg.reload.weights)
-#     return cfg
 def get_project_path_from_cl(argv: list, error_if_not_found=True) -> str:
+    """if project path is in a list of command line arguments, parses it
+
+    Parameters
+    ----------
+    argv : list
+        from sys.argv
+    error_if_not_found : bool, optional
+        if True, raises error if there is no project path, by default True
+
+    Returns
+    -------
+    str
+        path to deepethogram project
+
+    Raises
+    ------
+    ValueError
+        if project.path is not found
+    """
     for arg in argv:
         if 'project.config_file' in arg:
             key, path = arg.split('=')

@@ -77,6 +77,8 @@ def sequence_train(cfg: DictConfig) -> nn.Module:
 
 
 class SequenceLightning(BaseLightningModule):
+    """Lightning Module for training sequence models
+    """
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, criterion: nn.Module):
         super().__init__(model, cfg, datasets, metrics, viz.visualize_logger_multilabel_classification)
 
@@ -92,11 +94,23 @@ class SequenceLightning(BaseLightningModule):
 
         self.criterion = criterion
 
-        # self.batch_cnt = 0
-        # this will get overridden by the ExampleImagesCallback
-        # self.viz_cnt = None
-
     def common_step(self, batch: dict, batch_idx: int, split: str):
+        """forward pass, loss computation, input visualization
+
+        Parameters
+        ----------
+        batch : dict
+            contains input sequences
+        batch_idx : int
+            index in epoch
+        split : str
+            train or val
+
+        Returns
+        -------
+        loss: torch.Tensor
+            mean loss across inputs
+        """
         # images, outputs = self(batch, split)
         outputs = self(batch, split)
         probabilities = self.activation(outputs)

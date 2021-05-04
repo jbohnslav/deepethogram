@@ -14,6 +14,8 @@ def dict_to_dotlist(cfg_dict):
 
 
 def generate_tune_cfg(cfg):
+    """from a configuration, e.g. conf/tune/feature_extractor.yaml, generate a search space for specific hyperparameters
+    """
     def get_space(hparam_dict):
         if hparam_dict.space == 'uniform':
             return tune.uniform(hparam_dict.min, hparam_dict.max)
