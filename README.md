@@ -29,6 +29,12 @@ In brief:
 ## News
 DeepEthogram is now in Beta, version 0.1! There are major changes to the codebase and to model training and inference. Model performance, measured by F1, accuracy, etc. should be higher in version 0.1. Model training times and inference times should be dramatically reduced. For full information, see [the DeepEthogram Beta docs](docs/beta.md)
 
+## Pretrained models
+Rather than start from scratch, we will start with model weights pretrained on the Kinetics700 dataset. Go to 
+To download the pretrained weights, please use [this Google Drive link](https://drive.google.com/file/d/1ntIZVbOG1UAiFVlsAAuKEBEVCVevyets/view?usp=sharing).
+Unzip the files in your `project/models` directory. The path should be 
+`your_project/models/pretrained/{models 1:6}`. 
+
 ## Licensing
 Copyright (c) 2020 - President and Fellows of Harvard College. All rights reserved.
 
