@@ -46,7 +46,7 @@ def initialize_project(directory: Union[str, os.PathLike],
             if True, make a subdirectory like "/path/to/DATA/project_name_deepethogram"
             if False, keep as the input directory: "/path/to/DATA"
     Example:
-        intialize_project('C:\DATA', 'grooming', ['background', 'face_groom', 'body_groom', 'rear'])
+        intialize_project('C:/DATA', 'grooming', ['background', 'face_groom', 'body_groom', 'rear'])
     """
     assert os.path.isdir(directory), 'Directory does not exist: {}'.format(directory)
     if behaviors is not None:
@@ -202,22 +202,22 @@ def add_file_to_subdir(file: Union[str, os.PathLike], subdir: Union[str, os.Path
     utils.save_dict_to_yaml(record, os.path.join(subdir, 'record.yaml'))
 
 
-def change_project_directory(config_file: Union[str, os.PathLike], new_directory: Union[str, os.PathLike]):
-    """If you move the project directory to some other location, updates the config file to have the new directories"""
-    assert os.path.isfile(config_file)
-    assert os.path.isdir(new_directory)
-    # make sure that new directory is properly formatted for deepethogram
-    datadir = os.path.join(new_directory, 'DATA')
-    model_path = os.path.join(new_directory, 'models')
-    assert os.path.isdir(datadir)
-    assert os.path.isdir(model_path)
+# def change_project_directory(config_file: Union[str, os.PathLike], new_directory: Union[str, os.PathLike]):
+#     """If you move the project directory to some other location, updates the config file to have the new directories"""
+#     assert os.path.isfile(config_file)
+#     assert os.path.isdir(new_directory)
+#     # make sure that new directory is properly formatted for deepethogram
+#     datadir = os.path.join(new_directory, 'DATA')
+#     model_path = os.path.join(new_directory, 'models')
+#     assert os.path.isdir(datadir)
+#     assert os.path.isdir(model_path)
 
-    project_config = utils.load_yaml(config_file)
-    project_config['project']['path'] = new_directory
-    project_config['project']['model_path'] = os.path.basename(model_path)
-    project_config['project']['data_path'] = os.path.basename(datadir)
-    project_config['project']['config_file'] = os.path.join(new_directory, 'project_config.yaml')
-    utils.save_dict_to_yaml(project_config, project_config['project']['config_file'])
+#     project_config = utils.load_yaml(config_file)
+#     project_config['project']['path'] = new_directory
+#     project_config['project']['model_path'] = os.path.basename(model_path)
+#     project_config['project']['data_path'] = os.path.basename(datadir)
+#     project_config['project']['config_file'] = os.path.join(new_directory, 'project_config.yaml')
+#     utils.save_dict_to_yaml(project_config, project_config['project']['config_file'])
 
 
 def remove_video_from_project(config_file, video_file=None, record_directory=None):
@@ -843,7 +843,7 @@ def do_outputfiles_have_predictions(data_path: Union[str, os.PathLike], model_na
 
 def extract_date(string: str):
     """ Extracts the actual date time from a formatted string. Used for finding most recent models """
-    pattern = re.compile('\d{6}_\d{6}')
+    pattern = re.compile(r'\d{6}_\d{6}')
     match = pattern.search(string)
     if match is not None:
         match = match.group()
@@ -1164,7 +1164,7 @@ def load_config(path_to_config: Union[str, os.PathLike]) -> dict:
     """Convenience function to load dictionary from yaml and sort out potentially erroneous paths"""
     assert os.path.isfile(path_to_config), 'configuration file does not exist! {}'.format(path_to_config)
 
-    project = utils.load_yaml(path_to_config)
+    project = OmegaConf.load(path_to_config)
     project = fix_config_paths(project, path_to_config)
     # project = convert_config_paths_to_absolute(project)
     return project
@@ -1208,7 +1208,7 @@ def convert_all_videos(config_file: Union[str, os.PathLike], movie_format='hdf5'
             print(e)
 
 
-def get_config_from_path(path: Union[str, os.PathLike]) -> str:
+def get_config_file_from_path(path: Union[str, os.PathLike]) -> str:
     """gets a config file, with name either path/project.yaml or path/project_config.yaml
     """
     for cfg_path in ['project', 'project_config']:
@@ -1250,7 +1250,7 @@ def fix_config_paths(cfg, path_to_config: Union[str, os.PathLike]):
     return cfg
 
 
-def get_config_file_from_project_path(project_path: Union[str, os.PathLike]):
+def get_config_from_path(project_path: Union[str, os.PathLike]):
     """gets a project configuration from a project path
     
     Finds the file; loads it; and fixes any relevant config paths
@@ -1267,10 +1267,11 @@ def get_config_file_from_project_path(project_path: Union[str, os.PathLike]):
     """
     assert os.path.isdir(project_path)
     project_path = os.path.abspath(project_path)
-    cfg_file = get_config_from_path(project_path)
-    project_cfg = OmegaConf.load(cfg_file)
-    project_cfg = fix_config_paths(project_cfg, cfg_file)
-    return project_cfg
+    cfg_file = get_config_file_from_path(project_path)
+    return load_config(cfg_file)
+    # project_cfg = OmegaConf.load(cfg_file)
+    # project_cfg = fix_config_paths(project_cfg, cfg_file)
+    # return project_cfg
 
 
 def get_project_path_from_cl(argv: list, error_if_not_found=True) -> str:

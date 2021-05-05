@@ -26,10 +26,10 @@ def load_yaml(filename: Union[str, os.PathLike]) -> dict:
     return dictionary
 
 
-def load_config(filename: Union[str, os.PathLike]) -> DictConfig:
-    """ loads a yaml file as dictionary and converts to an omegaconf DictConfig """
-    dictionary = load_yaml(filename)
-    return OmegaConf.create(dictionary)
+# def load_config(filename: Union[str, os.PathLike]) -> DictConfig:
+#     """ loads a yaml file as dictionary and converts to an omegaconf DictConfig """
+#     dictionary = load_yaml(filename)
+#     return OmegaConf.create(dictionary)
 
 
 def get_minimum_learning_rate(optimizer):
