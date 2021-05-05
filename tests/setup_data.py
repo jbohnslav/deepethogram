@@ -1,6 +1,9 @@
 import os
 import shutil
 
+# from projects import get_records_from_datadir, fix_config_paths
+from deepethogram import projects, utils
+
 this_path = os.path.abspath(__file__)
 test_path = os.path.dirname(this_path)
 
@@ -11,6 +14,10 @@ assert os.path.isdir(archive_path)
 project_path = os.path.join(test_data_path, 'testing_deepethogram')
 data_path = os.path.join(project_path, 'DATA')
 
+config_path_archive = os.path.join(archive_path, 'project_config.yaml')
+# config_path = os.path.join(project_path, 'project_config.yaml')
+cfg_archive = projects.get_config_from_path(archive_path)
+
 
 def clean_test_data():
     if os.path.isdir(project_path):
@@ -20,3 +27,13 @@ def clean_test_data():
 def make_project_from_archive():
     clean_test_data()
     shutil.copytree(archive_path, project_path)
+    # this also fixes paths
+    cfg = projects.get_config_from_path(project_path)
+    # projects.fix_config_paths(cfg)
+
+
+def get_records(origin='project'):
+    if origin == 'project':
+        return projects.get_records_from_datadir(data_path)
+    elif origin == 'archive':
+        return projects.get_records_from_datadir(os.path.join(archive_path, 'DATA'))
