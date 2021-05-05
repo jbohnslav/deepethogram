@@ -4,20 +4,22 @@ import subprocess
 
 from deepethogram import utils
 
-from setup_data import get_testing_directory
+# from setup_data import get_testing_directory
 
 testing_directory = get_testing_directory()
 config_path = os.path.join(testing_directory, 'project_config.yaml')
-BATCH_SIZE = 4 # small but not too small
+BATCH_SIZE = 4  # small but not too small
 # if less than 10, might have bugs with visualization
 STEPS_PER_EPOCH = 20
 NUM_EPOCHS = 2
+
 
 def command_from_string(string):
     command = string.split(' ')
     if command[-1] == '':
         command = command[:-1]
     return command
+
 
 def add_default_arguments(string, train=True):
     string += f'project.config_file={config_path} '
@@ -27,6 +29,7 @@ def add_default_arguments(string, train=True):
         string += f'train.steps_per_epoch.test={STEPS_PER_EPOCH} '
         string += f'train.num_epochs={NUM_EPOCHS} '
     return string
+
 
 def test_flow():
     string = (f'python -m deepethogram.flow_generator.train preset=deg_f ')
@@ -46,6 +49,7 @@ def test_flow():
     command = command_from_string(string)
     ret = subprocess.run(command)
     assert ret.returncode == 0
+
 
 def test_feature_extractor():
     string = (f'python -m deepethogram.feature_extractor.train preset=deg_f flow_generator.weights=latest ')
@@ -68,6 +72,7 @@ def test_feature_extractor():
     ret = subprocess.run(command)
     assert ret.returncode == 0
 
+
 def test_feature_extraction():
     # the reason for this complexity is that I don't want to run inference on all directories
     string = (f'python -m deepethogram.feature_extractor.inference preset=deg_f reload.latest=True ')
@@ -83,6 +88,7 @@ def test_feature_extraction():
     ret = subprocess.run(command)
     assert ret.returncode == 0
     # string += 'inference.directory_list=[]'
+
 
 def test_sequence_train():
     string = (f'python -m deepethogram.sequence.train ')
