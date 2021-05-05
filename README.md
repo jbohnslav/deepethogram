@@ -32,8 +32,8 @@ DeepEthogram is now in Beta, version 0.1! There are major changes to the codebas
 ## Pretrained models
 Rather than start from scratch, we will start with model weights pretrained on the Kinetics700 dataset. Go to 
 To download the pretrained weights, please use [this Google Drive link](https://drive.google.com/file/d/1ntIZVbOG1UAiFVlsAAuKEBEVCVevyets/view?usp=sharing).
-Unzip the files in your `project/models` directory. The path should be 
-`your_project/models/pretrained/{models 1:6}`. 
+Unzip the files in your `project/models` directory. Make sure that you don't add an extra directory when unzipping! The path should be 
+`your_project/models/pretrained_models/{models 1:6}`, not `your_project/models/pretrained_models/pretrained_models/{models1:6}`.
 
 ## Licensing
 Copyright (c) 2020 - President and Fellows of Harvard College. All rights reserved.

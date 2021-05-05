@@ -43,8 +43,14 @@ to install on your system.
 
 ## Common installation problems
 * You might have dependency issues with other packages you've installed. Please make a new anaconda or miniconda 
-environment with `conda create --name deg python=3.7` before installation. 
+environment with `conda create --name deg python=3.8` before installation. 
 * `module not found: PySide2`. Some versions of PySide2 install poorly from pip. use `pip uninstall pyside2`, then 
 `conda install -c conda-forge pyside2`
 * When opening the GUI, you might get `Segmentation fault (core dumped)`. In this case; please `pip uninstall pyside2`, 
-`conda uninstall pyside2`. `conda install -c conda-forge pyside2==5.13.2`
+`conda uninstall pyside2`. `pip install pyside2`
+* `ImportError: C:\Users\jbohn\.conda\envs\deg2\lib\site-packages\shiboken2\libshiboken does not exist`
+  * something went wrong with your PySide2 installation, likely on Windows. 
+  * Make sure you have opened your command prompt as administrator
+  * If it tells you to install a new version of Visual Studio C++, please do that. 
+  * Now you should be set up: let's reinstall PySide2 and libshiboken. 
+  * `pip install --force-reinstall pyside2`
