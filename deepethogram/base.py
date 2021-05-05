@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
-try: 
+try:
     from ray.tune.integration.pytorch_lightning import TuneReportCallback, \
         TuneReportCheckpointCallback
     from ray.tune import get_trial_dir
@@ -83,7 +83,7 @@ class BaseLightningModule(pl.LightningModule):
         self.lr = self.hparams.train.lr if self.hparams.train.lr != 'auto' else 1e-4
         log.info('scheduler mode: {}'.format(self.scheduler_mode))
         # self.is_key_metric_loss = self.metrics.key_metric == 'loss'
-        
+
         self.viz_cnt = defaultdict(int)
         # for hyperparameter tuning, log specific hyperparameters and metrics for tensorboard
         if 'tune' in cfg.keys():
@@ -96,14 +96,9 @@ class BaseLightningModule(pl.LightningModule):
         else:
             self.tune_hparams = {}
             self.tune_metrics = []
-            
-        
-        self.samplers = {
-            'train': self.get_train_sampler(), 
-            'val': self.get_val_sampler(), 
-            'test': None
-        }
-            
+
+        self.samplers = {'train': self.get_train_sampler(), 'val': self.get_val_sampler(), 'test': None}
+
     def on_train_epoch_start(self, *args, **kwargs):
         # I couldn't figure out how to make sure that this is called after BOTH train and validation ends
         if self.current_epoch > 0 and self.hparams.train.viz_metrics:
@@ -118,14 +113,15 @@ class BaseLightningModule(pl.LightningModule):
         # top-level in self.hparams
         batch_size = self.hparams.compute.batch_size if self.hparams.compute.batch_size != 'auto' else \
             self.hparams.batch_size
-            
-        shuffles = {'train': self.samplers['train'] is None, 
-                    'val': self.samplers['val'] is None, 
-                    'test': False}
-            
-        dataloader = DataLoader(self.datasets[split], batch_size=batch_size,
-                                shuffle=shuffles[split], num_workers=self.hparams.compute.num_workers,
-                                pin_memory=torch.cuda.is_available(), drop_last=False, 
+
+        shuffles = {'train': self.samplers['train'] is None, 'val': self.samplers['val'] is None, 'test': False}
+
+        dataloader = DataLoader(self.datasets[split],
+                                batch_size=batch_size,
+                                shuffle=shuffles[split],
+                                num_workers=self.hparams.compute.num_workers,
+                                pin_memory=torch.cuda.is_available(),
+                                drop_last=False,
                                 sampler=self.samplers[split])
         return dataloader
 
@@ -152,15 +148,17 @@ class BaseLightningModule(pl.LightningModule):
 
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
-    
+
     def get_train_sampler(self):
         """gets a WeightedRandomSampler for over-sampling rare classes. Not rigorously evaluated
         """
         dataset = self.datasets['train']
-        if dataset.labels is None:
+        if not hasattr(dataset, 'labels') or dataset.labels is None:
             # self-supervised, e.g. flow generators
             return
-        
+        if self.hparams.train.oversampling_exp < 1e-4:
+            log.info('not using oversampling')
+            return
         # total positive examples of each class in our training set
         class_counts = dataset.labels.sum(axis=0)
         # fraction of examples that are positive
@@ -168,21 +166,19 @@ class BaseLightningModule(pl.LightningModule):
         # weight the sampling ratio based on self.hparams.train.oversampling_exp
         # if this is 0, don't oversample at all
         # if this is 1, all classes will be sampled equally, as though we have a uniform input distribution
-        sampling_ratio = 1 / (class_frac ** self.hparams.train.oversampling_exp)
-        
+        sampling_ratio = 1 / (class_frac**self.hparams.train.oversampling_exp)
+        sampling_ratio = utils.remove_nans_and_infs(sampling_ratio)
         # sampling weight for each input data point
         sample_weights = dataset.labels @ sampling_ratio
-        replacement =  self.hparams.train.oversampling_exp>1e-4
-        
+        replacement = self.hparams.train.oversampling_exp > 1e-4
+
         log.info('oversampling exp: {}'.format(self.hparams.train.oversampling_exp))
         log.info('oversampling ratio: {}'.format(sampling_ratio))
-        
-        sampler = WeightedRandomSampler(sample_weights, len(sample_weights), 
-                                replacement=replacement)
+
+        sampler = WeightedRandomSampler(sample_weights, len(sample_weights), replacement=replacement)
         return sampler
-        
-    
-    def get_val_sampler(self):        
+
+    def get_val_sampler(self):
         # get sample weights for validation dataset to up-sample rare classes
         dataset = self.datasets['val']
         # if dataset.labels is None:
@@ -196,15 +192,14 @@ class BaseLightningModule(pl.LightningModule):
         # # highest probability: multiple rare classes
         # # lowest probability: one common class
         # weights_per_sample = dataset.labels @ weights
-        # sampler = WeightedRandomSampler(weights = weights_per_sample, 
+        # sampler = WeightedRandomSampler(weights = weights_per_sample,
         #                                 num_samples=len(dataset), replacement=False)
-        
-        # above is experimental! for now, ignore 
+
+        # above is experimental! for now, ignore
         sampler = None
-        
+
         return sampler
-        
-        
+
     def apply_gpu_transforms(self, images: torch.Tensor, mode: str) -> torch.Tensor:
         with torch.no_grad():
             images = self.gpu_transforms[mode](images).detach()
@@ -212,13 +207,16 @@ class BaseLightningModule(pl.LightningModule):
 
     def configure_optimizers(self):
 
-        weight_decay = 0 # if self.hparams.weight_decay is None else self.hparams.weight_decay
+        weight_decay = 0  # if self.hparams.weight_decay is None else self.hparams.weight_decay
 
-        optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.lr,
+        optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()),
+                               lr=self.lr,
                                weight_decay=weight_decay)
         self.optimizer = optimizer
         log.info('learning rate: {}'.format(self.lr))
-        scheduler = initialize_scheduler(optimizer, self.hparams, mode=self.scheduler_mode,
+        scheduler = initialize_scheduler(optimizer,
+                                         self.hparams,
+                                         mode=self.scheduler_mode,
                                          reduction_factor=self.hparams.train.reduction_factor)
         monitor_key = 'val/' + self.metrics.key_metric
         return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': monitor_key}
@@ -226,11 +224,12 @@ class BaseLightningModule(pl.LightningModule):
 
 # @profile
 default_tune_dict = {
-    'loss': 'val_loss', 
-    'f1_micro': 'val_f1_class_mean', 
-    'data_loss': 'val_data_loss', 
+    'loss': 'val_loss',
+    'f1_micro': 'val_f1_class_mean',
+    'data_loss': 'val_data_loss',
     'reg_loss': 'val_reg_loss'
 }
+
 
 def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: str = None) -> pl.Trainer:
     """Gets a PyTorch Lightning Trainer from a configuration
@@ -271,7 +270,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                              limit_val_batches=1.0,
                              limit_test_batches=1.0,
                              num_sanity_val_steps=0)
-                            # callbacks=[ExampleImagesCallback()])
+        # callbacks=[ExampleImagesCallback()])
         tmp_metrics = lightning_module.metrics
         tmp_workers = lightning_module.hparams.compute.num_workers
         # visualize_examples = lightning_module.visualize_examples
@@ -279,23 +278,23 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         if lightning_module.model_type != 'sequence':
             # there is a somewhat common error that VRAM will be maximized by the gpu-auto-tuner.
             # However, during training, we probabilistically sample colorspace transforms; in an "unlucky"
-            # batch, perhaps all of the training samples are converted to HSV, hue and saturation changed, then changed 
+            # batch, perhaps all of the training samples are converted to HSV, hue and saturation changed, then changed
             # back. This is rare enough to not be encountered in "auto-tuning," so we'll get a train-time error. BAD!
             # so, we crank up the colorspace augmentation probability, then pick batch size, then change it back
             original_gpu_transforms = deepcopy(lightning_module.gpu_transforms)
-            
+
             log.debug('orig: {}'.format(lightning_module.gpu_transforms))
-            
+
             original_augs = cfg.augs
             new_augs = deepcopy(cfg.augs)
             new_augs.color_p = 1.0
-            
+
             arch = lightning_module.hparams[lightning_module.model_type].arch
             mode = '2d'
             gpu_transforms = get_gpu_transforms(new_augs, '3d' if '3d' in arch.lower() else '2d')
-            lightning_module.gpu_transforms = gpu_transforms        
+            lightning_module.gpu_transforms = gpu_transforms
             log.debug('new: {}'.format(lightning_module.gpu_transforms))
-            
+
         tuner = pl.tuner.tuning.Tuner(trainer)
         # hack for lightning to find the batch size
         cfg.batch_size = 2  # to start
@@ -312,13 +311,15 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         if cfg.compute.batch_size == 'auto':
             max_trials = int(math.log2(cfg.compute.max_batch_size)) - int(math.log2(cfg.compute.min_batch_size))
             log.info('max trials: {}'.format(max_trials))
-            new_batch_size = trainer.tuner.scale_batch_size(lightning_module, mode='power', steps_per_trial=30,
-                                                            init_val=cfg.compute.min_batch_size, max_trials=max_trials)
+            new_batch_size = trainer.tuner.scale_batch_size(lightning_module,
+                                                            mode='power',
+                                                            steps_per_trial=30,
+                                                            init_val=cfg.compute.min_batch_size,
+                                                            max_trials=max_trials)
             cfg.compute.batch_size = new_batch_size
             log.info('auto-tuned batch size: {}'.format(new_batch_size))
         if cfg.train.lr == 'auto':
-            lr_finder = trainer.tuner.lr_find(lightning_module, early_stop_threshold=None,
-                                              min_lr=1e-6, max_lr=10.0)
+            lr_finder = trainer.tuner.lr_find(lightning_module, early_stop_threshold=None, min_lr=1e-6, max_lr=10.0)
             # log.info(lr_finder.results)
             plt.style.use('seaborn')
             fig = lr_finder.plot(suggest=True, show=False)
@@ -342,29 +343,31 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
     mode = 'min' if 'loss' in key_metric else 'max'
     monitor = f'val/{key_metric}'
     dirpath = os.path.join(cfg.run.dir, 'lightning_checkpoints')
-    callback_list = [FPSCallback(), 
-                     MetricsCallback(), 
-                     ExampleImagesCallback(), 
-                     CheckpointCallback(), 
-                     StopperCallback(stopper),
-                    pl.callbacks.ModelCheckpoint(dirpath=dirpath, 
-                                                save_top_k=1, 
-                                                save_last=True, 
-                                                mode=mode, 
-                                                monitor=monitor, 
-                                                save_weights_only=True)]
-    if 'tune' in cfg and cfg.tune.use and ray: 
-        callback_list.append(TuneReportCallback(OmegaConf.to_container(cfg.tune.metrics), 
-                                                on='validation_end'))
+    callback_list = [
+        FPSCallback(),
+        MetricsCallback(),
+        ExampleImagesCallback(),
+        CheckpointCallback(),
+        StopperCallback(stopper),
+        pl.callbacks.ModelCheckpoint(dirpath=dirpath,
+                                     save_top_k=1,
+                                     save_last=True,
+                                     mode=mode,
+                                     monitor=monitor,
+                                     save_weights_only=True)
+    ]
+    if 'tune' in cfg and cfg.tune.use and ray:
+        callback_list.append(TuneReportCallback(OmegaConf.to_container(cfg.tune.metrics), on='validation_end'))
         # https://docs.ray.io/en/master/tune/tutorials/tune-pytorch-lightning.html
-        tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(
-            save_dir=get_trial_dir(), name="", version=".", 
-            default_hp_metric=False)
+        tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(save_dir=get_trial_dir(),
+                                                                      name="",
+                                                                      version=".",
+                                                                      default_hp_metric=False)
         refresh_rate = 0
     else:
         tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(os.getcwd())
         refresh_rate = 1
-    
+
     # tuning messes with the callbacks
     trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
                          precision=16 if cfg.compute.fp16 else 32,
@@ -376,11 +379,11 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                          num_sanity_val_steps=0,
                          callbacks=callback_list,
                          reload_dataloaders_every_epoch=True,
-                         progress_bar_refresh_rate=refresh_rate, 
+                         progress_bar_refresh_rate=refresh_rate,
                          profiler=profiler)
     torch.cuda.empty_cache()
     # gc.collect()
-    
+
     # import signal
     # signal.signal(signal.SIGTERM, signal.SIG_DFL)
     # log.info('trainer is_slurm_managing_tasks: {}'.format(trainer.is_slurm_managing_tasks))

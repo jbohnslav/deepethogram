@@ -20,8 +20,8 @@ from vidio import VideoReader
 # from deepethogram.dataloaders import log
 from deepethogram import projects
 from deepethogram.data.augs import get_cpu_transforms
-from deepethogram.data.utils import purge_unlabeled_videos, get_video_metadata, extract_metadata, find_labelfile, \
-    read_all_labels, get_split_from_records, remove_invalid_records_from_split_dictionary, \
+from deepethogram.data.utils import purge_unlabeled_elements_from_records, get_video_metadata, extract_metadata, \
+    find_labelfile, read_all_labels, get_split_from_records, remove_invalid_records_from_split_dictionary, \
     make_loss_weight
 from deepethogram.data.keypoint_utils import load_dlcfile, interpolate_bad_values, stack_features_in_time, \
     expand_features_sturman
@@ -870,6 +870,15 @@ def get_video_datasets(datadir: Union[str, os.PathLike],
     records = projects.get_records_from_datadir(datadir)
     # some videos might not have flows yet, or labels. Filter records to only get those that have all required files
     records = projects.filter_records_for_filetypes(records, return_types)
+
+    if supervised:
+        records = purge_unlabeled_elements_from_records(records)
+
+    if len(records) < 3:
+        error_message = 'You only have {} valid videos with file types {}!'.format(len(records), return_types)
+        error_message += 'You need at least 3 videos in your project to begin training.'
+        raise ValueError(error_message)
+
     # returns a dictionary, where each split in ['train', 'val', 'test'] as a list of keys
     # each key corresponds to a unique directory, and has
     split_dictionary = get_split_from_records(records, datadir, splitfile, supervised, reload_split, valid_splits_only,
@@ -1011,6 +1020,15 @@ def get_sequence_datasets(datadir: Union[str, os.PathLike],
     records = projects.get_records_from_datadir(datadir)
     # some videos might not have flows yet, or labels. Filter records to only get those that have all required files
     records = projects.filter_records_for_filetypes(records, return_types)
+
+    if supervised:
+        records = purge_unlabeled_elements_from_records(records)
+
+    if len(records) < 3:
+        error_message = 'You only have {} valid videos with file types {}!'.format(len(records), return_types)
+        error_message += 'You need at least 3 videos in your project to begin training.'
+        raise ValueError(error_message)
+
     # returns a dictionary, where each split in ['train', 'val', 'test'] as a list of keys
     # each key corresponds to a unique directory, and has
     split_dictionary = get_split_from_records(records, datadir, splitfile, supervised, reload_split, valid_splits_only,
@@ -1120,7 +1138,7 @@ def get_datasets_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 
     if model_type == 'feature_extractor' or model_type == 'flow_generator':
         arch = cfg[model_type].arch
         mode = '3d' if '3d' in arch.lower() else '2d'
-        log.info('getting dataloaders: {} convolution type detected'.format(mode))
+        # log.info('getting dataloaders: {} convolution type detected'.format(mode))
         xform = get_cpu_transforms(cfg.augs)
 
         if cfg.project.name == 'kinetics':

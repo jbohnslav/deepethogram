@@ -103,7 +103,7 @@ def get_penultimate_layer(model: Type[nn.Module]):
     return children[-1]
 
 
-def print_debug_statement(images: torch.Tensor, logits: torch.Tensor, spatial_features: torch.Tensor, 
+def print_debug_statement(images: torch.Tensor, logits: torch.Tensor, spatial_features: torch.Tensor,
                           flow_features: torch.Tensor, probabilities: torch.Tensor):
     """prints useful debug information to make sure there are no inference bugs
 
@@ -129,14 +129,10 @@ def print_debug_statement(images: torch.Tensor, logits: torch.Tensor, spatial_fe
     log.info('logits shape: {}'.format(logits.shape))
     log.info('spatial_features shape: {}'.format(spatial_features.shape))
     log.info('flow_features shape: {}'.format(flow_features.shape))
-    log.info('spatial: min {} mean {} max {} shape {}'.format(spatial_features.min(),
-                                                              spatial_features.mean(),
-                                                              spatial_features.max(),
-                                                              spatial_features.shape))
-    log.info('flow   : min {} mean {} max {} shape {}'.format(flow_features.min(),
-                                                              flow_features.mean(),
-                                                              flow_features.max(),
-                                                              flow_features.shape))
+    log.info('spatial: min {} mean {} max {} shape {}'.format(spatial_features.min(), spatial_features.mean(),
+                                                              spatial_features.max(), spatial_features.shape))
+    log.info('flow   : min {} mean {} max {} shape {}'.format(flow_features.min(), flow_features.mean(),
+                                                              flow_features.max(), flow_features.shape))
     # a common issue I've had is not properly z-scoring input channels. this will check for that
     if len(images.shape) == 4:
         N, C, H, W = images.shape
@@ -144,17 +140,25 @@ def print_debug_statement(images: torch.Tensor, logits: torch.Tensor, spatial_fe
         N, C, T, H, W = images.shape
     else:
         raise ValueError('images of unknown shape: {}'.format(images.shape))
-  
+
     log.info('channel min:  {}'.format(images[0].reshape(C, -1).min(dim=1).values))
     log.info('channel mean: {}'.format(images[0].reshape(C, -1).mean(dim=1)))
     log.info('channel max : {}'.format(images[0].reshape(C, -1).max(dim=1).values))
     log.info('channel std : {}'.format(images[0].reshape(C, -1).std(dim=1)))
 
 
-def predict_single_video(videofile: Union[str, os.PathLike], model: nn.Module, activation_function: nn.Module,
-                         fusion: str,num_rgb: int, mean_by_channels: np.ndarray, device: str = 'cuda:0',
-                         cpu_transform=None, gpu_transform=None,
-                         should_print: bool = False, num_workers: int = 1, batch_size: int = 16):
+def predict_single_video(videofile: Union[str, os.PathLike],
+                         model: nn.Module,
+                         activation_function: nn.Module,
+                         fusion: str,
+                         num_rgb: int,
+                         mean_by_channels: np.ndarray,
+                         device: str = 'cuda:0',
+                         cpu_transform=None,
+                         gpu_transform=None,
+                         should_print: bool = False,
+                         num_workers: int = 1,
+                         batch_size: int = 16):
     """Runs inference on one input video, caching the output probabilities and image and flow feature vectors
 
     Parameters
@@ -206,7 +210,10 @@ def predict_single_video(videofile: Union[str, os.PathLike], model: nn.Module, a
     if type(device) != torch.device:
         device = torch.device(device)
 
-    dataset = VideoIterable(videofile, transform=cpu_transform, num_workers=num_workers, sequence_length=num_rgb,
+    dataset = VideoIterable(videofile,
+                            transform=cpu_transform,
+                            num_workers=num_workers,
+                            sequence_length=num_rgb,
                             mean_by_channels=mean_by_channels)
     dataloader = DataLoader(dataset, num_workers=num_workers, batch_size=batch_size)
     video_frame_num = len(dataset)
@@ -249,15 +256,12 @@ def predict_single_video(videofile: Union[str, os.PathLike], model: nn.Module, a
             has_printed = True
         if i == 0:
             # print(f'~~~ N: {N} ~~~')
-            buffer['probabilities'] = torch.zeros((video_frame_num, probabilities.shape[1]),
-                                                  dtype=probabilities.dtype)
-            buffer['logits'] = torch.zeros((video_frame_num, logits.shape[1]),
-                                           dtype=logits.dtype)
+            buffer['probabilities'] = torch.zeros((video_frame_num, probabilities.shape[1]), dtype=probabilities.dtype)
+            buffer['logits'] = torch.zeros((video_frame_num, logits.shape[1]), dtype=logits.dtype)
             buffer['spatial_features'] = torch.zeros((video_frame_num, spatial_features.shape[1]),
                                                      dtype=spatial_features.dtype)
-            buffer['flow_features'] = torch.zeros((video_frame_num, flow_features.shape[1]),
-                                                  dtype=flow_features.dtype)
-            buffer['debug'] = torch.zeros((video_frame_num,)).float()
+            buffer['flow_features'] = torch.zeros((video_frame_num, flow_features.shape[1]), dtype=flow_features.dtype)
+            buffer['debug'] = torch.zeros((video_frame_num, )).float()
         buffer['probabilities'][frame_numbers, :] = probabilities
         buffer['logits'][frame_numbers] = logits
 
@@ -302,13 +306,19 @@ def extract(rgbs: list,
             model,
             final_activation: str,
             thresholds: np.ndarray,
-            postprocessor, 
+            postprocessor,
             mean_by_channels,
             fusion: str,
-            num_rgb: int, latent_name: str, class_names: list = ['background'],
+            num_rgb: int,
+            latent_name: str,
+            class_names: list = ['background'],
             device: str = 'cuda:0',
-            cpu_transform=None, gpu_transform=None, ignore_error=True, overwrite=False,
-            num_workers: int = 1, batch_size: int = 1):
+            cpu_transform=None,
+            gpu_transform=None,
+            ignore_error=True,
+            overwrite=False,
+            num_workers: int = 1,
+            batch_size: int = 1):
     """ Use the model to extract spatial and flow feature vectors, and predictions, and save them to disk.
     Assumes you have a pretrained model, and K classes. Will go through each video in rgbs, run inference, extracting
     the 512-d spatial features, 512-d flow features, K-d probabilities to disk for each video frame.
@@ -373,8 +383,6 @@ def extract(rgbs: list,
 
     class_names = [n.encode("ascii", "ignore") for n in class_names]
 
-    
-    
     log.debug('model training mode: {}'.format(model.training))
     # iterate over movie files
     for i in tqdm(range(len(rgbs))):
@@ -390,16 +398,24 @@ def extract(rgbs: list,
             continue
 
         # iterate over each frame of the movie
-        outputs = predict_single_video(rgb, model, activation_function, fusion, num_rgb, mean_by_channels,
-                                       device, cpu_transform, gpu_transform, should_print=i == 0,
-                                       num_workers=num_workers, batch_size=batch_size)
+        outputs = predict_single_video(rgb,
+                                       model,
+                                       activation_function,
+                                       fusion,
+                                       num_rgb,
+                                       mean_by_channels,
+                                       device,
+                                       cpu_transform,
+                                       gpu_transform,
+                                       should_print=i == 0,
+                                       num_workers=num_workers,
+                                       batch_size=batch_size)
         if i == 0:
             for k, v in outputs.items():
                 log.info('{}: {}'.format(k, v.shape))
                 if k == 'debug':
                     log.debug('All should be 1.0: min: {:.4f} mean {:.4f} max {:.4f}'.format(
-                        v.min(), v.mean(), v.max()
-                    ))
+                        v.min(), v.mean(), v.max()))
 
         # if running inference from multiple processes, this will wait until the resource is available
         has_worked = False
@@ -413,7 +429,7 @@ def extract(rgbs: list,
                 has_worked = True
 
         try:
-            
+
             predictions = postprocessor(outputs['probabilities'].detach().cpu().numpy())
             labelfile = projects.find_labelfiles(os.path.dirname(rgb))[0]
             labels = read_labels(labelfile)
@@ -423,8 +439,7 @@ def extract(rgbs: list,
             log.warning('error calculating f1: {}'.format(e))
             # since this is just for debugging, ignore
             pass
-            
-        
+
         # these assignments are where it's actually saved to disk
         group = f.create_group(latent_name)
         group.create_dataset('thresholds', data=thresholds, dtype=np.float32)
@@ -436,35 +451,6 @@ def extract(rgbs: list,
         group.create_dataset('class_names', data=class_names, dtype=dt)
         del outputs
         f.close()
-
-def get_run_files_from_weights(weightfile: Union[str, os.PathLike]) -> dict:
-    """from model weights, gets the configuration for that model and its metrics file
-
-    Parameters
-    ----------
-    weightfile : Union[str, os.PathLike]
-        path to model weights, either .pt or .ckpt
-
-    Returns
-    -------
-    dict
-        config_file: path to config file
-        metrics_file: path to metrics file
-    """
-    loaded_config_file = os.path.join(os.path.dirname(weightfile), 'config.yaml')
-    if not os.path.isfile(loaded_config_file):
-        # weight file should be at most one-subdirectory-down from rundir
-        loaded_config_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 'config.yaml')
-        assert os.path.isfile(loaded_config_file), 'no associated config file for weights! {}'.format(
-            weightfile)
-        
-    metrics_file = os.path.join(os.path.dirname(weightfile), 'classification_metrics.h5')
-    if not os.path.isfile(metrics_file):
-        metrics_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 
-                                    'classification_metrics.h5')
-        assert os.path.isfile(metrics_file), 'no associated metrics file for weights! {}'.format(weightfile)
-    
-    return dict(config_file=loaded_config_file, metrics_file=metrics_file)
 
 
 def feature_extractor_inference(cfg: DictConfig):
@@ -485,16 +471,16 @@ def feature_extractor_inference(cfg: DictConfig):
     cfg = projects.setup_run(cfg)
     # turn "models" in your project configuration to "full/path/to/models"
     log.info('args: {}'.format(' '.join(sys.argv)))
-    
+
     log.info('configuration used in inference: ')
     log.info(OmegaConf.to_yaml(cfg))
-    if 'sequence' not in cfg.keys() or cfg.sequence.latent_name is None:
+    if 'sequence' not in cfg.keys() or 'latent_name' not in cfg.sequence.keys() or cfg.sequence.latent_name is None:
         latent_name = cfg.feature_extractor.arch
     else:
         latent_name = cfg.sequence.latent_name
     log.info('Latent name used in HDF5 file: {}'.format(latent_name))
     directory_list = cfg.inference.directory_list
-    
+
     if directory_list is None or len(directory_list) == 0:
         raise ValueError('must pass list of directories from commmand line. '
                          'Ex: directory_list=[path_to_dir1,path_to_dir2]')
@@ -503,7 +489,7 @@ def feature_extractor_inference(cfg: DictConfig):
         directory_list = utils.get_subfiles(basedir, 'directory')
     elif isinstance(directory_list, str):
         directory_list = [directory_list]
-    elif isinstance(directory_list, list): 
+    elif isinstance(directory_list, list):
         pass
     elif isinstance(directory_list, ListConfig):
         directory_list = OmegaConf.to_container(directory_list)
@@ -534,7 +520,7 @@ def feature_extractor_inference(cfg: DictConfig):
 
     feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, 'feature_extractor')
     assert os.path.isfile(feature_extractor_weights)
-    run_files = get_run_files_from_weights(feature_extractor_weights)
+    run_files = utils.get_run_files_from_weights(feature_extractor_weights)
     if cfg.inference.use_loaded_model_cfg:
         loaded_config_file = run_files['config_file']
         loaded_cfg = OmegaConf.load(loaded_config_file)
@@ -546,26 +532,32 @@ def feature_extractor_inference(cfg: DictConfig):
         # therefore, overwrite the loaded configuration with the current weights
         cfg.feature_extractor.weights = feature_extractor_weights
         # num_classes = len(loaded_cfg.project.class_names)
-    
+
     # log.warning('Overwriting current project classes with loaded classes! REVERT')
     model_components = build_feature_extractor(cfg)
     _, _, _, _, model = model_components
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
-    
+
     metrics_file = run_files['metrics_file']
     assert os.path.isfile(metrics_file)
     best_epoch = utils.get_best_epoch_from_weightfile(feature_extractor_weights)
     # best_epoch = -1
     log.info('best epoch from loaded file: {}'.format(best_epoch))
     with h5py.File(metrics_file, 'r') as f:
-        try: 
+        try:
             thresholds = f['val']['metrics_by_threshold']['optimum'][best_epoch, :]
         except KeyError:
             # backwards compatibility
             thresholds = f['threshold_curves']['val']['optimum'][best_epoch, :]
     log.info('thresholds: {}'.format(thresholds))
-    
+
     class_names = list(cfg.project.class_names)
+    if len(thresholds) != len(class_names):
+        error_message = '''Number of classes in trained model: {}
+            Number of classes in project: {}
+            Did you add or remove behaviors after training this model? If so, please retrain!
+        '''.format(len(thresholds), len(class_names))
+        raise ValueError(error_message)
     # class_names = projects.get_classes_from_project(cfg)
     class_names = np.array(class_names)
     postprocessor = get_postprocessor_from_cfg(cfg, thresholds)
@@ -573,7 +565,7 @@ def feature_extractor_inference(cfg: DictConfig):
             model,
             final_activation=cfg.feature_extractor.final_activation,
             thresholds=thresholds,
-            postprocessor=postprocessor, 
+            postprocessor=postprocessor,
             mean_by_channels=cfg.augs.normalization.mean,
             fusion=cfg.feature_extractor.fusion,
             num_rgb=input_images,
@@ -587,8 +579,9 @@ def feature_extractor_inference(cfg: DictConfig):
             num_workers=cfg.compute.num_workers,
             batch_size=cfg.compute.batch_size)
 
+
 if __name__ == '__main__':
     project_path = projects.get_project_path_from_cl(sys.argv)
     cfg = make_feature_extractor_inference_cfg(project_path, use_command_line=True)
-    
+
     feature_extractor_inference(cfg)

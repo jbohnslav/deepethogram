@@ -1,4 +1,4 @@
-from collections import Mapping, Container
+from collections.abc import Mapping, Container
 import logging
 import os
 import pkgutil
@@ -44,7 +44,10 @@ def get_minimum_learning_rate(optimizer):
     return (min_lr)
 
 
-def load_checkpoint(model, optimizer, checkpoint_file: Union[str, os.PathLike], config: dict,
+def load_checkpoint(model,
+                    optimizer,
+                    checkpoint_file: Union[str, os.PathLike],
+                    config: dict,
                     overwrite_args: bool = False,
                     distributed: bool = False):
     """"Reload model and optimizer weights from a checkpoint.pt file
@@ -77,7 +80,9 @@ def load_checkpoint(model, optimizer, checkpoint_file: Union[str, os.PathLike], 
     return model, optimizer, config
 
 
-def load_weights(model, checkpoint_file: Union[str, os.PathLike], distributed: bool = False,
+def load_weights(model,
+                 checkpoint_file: Union[str, os.PathLike],
+                 distributed: bool = False,
                  device: torch.device = None):
     """"Reload model weights from a checkpoint.pt file
     Args:
@@ -111,12 +116,7 @@ def checkpoint(model, rundir: Union[str, os.PathLike], epoch: int, args=None):
     # rates, making sure the same keys were in the optimizer dict even when you've done something like change
     # the size of the final layer of the NN (for different number of classes). I've kept the optimizer field for
     # backwards compatibility, but this should not be used
-    state = {
-        'epoch': epoch,
-        'state_dict': model.state_dict(),
-        'optimizer': None,
-        'hyperparameters': args
-    }
+    state = {'epoch': epoch, 'state_dict': model.state_dict(), 'optimizer': None, 'hyperparameters': args}
     torch.save(state, fullfile)
 
 
@@ -208,7 +208,7 @@ def get_datadir_from_paths(paths, dataset):
             datadir = v
             found = True
     if not found:
-        raise ValueError('couldn''t find dataset: {}'.format(dataset))
+        raise ValueError('couldn' 't find dataset: {}'.format(dataset))
     return datadir
 
 
@@ -237,8 +237,8 @@ def load_state_from_dict(model, state_dict):
     pretrained_dict = {}
     for k, v in state_dict.items():
         if 'criterion' in k:
-            # we might have parameters from the loss function in our loaded weights. we don't want to reload these; 
-            # we will specify them for whatever we are currently training. 
+            # we might have parameters from the loss function in our loaded weights. we don't want to reload these;
+            # we will specify them for whatever we are currently training.
             continue
         if k not in model_dict:
             log.warning('{} not found in model dictionary'.format(k))
@@ -257,12 +257,12 @@ def load_state_from_dict(model, state_dict):
     return (model)
 
 
-def load_state_dict_from_file(weights_file, distributed: bool=False):
+def load_state_dict_from_file(weights_file, distributed: bool = False):
     state = torch.load(weights_file, map_location='cpu')
-        # except RuntimeError as e:
-        #     log.exception(e)
-        #     log.info('loading onto cpu...')
-        #     state = torch.load(weights_file, map_location='cpu')
+    # except RuntimeError as e:
+    #     log.exception(e)
+    #     log.info('loading onto cpu...')
+    #     state = torch.load(weights_file, map_location='cpu')
 
     is_pure_weights = not 'epoch' in list(state.keys())
     # load params
@@ -272,7 +272,7 @@ def load_state_dict_from_file(weights_file, distributed: bool=False):
     else:
         start_epoch = state['epoch']
         state_dict = state['state_dict']
-        optimizer_dict = None # state['optimizer']
+        optimizer_dict = None  # state['optimizer']
 
     first_key = next(iter(state_dict.items()))[0]
     trained_on_dataparallel = first_key[:7] == 'module.'
@@ -342,7 +342,7 @@ def load_state(model, weights_file: Union[str, os.PathLike], device: torch.devic
     # LOAD PARAMS
     model = load_state_from_dict(model, state_dict)
     optimizer_dict = None
-    
+
     return model, optimizer_dict, start_epoch, args
 
 
@@ -352,11 +352,9 @@ def print_gpus():
     """
     n_gpus = torch.cuda.device_count()
     for i in range(n_gpus):
-        print('GPU %d %s: Compute Capability %d.%d, Mem:%f' % (i,
-                                                               torch.cuda.get_device_name(i),
-                                                               int(torch.cuda.get_device_capability(i)[0]),
-                                                               int(torch.cuda.get_device_capability(i)[1]),
-                                                               torch.cuda.max_memory_allocated(i)))
+        print('GPU %d %s: Compute Capability %d.%d, Mem:%f' %
+              (i, torch.cuda.get_device_name(i), int(torch.cuda.get_device_capability(i)[0]),
+               int(torch.cuda.get_device_capability(i)[1]), torch.cuda.max_memory_allocated(i)))
 
 
 class Normalizer:
@@ -376,8 +374,8 @@ class Normalizer:
         mean: mean of input data. For images, should have 2 or 3 channels
         std: standard deviation of input data
     """
-
-    def __init__(self, mean: Union[list, np.ndarray, torch.Tensor] = None,
+    def __init__(self,
+                 mean: Union[list, np.ndarray, torch.Tensor] = None,
                  std: Union[list, np.ndarray, torch.Tensor] = None,
                  clamp: bool = True):
         """Constructor for Normalizer class.
@@ -524,7 +522,7 @@ def flow_to_img_lrcn(flow: np.ndarray, max_flow: Union[float, int] = 10) -> np.n
     img[:, :, 0] = flow[..., 0] * half_range + 128
     img[:, :, 1] = flow[..., 1] * half_range + 128
     # maximum magnitude is if x and y are both maxed
-    max_magnitude = np.sqrt(max_flow ** 2 + max_flow ** 2)
+    max_magnitude = np.sqrt(max_flow**2 + max_flow**2)
     img[:, :, 2] = mag * 255 / max_magnitude
     img = img.clip(min=0, max=255).astype(np.uint8)
     return img
@@ -562,7 +560,6 @@ def flow_img_to_flow(img: np.ndarray, max_flow: Union[int, float] = 10) -> np.nd
 #     # print(im.shape)
 #     ret, bytestring = cv2.imencode('.jpg', im)
 #     return (bytestring)
-
 
 # def decode_flow_img(bytestring, maxflow=10):
 #     im = cv2.imdecode(bytestring, 1)
@@ -631,7 +628,7 @@ def load_feature_extractor_components(model, checkpoint_file: Union[str, os.Path
     log.info('loading component {} from file {}'.format(component, checkpoint_file))
 
     state_dict, _, _ = load_state_dict_from_file(checkpoint_file)
-    
+
     # state = torch.load(checkpoint_file, map_location=device)
     # state_dict = state['state_dict']
     params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
@@ -698,7 +695,6 @@ def print_hdf5(h5py_obj, level=-1, print_full_name: bool = False, print_attrs: b
     -------
     None
     """
-
     def is_group(f):
         return type(f) == h5py._hl.group.Group
 
@@ -727,8 +723,7 @@ def print_hdf5(h5py_obj, level=-1, print_full_name: bool = False, print_attrs: b
         elif is_dataset(entry):
             shape = entry.shape
             dtype = entry.dtype
-            print('{}{}: {} {}'.format(print_level(level), name,
-                                       shape, dtype))
+            print('{}{}: {} {}'.format(print_level(level), name, shape, dtype))
     if level == -1:
         if print_attrs:
             print('attrs: ')
@@ -768,7 +763,8 @@ def print_hdf5(h5py_obj, level=-1, print_full_name: bool = False, print_attrs: b
 #
 #     return r
 
-def print_top_largest_variables(local_call, num: int=20):
+
+def print_top_largest_variables(local_call, num: int = 20):
     def sizeof_fmt(num, suffix='B'):
         ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
         for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
@@ -782,31 +778,33 @@ def print_top_largest_variables(local_call, num: int=20):
         print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
 
 
-def get_hparams_from_cfg(cfg, hparams): 
+def get_hparams_from_cfg(cfg, hparams):
     hparam_dict = {key: get_dotted_from_cfg(cfg, key) for key in hparams}
     return hparam_dict
+
 
 def get_dotted_from_cfg(cfg, dotted):
     # cfg: DictConfig
     # dotted: string parameter name. can be nested. e.g. 'tune.hparams.feature_extractor.dropout_p.min'
     key_list = dotted.split('.')
-    
+
     cfg_chunk = cfg.get(key_list[0])
     for i in range(1, len(key_list)):
         cfg_chunk = cfg_chunk.get(key_list[i])
-        
+
     return cfg_chunk
+
 
 def get_best_epoch_from_weightfile(weightfile: Union[str, os.PathLike]) -> int:
     """parses a checkpoint like epoch=15.ckpt to find the number 15
     """
     basename = os.path.basename(weightfile)
     # in the previous version of deepethogram, load the last checkpoint
-    if basename.endswith('.pt'): 
+    if basename.endswith('.pt'):
         return -1
     assert basename.endswith('.ckpt')
     basename = os.path.splitext(basename)[0]
-    
+
     # if weightfile is the "last"
     if 'last' in basename:
         return -1
@@ -816,3 +814,38 @@ def get_best_epoch_from_weightfile(weightfile: Union[str, os.PathLike]) -> int:
     assert component.startswith('epoch')
     best_epoch = component.split('=')[1]
     return int(best_epoch)
+
+
+def remove_nans_and_infs(array: np.ndarray, set_value: float = 0.0) -> np.ndarray:
+    """ Simple function to remove nans and infs from a numpy array """
+    bad_indices = np.logical_or(np.isinf(array), np.isnan(array))
+    array[bad_indices] = set_value
+    return array
+
+
+def get_run_files_from_weights(weightfile: Union[str, os.PathLike]) -> dict:
+    """from model weights, gets the configuration for that model and its metrics file
+
+    Parameters
+    ----------
+    weightfile : Union[str, os.PathLike]
+        path to model weights, either .pt or .ckpt
+
+    Returns
+    -------
+    dict
+        config_file: path to config file
+        metrics_file: path to metrics file
+    """
+    loaded_config_file = os.path.join(os.path.dirname(weightfile), 'config.yaml')
+    if not os.path.isfile(loaded_config_file):
+        # weight file should be at most one-subdirectory-down from rundir
+        loaded_config_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 'config.yaml')
+        assert os.path.isfile(loaded_config_file), 'no associated config file for weights! {}'.format(weightfile)
+
+    metrics_file = os.path.join(os.path.dirname(weightfile), 'classification_metrics.h5')
+    if not os.path.isfile(metrics_file):
+        metrics_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 'classification_metrics.h5')
+        assert os.path.isfile(metrics_file), 'no associated metrics file for weights! {}'.format(weightfile)
+
+    return dict(config_file=loaded_config_file, metrics_file=metrics_file)

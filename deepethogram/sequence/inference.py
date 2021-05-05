@@ -15,19 +15,22 @@ from tqdm import tqdm
 from deepethogram import utils, projects
 from deepethogram.configuration import make_sequence_inference_cfg
 from deepethogram.data.datasets import FeatureVectorDataset, KeypointDataset
-from deepethogram.feature_extractor.inference import get_run_files_from_weights
 from deepethogram.sequence.train import build_model_from_cfg
 
 log = logging.getLogger(__name__)
 
 
-def infer(model: Type[nn.Module], device: Union[str, torch.device],
+def infer(model: Type[nn.Module],
+          device: Union[str, torch.device],
           activation_function: Union[str, Type[nn.Module]],
-          data_file: Union[str, os.PathLike], latent_name: str, 
+          data_file: Union[str, os.PathLike],
+          latent_name: str,
           videofile: Union[str, os.PathLike],
           sequence_length: int = 180,
-          is_two_stream: bool = True, is_keypoint:bool=False, 
-         expansion_method:str='sturman', stack_in_time: bool=False):
+          is_two_stream: bool = True,
+          is_keypoint: bool = False,
+          expansion_method: str = 'sturman',
+          stack_in_time: bool = False):
     """Runs inference of the sequence model
 
     Parameters
@@ -67,15 +70,23 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
     """
     if not is_keypoint:
         assert latent_name is not None
-    
-        gen = FeatureVectorDataset(data_file, labelfile=None, h5_key=latent_name,
-                                    sequence_length=sequence_length,
-                                    nonoverlapping=True, store_in_ram=False, is_two_stream=is_two_stream)
+
+        gen = FeatureVectorDataset(data_file,
+                                   labelfile=None,
+                                   h5_key=latent_name,
+                                   sequence_length=sequence_length,
+                                   nonoverlapping=True,
+                                   store_in_ram=False,
+                                   is_two_stream=is_two_stream)
     else:
-        gen = KeypointDataset(data_file, labelfile=None, videofile=videofile, expansion_method=expansion_method, 
-                             sequence_length=sequence_length, stack_in_time=stack_in_time, 
-                             nonoverlapping= not stack_in_time)
-        
+        gen = KeypointDataset(data_file,
+                              labelfile=None,
+                              videofile=videofile,
+                              expansion_method=expansion_method,
+                              sequence_length=sequence_length,
+                              stack_in_time=stack_in_time,
+                              nonoverlapping=not stack_in_time)
+
     n_datapoints = gen.shape[1]
     gen = data.DataLoader(gen, batch_size=1, shuffle=False, num_workers=0, drop_last=False)
 
@@ -121,7 +132,7 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
         if not has_printed:
             log.debug('logits shape: {}'.format(logits.shape))
             has_printed = True
-        
+
         if not stack_in_time:
             # stacking in time means that we only do one element at a time
             # therefore, we don't need this indexing logic
@@ -144,9 +155,17 @@ def infer(model: Type[nn.Module], device: Union[str, torch.device],
     return all_logits, all_probabilities
 
 
-def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: str,
-            latent_name: str, output_name: str = 'tgmj', sequence_length: int = 180,
-            is_two_stream: bool = True, device: str = 'cuda:0', ignore_error=True, overwrite=False,
+def extract(model,
+            outputfiles: list,
+            thresholds: np.ndarray,
+            final_activation: str,
+            latent_name: str,
+            output_name: str = 'tgmj',
+            sequence_length: int = 180,
+            is_two_stream: bool = True,
+            device: str = 'cuda:0',
+            ignore_error=True,
+            overwrite=False,
             class_names: list = ['background']):
     torch.backends.cudnn.benchmark = True
 
@@ -172,12 +191,12 @@ def extract(model, outputfiles: list, thresholds: np.ndarray, final_activation: 
 
     for i in tqdm(range(len(outputfiles))):
         outputfile = outputfiles[i]
-        log.info('running inference on {}. latent name: {} output name: {}...'.format(outputfile, latent_name,
-                                                                                      output_name))
-        
-        logits, probabilities = infer(model, device, final_activation, outputfile, latent_name, sequence_length, 
-                                      is_two_stream)
-        
+        log.info('running inference on {}. latent name: {} output name: {}...'.format(
+            outputfile, latent_name, output_name))
+
+        logits, probabilities = infer(model, device, activation_function, outputfile, latent_name, None,
+                                      sequence_length, is_two_stream)
+
         # gen = FeatureVectorDataset(outputfile, labelfile=None, h5_key=latent_name,
         #                             sequence_length=sequence_length,
         #                             nonoverlapping=True, store_in_ram=False, is_two_stream=is_two_stream)
@@ -215,10 +234,11 @@ def sequence_inference(cfg: DictConfig):
     weights = projects.get_weightfile_from_cfg(cfg, model_type='sequence')
     assert weights is not None, 'Must either specify a weightfile or use reload.latest=True'
 
+    run_files = utils.get_run_files_from_weights(weights)
     if cfg.sequence.latent_name is None:
         # find the latent name used in the weight file you loaded
         rundir = os.path.dirname(weights)
-        loaded_cfg = utils.load_yaml(os.path.join(rundir, 'config.yaml'))
+        loaded_cfg = utils.load_yaml(run_files['config_file'])
         latent_name = loaded_cfg['sequence']['latent_name']
         # if this latent name is also None, use the arch of the feature extractor
         # this should never happen
@@ -226,8 +246,7 @@ def sequence_inference(cfg: DictConfig):
             latent_name = loaded_cfg['feature_extractor']['arch']
     else:
         latent_name = cfg.sequence.latent_name
-        
-    run_files = get_run_files_from_weights(weights)
+
     if cfg.inference.use_loaded_model_cfg:
         output_name = cfg.sequence.output_name
         loaded_config_file = run_files['config_file']
@@ -262,35 +281,51 @@ def sequence_inference(cfg: DictConfig):
         assert record['output'] is not None
         outputfiles.append(record['output'])
 
-
     model = build_model_from_cfg(cfg, 1024, len(cfg.project.class_names))
     log.info('model: {}'.format(model))
 
     model = utils.load_weights(model, weights)
-    
+
     metrics_file = run_files['metrics_file']
     assert os.path.isfile(metrics_file)
     best_epoch = utils.get_best_epoch_from_weightfile(weights)
     # best_epoch = -1
     log.info('best epoch from loaded file: {}'.format(best_epoch))
     with h5py.File(metrics_file, 'r') as f:
-        try: 
+        try:
             thresholds = f['val']['metrics_by_threshold']['optimum'][best_epoch, :]
         except KeyError:
             # backwards compatibility
             thresholds = f['threshold_curves']['val']['optimum'][best_epoch, :]
     log.info('thresholds: {}'.format(thresholds))
-    
+
+    class_names = list(cfg.project.class_names)
+    if len(thresholds) != len(class_names):
+        error_message = '''Number of classes in trained model: {}
+            Number of classes in project: {}
+            Did you add or remove behaviors after training this model? If so, please retrain!
+        '''.format(len(thresholds), len(class_names))
+        raise ValueError(error_message)
+
     device = 'cuda:{}'.format(cfg.compute.gpu_id)
     class_names = cfg.project.class_names
     class_names = np.array(class_names)
-    extract(model, outputfiles, thresholds, cfg.feature_extractor.final_activation, latent_name, output_name,
-            cfg.sequence.sequence_length, True, device, cfg.inference.ignore_error,
-            cfg.inference.overwrite, class_names=class_names)
+    extract(model,
+            outputfiles,
+            thresholds,
+            cfg.feature_extractor.final_activation,
+            latent_name,
+            output_name,
+            cfg.sequence.sequence_length,
+            True,
+            device,
+            cfg.inference.ignore_error,
+            cfg.inference.overwrite,
+            class_names=class_names)
 
 
 if __name__ == '__main__':
     project_path = projects.get_project_path_from_cl(sys.argv)
     cfg = make_sequence_inference_cfg(project_path, use_command_line=True)
-    
+
     sequence_inference(cfg)

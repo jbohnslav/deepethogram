@@ -24,20 +24,42 @@ def purge_unlabeled_videos(video_list: list, label_list: list) -> Tuple[list, li
     """
     valid_videos = []
     valid_labels = []
+
+    warning_string = '''Labelfile {} associated with video {} has unlabeled frames! 
+        Please finish labeling or click the Finalize Labels button on the GUI.'''
+
     for i in range(len(label_list)):
         label = read_labels(label_list[i])
         has_unlabeled_frames = np.any(label == -1)
         if not has_unlabeled_frames:
             valid_videos.append(video_list[i])
             valid_labels.append(label_list[i])
+        else:
+            log.warning(warning_string.format(label_list[i], video_list[i]))
     return video_list, label_list
 
 
-def remove_nans_and_infs(array: np.ndarray, set_value: float = 0.0) -> np.ndarray:
-    """ Simple function to remove nans and infs from a numpy array """
-    bad_indices = np.logical_or(np.isinf(array), np.isnan(array))
-    array[bad_indices] = set_value
-    return array
+def purge_unlabeled_elements_from_records(records: dict) -> dict:
+    valid_records = {}
+
+    warning_message = '''labelfile {} has unlabeled frames! 
+        Please finish labeling or click the Finalize Labels button on the GUI.
+        Associated files: {}'''
+
+    for animal, record in records.items():
+        labelfile = record['label']
+
+        if labelfile is None:
+            log.warning('Record {} does not have a labelfile! Please start and finish labeling. '.format(animal) + \
+                'Associated files: {}'.format(record))
+            continue
+        label = read_labels(labelfile)
+        has_unlabeled_frames = np.any(label == -1)
+        if has_unlabeled_frames:
+            log.warning(warning_message.format(animal, record))
+        else:
+            valid_records[animal] = record
+    return valid_records
 
 
 def make_loss_weight(class_counts: np.ndarray,
@@ -72,7 +94,7 @@ def make_loss_weight(class_counts: np.ndarray,
     pos_weight = num_neg / num_pos
     pos_weight_transformed = (pos_weight**weight_exp).astype(np.float32)
     # don't weight losses if there are no examples
-    pos_weight_transformed = remove_nans_and_infs(pos_weight_transformed)
+    pos_weight_transformed = utils.remove_nans_and_infs(pos_weight_transformed)
 
     softmax_weight = 1 / (class_counts + 1e-8)
     # we have to get rid of invalid classes here, or else when we normalize below, it will disrupt non-zero classes
@@ -81,7 +103,7 @@ def make_loss_weight(class_counts: np.ndarray,
     softmax_weight = softmax_weight / np.sum(softmax_weight)
     softmax_weight_transformed = (softmax_weight**weight_exp).astype(np.float32)
     # don't weight losses if there are no examples
-    softmax_weight_transformed = remove_nans_and_infs(softmax_weight_transformed)
+    softmax_weight_transformed = utils.remove_nans_and_infs(softmax_weight_transformed)
 
     np.set_printoptions(suppress=True)
     log.info('Class counts: {}'.format(class_counts))

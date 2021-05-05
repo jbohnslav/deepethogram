@@ -4,6 +4,7 @@
 deepethogram/models/*
 tests/DATA
 gui_logs/
+tests/tmp_data
 .vscode/
 # line profiling
 *.lprof
