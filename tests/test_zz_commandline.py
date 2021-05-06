@@ -1,3 +1,4 @@
+# this is named test__zz_commandline so that it comes last, after all module-specific tests
 import os
 import numpy as np
 import subprocess
