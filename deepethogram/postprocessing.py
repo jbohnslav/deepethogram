@@ -10,8 +10,11 @@ from deepethogram import projects, file_io
 
 log = logging.getLogger(__name__)
 
-def remove_low_thresholds(thresholds: np.ndarray, minimum: float=0.01, f1s: np.ndarray=None, 
-                          minimum_f1: float= 0.05) -> np.ndarray:
+
+def remove_low_thresholds(thresholds: np.ndarray,
+                          minimum: float = 0.01,
+                          f1s: np.ndarray = None,
+                          minimum_f1: float = 0.05) -> np.ndarray:
     """ Replaces thresholds below a certain value with 0.5
     
     If the model completely fails, the optimum threshold might be something erreoneous, such as 
@@ -40,6 +43,7 @@ def remove_low_thresholds(thresholds: np.ndarray, minimum: float=0.01, f1s: np.n
             log.debug('f1 {} too low, setting to 0.5'.format(f1s))
             thresholds[f1s < minimum_f1] = 0.5
     return thresholds
+
 
 def get_onsets_offsets(binary: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """ Gets the onset and offset indices of a binary array.
@@ -77,16 +81,20 @@ def get_bouts(ethogram: np.ndarray) -> list:
     stats = []
     for i in range(K):
         onsets, offsets = get_onsets_offsets(ethogram[:, i])
-        stat = {'N': len(onsets),
-                'lengths': np.array([offset - onset for (onset, offset) in zip(onsets, offsets)]),
-                'starts': onsets,
-                'ends': offsets}
+        stat = {
+            'N': len(onsets),
+            'lengths': np.array([offset - onset for (onset, offset) in zip(onsets, offsets)]),
+            'starts': onsets,
+            'ends': offsets
+        }
         stats.append(stat)
     return stats
 
 
-def find_bout_indices(predictions_trace: np.ndarray, bout_length: int, positive: bool = True,
-                      eps: float=1e-6) -> np.ndarray:
+def find_bout_indices(predictions_trace: np.ndarray,
+                      bout_length: int,
+                      positive: bool = True,
+                      eps: float = 1e-6) -> np.ndarray:
     """ Find indices where a bout of bout-length occurs in a binary vector
 
     Bouts are defined as consecutive sets of 1s (if `positive`) or 0s (if not `positive`).
@@ -240,7 +248,7 @@ class MinBoutLengthPostprocessor(Postprocessor):
         predictions = remove_short_bouts(predictions, self.bout_length)
         predictions = compute_background(predictions)
         return predictions
-    
+
 
 class MinBoutLengthPerBehaviorPostprocessor(Postprocessor):
     """ Postprocessor that removes bouts of length less than or equal to bout_length """
@@ -253,7 +261,7 @@ class MinBoutLengthPerBehaviorPostprocessor(Postprocessor):
         T, K = probabilities.shape
         assert K == len(self.bout_lengths)
         predictions = self.threshold(probabilities)
-        
+
         predictions_smoothed = []
         for i in range(K):
             trace = predictions[:, i]
@@ -265,7 +273,7 @@ class MinBoutLengthPerBehaviorPostprocessor(Postprocessor):
         return predictions
 
 
-def get_bout_length_percentile(label_list: list,  percentile: float) -> dict:
+def get_bout_length_percentile(label_list: list, percentile: float) -> dict:
     """gets the Nth percentile of the bout length distribution for each behavior
 
     Parameters
@@ -281,7 +289,7 @@ def get_bout_length_percentile(label_list: list,  percentile: float) -> dict:
         Nth percentile for each behavior
     """
     bout_lengths = defaultdict(list)
-    
+
     for label in label_list:
         bouts = get_bouts(label)
         T, K = label.shape
@@ -289,8 +297,16 @@ def get_bout_length_percentile(label_list: list,  percentile: float) -> dict:
             bout_length = bouts[k]['lengths'].tolist()
             bout_lengths[k].append(bout_length)
     bout_lengths = {behavior: np.concatenate(value) for behavior, value in bout_lengths.items()}
-    percentiles = {behavior: np.percentile(value, percentile) for behavior, value in bout_lengths.items()}
+    # print(bout_lengths)
+    percentiles = {}
+    for behavior, value in bout_lengths.items():
+        if len(value) > 0:
+            percentiles[behavior] = np.percentile(value, percentile)
+        else:
+            percentiles[behavior] = 1
+    # percentiles = {behavior: np.percentile(value, percentile) for behavior, value in bout_lengths.items()}
     return percentiles
+
 
 def get_postprocessor_from_cfg(cfg: DictConfig, thresholds: np.ndarray) -> Type[Postprocessor]:
     """ Returns a PostProcessor from an OmegaConf DictConfig returned by a  """
@@ -303,19 +319,19 @@ def get_postprocessor_from_cfg(cfg: DictConfig, thresholds: np.ndarray) -> Type[
             cfg = projects.convert_config_paths_to_absolute(cfg)
         assert os.path.isdir(cfg.project.data_path)
         records = projects.get_records_from_datadir(cfg.project.data_path)
-        
+
         label_list = []
-        
+
         for animal, record in records.items():
             labelfile = record['label']
             if labelfile is None:
                 continue
             label = file_io.read_labels(labelfile)
             # ignore partially labeled videos
-            if np.any(label==-1):
+            if np.any(label == -1):
                 continue
             label_list.append(label)
-        
+
         percentiles = get_bout_length_percentile(label_list, cfg.postprocessor.min_bout_length)
         # percntiles is a dict: keys are behaviors, values are percentiles
         # need to round and then cast to int
