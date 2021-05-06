@@ -14,7 +14,7 @@ tune:
     gpu: 0.5
     cpu: 3
 train:
-  viz_examples: False # don't spend time and space making example images 
+  viz_examples: 0 # don't spend time and space making example images 
   steps_per_epoch:
     train: 1000
     val: 1000

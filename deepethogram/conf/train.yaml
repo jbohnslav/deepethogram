@@ -42,7 +42,7 @@ train:
   early_stopping_begins: 0
   # whether or not to visualize data. always keep true
   viz_metrics: true
-  viz_examples: true
+  viz_examples: 10
   # the amount to reduce the learning rate by when the scheduler demands
   reduction_factor: 0.1
   # In the paper, see Methods / loss functions. This value is beta.

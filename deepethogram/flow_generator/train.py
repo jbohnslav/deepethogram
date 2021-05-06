@@ -24,9 +24,11 @@ from deepethogram.losses import get_regularization_loss
 from deepethogram.metrics import OpticalFlow
 from deepethogram.stoppers import get_stopper
 
-warnings.filterwarnings('ignore', category=UserWarning, message=
-'Your val_dataloader has `shuffle=True`, it is best practice to turn this off for validation '
-'and test dataloaders.')
+warnings.filterwarnings(
+    'ignore',
+    category=UserWarning,
+    message='Your val_dataloader has `shuffle=True`, it is best practice to turn this off for validation '
+    'and test dataloaders.')
 
 flow_generators = utils.get_models_from_module(models, get_function=False)
 
@@ -59,7 +61,7 @@ def flow_generator_train(cfg: DictConfig) -> nn.Module:
     # SHOULD NEVER MODIFY / MAKE ASSIGNMENTS TO THE CFG OBJECT AFTER RIGHT HERE!
     log.info('configuration used ~~~~~')
     log.info(OmegaConf.to_yaml(cfg))
-    
+
     datasets, data_info = get_datasets_from_cfg(cfg, 'flow_generator', input_images=cfg.flow_generator.n_rgb)
     flow_generator = build_model_from_cfg(cfg)
     log.info('Total trainable params: {:,}'.format(utils.get_num_parameters(flow_generator)))
@@ -76,8 +78,8 @@ def flow_generator_train(cfg: DictConfig) -> nn.Module:
     trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
     trainer.fit(lightning_module)
     return flow_generator
-    
-    
+
+
 def build_model_from_cfg(cfg: DictConfig) -> Type[nn.Module]:
     """builds flow generator from an OmegaConf configuration
 
@@ -120,7 +122,7 @@ class OpticalFlowLightning(BaseLightningModule):
 
         self.has_logged_channels = False
         # for convenience
-        
+
         self.criterion = get_criterion(cfg, self.model)
         # this will get overridden by the ExampleImagesCallback
         self.viz_cnt = None
@@ -185,7 +187,7 @@ class OpticalFlowLightning(BaseLightningModule):
     def test_step(self, batch: dict, batch_idx: int):
         images, outputs = self(batch, 'test')
 
-    def visualize_batch(self, images: torch.Tensor, downsampled_t0: torch.Tensor, estimated_t0: torch.Tensor, 
+    def visualize_batch(self, images: torch.Tensor, downsampled_t0: torch.Tensor, estimated_t0: torch.Tensor,
                         flows_reshaped: torch.Tensor, split: str):
         """visualizes a batch of inputs and saves as a matplotlib figure PNG to disk
 
@@ -202,33 +204,44 @@ class OpticalFlowLightning(BaseLightningModule):
         split : str
             train or val
         """
-        if not self.hparams.train.viz_examples:
+        if self.hparams.train.viz_examples == 0:
             return
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]
-        if viz_cnt > 10:
+        if viz_cnt > self.hparams.train.viz_examples:
             return
         fig = plt.figure(figsize=(14, 14))
         batch_ind = np.random.choice(images.shape[0])
         sequence_length = int(downsampled_t0[0].shape[0] / images.shape[0])
 
-        viz.visualize_images_and_flows(downsampled_t0, flows_reshaped, sequence_length,
+        viz.visualize_images_and_flows(downsampled_t0,
+                                       flows_reshaped,
+                                       sequence_length,
                                        batch_ind=batch_ind,
-                                       fig=fig, max_flow=self.hparams.flow_generator.max)
+                                       fig=fig,
+                                       max_flow=self.hparams.flow_generator.max)
         viz.save_figure(fig, 'batch', True, viz_cnt, split)
 
         fig = plt.figure(figsize=(14, 14))
         sequence_ind = np.random.choice(sequence_length - 1)
-        viz.visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequence_length,
-                                      max_flow=self.hparams.flow_generator.max, sequence_ind=sequence_ind,
+        viz.visualize_multiresolution(downsampled_t0,
+                                      estimated_t0,
+                                      flows_reshaped,
+                                      sequence_length,
+                                      max_flow=self.hparams.flow_generator.max,
+                                      sequence_ind=sequence_ind,
                                       batch_ind=batch_ind,
                                       fig=fig)
         viz.save_figure(fig, 'multiresolution', True, viz_cnt, split)
 
         fig = plt.figure(figsize=(14, 14))
-        viz.visualize_batch_unsupervised(downsampled_t0, estimated_t0, flows_reshaped,
-                                         batch_ind=batch_ind, sequence_ind=sequence_ind,
-                                         fig=fig, sequence_length=sequence_length)
+        viz.visualize_batch_unsupervised(downsampled_t0,
+                                         estimated_t0,
+                                         flows_reshaped,
+                                         batch_ind=batch_ind,
+                                         sequence_ind=sequence_ind,
+                                         fig=fig,
+                                         sequence_length=sequence_length)
         viz.save_figure(fig, 'reconstruction', True, viz_cnt, split)
 
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, list]:
@@ -310,15 +323,17 @@ def get_criterion(cfg, model):
         for losses other than MotionNet
     """
     regularization_criterion = get_regularization_loss(cfg, model)
-    
+
     if cfg.flow_generator.loss == 'MotionNet':
-        criterion = MotionNetLoss(regularization_criterion, flow_sparsity=cfg.flow_generator.flow_sparsity,
-                                    sparsity_weight=cfg.flow_generator.sparsity_weight,
-                                    smooth_weight_multiplier=cfg.flow_generator.smooth_weight_multiplier, 
-                                    )
+        criterion = MotionNetLoss(
+            regularization_criterion,
+            flow_sparsity=cfg.flow_generator.flow_sparsity,
+            sparsity_weight=cfg.flow_generator.sparsity_weight,
+            smooth_weight_multiplier=cfg.flow_generator.smooth_weight_multiplier,
+        )
     else:
         raise NotImplementedError
-    
+
     return criterion
 
 
@@ -355,5 +370,5 @@ def get_metrics(cfg: DictConfig, rundir: Union[str, bytes, os.PathLike], num_par
 if __name__ == '__main__':
     project_path = projects.get_project_path_from_cl(sys.argv)
     cfg = make_flow_generator_train_cfg(project_path, use_command_line=True)
-    
+
     flow_generator_train(cfg)

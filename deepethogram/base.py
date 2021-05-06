@@ -305,7 +305,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         # don't visualize our model inputs when batch size finding
         # lightning_module.visualize_examples = False
         should_viz = cfg.train.viz_examples
-        lightning_module.hparams.train.viz_examples = False
+        lightning_module.hparams.train.viz_examples = 0
         # dramatically reduces RAM usage by this process
         lightning_module.hparams.compute.num_workers = min(tmp_workers, 1)
         if cfg.compute.batch_size == 'auto':

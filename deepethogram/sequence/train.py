@@ -144,13 +144,13 @@ class SequenceLightning(BaseLightningModule):
         images, outputs = self(batch, 'test')
 
     def visualize_batch(self, features, predictions, labels, split: str):
-        if not self.hparams.train.viz_examples:
+        if self.hparams.train.viz_examples == 0:
             return
         # log.info('current epoch: {}'.format(self.current_epoch))
         # ALWAYS VISUALIZE MODEL INPUTS JUST BEFORE FORWARD PASS
         viz_cnt = self.viz_cnt[split]
         # only visualize every 10 epochs for speed
-        if viz_cnt > 10 or self.current_epoch % 10 != 0:
+        if viz_cnt > self.hparams.train.viz_examples or self.current_epoch % 10 != 0:
             return
         fig = plt.figure(figsize=(14, 14))
         # log.info('visualizing sequence batch')
