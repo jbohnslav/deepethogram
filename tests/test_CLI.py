@@ -4,14 +4,19 @@ import subprocess
 
 from deepethogram import utils
 
+from setup_data import (make_project_from_archive, project_path, test_data_path, clean_test_data, get_records,
+                        config_path, data_path)
 # from setup_data import get_testing_directory
 
-testing_directory = get_testing_directory()
-config_path = os.path.join(testing_directory, 'project_config.yaml')
-BATCH_SIZE = 4  # small but not too small
+# testing_directory = get_testing_directory()
+# config_path = os.path.join(testing_directory, 'project_config.yaml')
+BATCH_SIZE = 2  # small but not too small
 # if less than 10, might have bugs with visualization
 STEPS_PER_EPOCH = 20
 NUM_EPOCHS = 2
+VIZ_EXAMPLES = 2
+
+make_project_from_archive()
 
 
 def command_from_string(string):
@@ -28,6 +33,7 @@ def add_default_arguments(string, train=True):
         string += f'train.steps_per_epoch.train={STEPS_PER_EPOCH} train.steps_per_epoch.val={STEPS_PER_EPOCH} '
         string += f'train.steps_per_epoch.test={STEPS_PER_EPOCH} '
         string += f'train.num_epochs={NUM_EPOCHS} '
+        string += f'train.viz_examples={VIZ_EXAMPLES}'
     return string
 
 
@@ -75,11 +81,12 @@ def test_feature_extractor():
 
 def test_feature_extraction():
     # the reason for this complexity is that I don't want to run inference on all directories
-    string = (f'python -m deepethogram.feature_extractor.inference preset=deg_f reload.latest=True ')
-    datadir = os.path.join(testing_directory, 'DATA')
-    subdirs = utils.get_subfiles(datadir, 'directory')
-    np.random.seed(42)
-    subdirs = np.random.choice(subdirs, size=100, replace=False)
+    string = (f'python -m deepethogram.feature_extractor.inference preset=deg_f feature_extractor.weights=latest '
+              'flow_generator.weights=latest ')
+    # datadir = os.path.join(testing_directory, 'DATA')
+    subdirs = utils.get_subfiles(data_path, 'directory')
+    # np.random.seed(42)
+    # subdirs = np.random.choice(subdirs, size=100, replace=False)
     dir_string = ','.join([str(i) for i in subdirs])
     dir_string = '[' + dir_string + ']'
     string += f'inference.directory_list={dir_string} inference.overwrite=True '

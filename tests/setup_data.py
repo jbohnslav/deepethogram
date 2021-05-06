@@ -14,6 +14,7 @@ assert os.path.isdir(archive_path)
 project_path = os.path.join(test_data_path, 'testing_deepethogram')
 data_path = os.path.join(project_path, 'DATA')
 
+config_path = os.path.join(project_path, 'project_config.yaml')
 config_path_archive = os.path.join(archive_path, 'project_config.yaml')
 # config_path = os.path.join(project_path, 'project_config.yaml')
 cfg_archive = projects.get_config_from_path(archive_path)
@@ -37,3 +38,5 @@ def get_records(origin='project'):
         return projects.get_records_from_datadir(data_path)
     elif origin == 'archive':
         return projects.get_records_from_datadir(os.path.join(archive_path, 'DATA'))
+    else:
+        raise NotImplementedError
