@@ -10,9 +10,7 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 import deepethogram.file_io
-import deepethogram.projects
-from deepethogram import projects
-from deepethogram import utils
+from deepethogram import configuration, utils, projects
 
 log = logging.getLogger(__name__)
 
@@ -192,6 +190,7 @@ if __name__ == '__main__':
     config_list = ['config', 'zscore']
     run_type = 'zscore'
     model = None
-    cfg = projects.make_config_from_cli(sys.argv, config_list, run_type, model)
+    project_path = projects.get_project_path_from_cl(sys.argv)
+    cfg = configuration.make_config(project_path, config_list, run_type, model, use_command_line=True)
     cfg = projects.setup_run(cfg)
     main(cfg)

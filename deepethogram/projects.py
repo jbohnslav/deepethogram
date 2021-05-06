@@ -1312,46 +1312,45 @@ def get_project_path_from_cl(argv: list, error_if_not_found=True) -> str:
         return None
 
 
-def make_config(project_path: Union[str, os.PathLike], config_list: list, run_type: str, model: str) -> DictConfig:
-    """DEPRECATED
-    TODO: replace with configuration.make_config
-    """
-    config_path = os.path.join(os.path.dirname(deepethogram.__file__), 'conf')
+# def make_config(project_path: Union[str, os.PathLike], config_list: list, run_type: str, model: str) -> DictConfig:
+#     """DEPRECATED
+#     TODO: replace with configuration.make_config
+#     """
+#     config_path = os.path.join(os.path.dirname(deepethogram.__file__), 'conf')
 
-    def config_string_to_path(config_path, string):
-        fullpath = os.path.join(config_path, *string.split('/')) + '.yaml'
-        assert os.path.isfile(fullpath)
-        return fullpath
+#     def config_string_to_path(config_path, string):
+#         fullpath = os.path.join(config_path, *string.split('/')) + '.yaml'
+#         assert os.path.isfile(fullpath)
+#         return fullpath
 
-    cli = OmegaConf.from_cli()
+#     cli = OmegaConf.from_cli()
 
-    if project_path is not None:
-        user_cfg = get_config_file_from_project_path(project_path)
+#     if project_path is not None:
+#         user_cfg = get_config_file_from_path(project_path)
 
-        # order of operations: first, defaults specified in config_list
-        # then, if preset is specified in user config or at the command line, load those preset values
-        # then, append the user config
-        # then, the command line args
-        # so if we specify a preset and manually change, say, the feature extractor architecture, we can do that
-        if 'preset' in user_cfg:
-            config_list += ['preset/' + user_cfg.preset]
+#         # order of operations: first, defaults specified in config_list
+#         # then, if preset is specified in user config or at the command line, load those preset values
+#         # then, append the user config
+#         # then, the command line args
+#         # so if we specify a preset and manually change, say, the feature extractor architecture, we can do that
+#         if 'preset' in user_cfg:
+#             config_list += ['preset/' + user_cfg.preset]
 
-    if 'preset' in cli:
-        config_list += ['preset/' + cli.preset]
+#     if 'preset' in cli:
+#         config_list += ['preset/' + cli.preset]
 
-    config_files = [config_string_to_path(config_path, i) for i in config_list]
+#     config_files = [config_string_to_path(config_path, i) for i in config_list]
 
-    cfgs = [OmegaConf.load(i) for i in config_files]
+#     cfgs = [OmegaConf.load(i) for i in config_files]
 
-    if project_path is not None:
-        # first defaults; then user cfg; then cli
-        cfg = OmegaConf.merge(*cfgs, user_cfg, cli)
-    else:
-        cfg = OmegaConf.merge(*cfgs, cli)
+#     if project_path is not None:
+#         # first defaults; then user cfg; then cli
+#         cfg = OmegaConf.merge(*cfgs, user_cfg, cli)
+#     else:
+#         cfg = OmegaConf.merge(*cfgs, cli)
 
-    cfg.run = {'type': run_type, 'model': model}
-    return cfg
-
+#     cfg.run = {'type': run_type, 'model': model}
+#     return cfg
 
 # def make_config_from_cli(argv, *args, **kwargs):
 #     """DEPRECATED

@@ -996,7 +996,7 @@ class MainWindow(QMainWindow):
         #                                self.project_config['project']['model_path'])
 
         # overwrite cfg passed at command line now that we know the project path. still includes command line arguments
-        self.cfg = projects.make_config(directory, ['config', 'gui', 'postprocessor'], run_type='gui', model=None)
+        self.cfg = configuration.make_config(directory, ['config', 'gui', 'postprocessor'], run_type='gui', model=None)
         log.info('cwd: {}'.format(os.getcwd()))
         self.cfg = projects.convert_config_paths_to_absolute(self.cfg, raise_error_if_pretrained_missing=False)
         log.info('cwd: {}'.format(os.getcwd()))
@@ -1234,7 +1234,6 @@ def setup_gui_cfg():
             config_list.append('preset/' + command_line_cfg.preset)
         cfgs = [configuration.load_config_by_name(i) for i in config_list]
         cfg = OmegaConf.merge(*cfgs, command_line_cfg)
-
     try:
         cfg = projects.setup_run(cfg)
     except Exception:
