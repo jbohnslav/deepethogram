@@ -10,5 +10,23 @@ logging, automatic batch sizing, and Ray Tune integration.
 * Image augmentations moved to GPU with Kornia. [see Performance guide for details](performance.md)
 
 ## Migration guide
-* activate your conda environment, e.g. `deg`
-* pip uninstall hydra-core
+
+There are some new dependency changes; making sure that install works correctly is the hardest part about migration. 
+
+* activate your conda environment, e.g. `conda activate deg`
+* uninstall hydra: `pip uninstall hydra-core`
+* uninstall pytorch to upgrade: `conda uninstall pytorch`
+* uninstall pyside2 via conda: `conda uninstall pyside2`
+* upgrade pytorch. note that cudatoolkit version is not important `conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch`
+
+### upgrade issues
+* `AttributeError: type object 'OmegaConf' has no attribute 'to_yaml'`
+  * this indicates that OmegaConf did not successfully upgrade to version 2.0+, and also likely that there was a problem
+  with your upgrade. please follow the above steps. If you're sure that everything else installed correctly, you can run
+  `pip install --upgrade omegaconf`
+* `error: torch 1.5.1 is installed but torch>=1.6.0 is required by {'kornia'}`
+  * this indicates that your PyTorch version is too low. Please uninstall and reinstall PyTorch. 
+* `ValueError: Hydra installation found. Please run pip uninstall hydra-core`
+  * do as the error message says: run `pip uninstall hydra-core`
+  * if you've already done this, you might have to manually delete hydra files. Mine were at 
+  `'C:\\ProgramData\\Anaconda3\\lib\\site-packages\\hydra_core-0.11.3-py3.7.egg\\hydra'`. Please delete the `hydra_core` folder.
