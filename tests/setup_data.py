@@ -10,7 +10,7 @@ test_path = os.path.dirname(this_path)
 test_data_path = os.path.join(test_path, 'DATA')
 # the deepethogram test archive should only be read from, never written to
 archive_path = os.path.join(test_data_path, 'testing_deepethogram_archive')
-assert os.path.isdir(archive_path)
+assert os.path.isdir(archive_path), '{} does not exist!'.format(archive_path)
 project_path = os.path.join(test_data_path, 'testing_deepethogram')
 data_path = os.path.join(project_path, 'DATA')
 
