@@ -41,6 +41,9 @@ to install on your system.
 * `conda activate deg`. This activates the environment.
 * type `python -m deepethogram`, in the command line to open the GUI.
 
+## Upgrading to Beta
+Please see [the beta docs for instructions](beta.md)
+
 ## Common installation problems
 * You might have dependency issues with other packages you've installed. Please make a new anaconda or miniconda 
 environment with `conda create --name deg python=3.8` before installation. 
