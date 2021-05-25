@@ -1,9 +1,11 @@
+import logging
 import math
 
 import torch
 from omegaconf import DictConfig
 from torch.optim.optimizer import Optimizer
 
+log = logging.getLogger(__name__)
 
 class _LRScheduler:
     def __init__(self, optimizer, last_epoch=-1):

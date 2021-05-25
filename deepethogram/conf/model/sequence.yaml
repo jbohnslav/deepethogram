@@ -1,5 +1,6 @@
+# @package _global_
 sequence:
-  # the architecture for the sequence model. choices=['linear', 'conv_nonlinear', 'rnn', 'tgm', 'tgmj']
+  # the architecture for the sequence model. choices=['linear', 'conv_nonlinear', 'rnn', 'tgm', 'tgmj', 'mlp']
   # if RNN, the actual architecture will be rnn_style below
   arch: tgmj
   #  # the INPUTS to the sequence model will be in HDF5 groups with the below name. If None: will default to the
@@ -13,19 +14,18 @@ sequence:
   # the dropout to be placed on the penultimate layer before the 1d convolution with K (# behaviors) output features
   dropout_p: 0.5
   # number of layers in RNN, 1d cnn, or TGM models. typically 1-3
-  num_layers: 1
+  num_layers: 3
    # for RNNs or CNNs. For CNNs, only 1 hidden layer by default.
   hidden_size: 64
-  # values less than one will down-weight the loss on the background class. useful for very imbalanced datasets
   # if true, only loads data in non-overlapping chunks of length `filter_length`. E.g., the first batch of your dataset
   # would be frames 0-180, then 181-360, etc. If false, the first batch would be 0-180, the second would be 1-181, etc.
   # Setting to True will dramatically speed up training
-  nonoverlapping: False
+  nonoverlapping: True
   # tgm parameters
   # Length (in time) per TGM filter
   filter_length: 15
   # dropout the input features before concatentating again to the smoothed features. paper: 0.5
-  input_dropout: 0.4
+  input_dropout: 0.5
    # Number of filters to use per TGM layer
   n_filters: 8
   # How to reduce tgm stack N x C_out x D x T -> N x D x T. choices=['max', 'mean', 'conv1x1']  Paper: max
@@ -35,9 +35,9 @@ sequence:
   # How many representations of DxT per TGM layer. Paper: 8
   c_out: 8
   # whether to use soft attention or 1d conv to reduce C_in x D x T -> 1 x D x T
-  soft_attn: false
+  soft_attn: true
   # how many features in final layer before logits. paper: 512 (too many parameters for our case)
-  num_features: 64
+  num_features: 128
   # rnn parameters
   # should RNNs run bidirectionally, adds a lot of time
   bidirectional: false
@@ -50,4 +50,20 @@ sequence:
   # Inputs to TGM model: N x D x T features. This is smoothed to a new N x D x T tensor. If true, use conv1d to reduce
   # to N x num_features x T, before another conv1d to N x num_classes x T.
   # if False, go straight from N x D x T to N x num_classes x T
-  nonlinear_classification: False
+  nonlinear_classification: True
+  # use a batch normalization layer on the outputs
+  final_bn: True
+  # what kinds of inputs to use for the sequence model. choices: ['features', 'keypoints']
+  input_type: features
+train:
+  regularization:
+    # can't use l2_sp regularization because we are not pretraining sequence models
+    style: l2
+    alpha: 0.01
+  # overwrite patience: because of Nonoverlapping, train epochs can be very low
+  patience: 5
+  # overwrite num epochs. due to nonoverlapping, one epoch takes only a minute or two
+  num_epochs: 100 
+compute:
+  min_batch_size: 2
+  max_batch_size: 64 # sequence can get weird when batch sizes are too high

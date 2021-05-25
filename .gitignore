@@ -2,10 +2,14 @@
 *.h5
 *.pt
 deepethogram/models/*
-tests/DATA
+tests/DATA/testing_deepethogram
+tests/DATA/testing_deepethogram_archive
+tests/DATA/testing_deepethogram_archive.zip
 gui_logs/
+.vscode/
+# line profiling
+*.lprof
 
-tests/testing_directory.txt
 *.user
 # Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
 # User-specific stuff

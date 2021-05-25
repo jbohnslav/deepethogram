@@ -1,8 +1,0 @@
-run:
-  type: train
-  model: feature_extractor
-defaults:
-  - config
-  - model/feature_extractor
-  - model/flow_generator
-  - train

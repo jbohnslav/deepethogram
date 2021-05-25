@@ -1,8 +1,0 @@
-run:
-  type: train
-  model: flow_generator
-defaults:
-  - config
-  - model/flow_generator
-  - train
-  - augs

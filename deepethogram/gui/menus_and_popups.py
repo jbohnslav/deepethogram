@@ -48,7 +48,7 @@ class CreateProject(QtWidgets.QDialog):
         if len(project_directory) == 0:
             warnings.warn('Please choose a directory')
             return
-        project_directory = pathlib.Path(project_directory).resolve()
+        project_directory = str(pathlib.Path(project_directory).resolve())
         self.project_directory = project_directory
 
         self.project_name_default = 'Project Name'

@@ -1,3 +1,4 @@
+# @package _global_
 split:
   # if true, attempt to reload a previously made data split. If false, will randomly assign to splits new
   reload: true
@@ -16,31 +17,35 @@ compute:
   num_workers: 8
   # batch size for training and inference. If you're getting out of VRAM errors, lower this. If you're less than say 8,
   # reduce model complexity or buy a better GPU instead
-  batch_size: 32
+  # "auto" will use Pytorch Lightning's automatic batch sizing feature
+  batch_size: auto
+  min_batch_size: 8   # minimum batch size with auto
+  max_batch_size: 512 # maximum batch size with auto
   # not implemented: for distributed training
   distributed: false
   # which GPU to use on a multi-GPU computer. use nvidia-smi to see which numbers correspond to which GPUs
   gpu_id: 0
   # not implemented: for nvidia dali dataloading
   dali: false
+  # whether or not to use multiprocessing to run metrics computation
+  metrics_workers: 0
 # for reloading model weights
 reload:
   # not used: overwrite specified config with the loaded one
   overwrite_cfg: false
   # path to weightfile. You can either use this or the model-specific .weights field, depending
-  weights: null
+  # weights: null
   # if True, will attempt to automatically load the most recent trained model
   latest: false
 # one of deg_f, deg_m, deg_s. see paper
-preset: null
 # use this field to set notes in both the saved configuration file and the run directory. e.g.
 # `train.dropout_p=0.5 notes=trying_lower_dropout`
 notes: null
-# do not change: for Hydra
-#defaults:
+log:
+  level: info
 #  project: project_config
 # hyra configuration: specifies how to create the run directory
-hydra:
-  run: 
-    dir: ${project.path}/${project.model_path}/${now:%y%m%d_%H%M%S}_${run.model}_${run.type}_${notes}
-  output_subdir: ''
+# hydra:
+#   run: 
+#     dir: ${project.path}/${project.model_path}/${now:%y%m%d_%H%M%S}_${run.model}_${run.type}_${notes}
+#   output_subdir: ''

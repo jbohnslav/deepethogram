@@ -1,3 +1,4 @@
+# @package _global_
 train:
   # learning rate of your optimizer. default: 1e-4. Potentially set lower if you're retraining from a decent
   # checkpoint
@@ -8,7 +9,7 @@ train:
   # multistep: decrease learning rate at fixed milestones (below)
   scheduler: plateau
   # number of epochs to train before automatically stopping. Use to decrease training time
-  num_epochs: 1000
+  num_epochs: 100
   # number of gradient descent steps during each "epoch". for large datasets, it will take too long to go through
   # the entire dataset before validation (when model saving occurs). Reduce to speed up training, or increase to train
   # further before visualization, checkpointing, learning rate decrements, etc.
@@ -36,11 +37,12 @@ train:
   # whether or not to weight your loss function by the number of examples. Should essentially always keep to true
   weight_loss: true
   # patience used both in stopping and the learning rate scheduler
-  patience: 5
+  patience: 3
   # if using early stopping, you can set this value and early stopping will not kick in until the below epoch is reached
   early_stopping_begins: 0
   # whether or not to visualize data. always keep true
-  viz: true
+  viz_metrics: true
+  viz_examples: 10
   # the amount to reduce the learning rate by when the scheduler demands
   reduction_factor: 0.1
   # In the paper, see Methods / loss functions. This value is beta.
@@ -50,5 +52,19 @@ train:
   # in practice I find this is too strong an up-weighting. Instead, I will weight by
   # the proportion of pos examples ** loss_weight_exp
   # if only 1% of data ==1, and loss_weight_exp=0.5, the weight value will be 10
-  loss_weight_exp: 1.0
-# used for computing the train, validation, and test splits
+  loss_weight_exp: 0.25
+  # focal loss gamma for feature extractor and sequence models
+  # gamma == 0: BCELoss
+  # the higher the gamma, the more the model "focuses" on mis-classified points near 0.5, and not trying to increase
+  # the p(y=1) from 0.8 ->0.99, for example
+  loss_gamma: 1.0
+  label_smoothing: 0.05
+  # how much to oversample rare classes. Formula: 1/(class_proportion ** oversampling_exp)
+  # 0: no oversampling
+  # 1: all classes will be sampled equally
+  oversampling_exp: 0.0
+  regularization:
+    style: l2_sp
+    alpha: 1e-5
+    beta: 1e-3
+

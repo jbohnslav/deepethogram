@@ -1,21 +1,20 @@
+from collections.abc import Mapping, Container
 import logging
 import os
 import pkgutil
-import shutil
-import sys
 from collections import OrderedDict
 from inspect import isfunction
 from operator import itemgetter
+import sys
 from types import SimpleNamespace
 from typing import Union
 
 import cv2
+import h5py
 import numpy as np
 import torch
 import yaml
 from omegaconf import OmegaConf, DictConfig
-
-import deepethogram
 
 log = logging.getLogger(__name__)
 
@@ -27,63 +26,10 @@ def load_yaml(filename: Union[str, os.PathLike]) -> dict:
     return dictionary
 
 
-def load_config(filename: Union[str, os.PathLike]) -> DictConfig:
-    """ loads a yaml file as dictionary and converts to an omegaconf DictConfig """
-    dictionary = load_yaml(filename)
-    return OmegaConf.create(dictionary)
-
-def process_config_file_from_cl(argv: list) -> list:
-    """ Unfortunate HACK for Hydra. Moves an input yaml file into Hydra's search path
-
-    Allows for fully-functional config compositions while passing a yaml file from the command line. For example,
-    deepethogram expects each project to have its own specific hyperparameters. We want to be able to integrate that
-    with our given defaults.
-
-    Example: in your project configuration file, you specify that the preset model should be deg_s. This changes
-    the loss function for the flow generator, but you didn't specify that in your project config. This function will
-    move your project config into Hydra's search path by literally copying a file to the deepethogram directory.
-    When Hydra sees this in its search path, it will figure out that you've changed the preset model, and automatically
-    change the associated hyperparameters (in this case, the loss function).
-
-    Parameters
-    ----------
-    argv: list
-        command line inputs
-
-    Returns
-    ------
-    argv: list
-        command line inputs
-    """
-    for arg in argv:
-        if 'project.config_file' in arg:
-            key, path = arg.split('=')
-            assert os.path.isfile(path)
-            log.debug('file: {}'.format(__file__))
-            log.debug('deepethogram loc: {}'.format(deepethogram.__file__))
-            conf_dir = os.path.join(os.path.dirname(deepethogram.__file__), 'conf', 'project')
-            shutil.copy(path, conf_dir)
-            basename = os.path.splitext(os.path.basename(path))[0]
-            argv.append('project={}'.format(basename))
-            log.debug('args: {}'.format(sys.argv))
-    return argv
-
-def get_absolute_paths_from_cfg(cfg: DictConfig) -> DictConfig:
-    """ Changes config file relative paths to absolute paths """
-    if cfg.project.path is None:
-        return cfg
-    assert os.path.isdir(cfg.project.path)
-    cfg.project.data_path = os.path.join(cfg.project.path, cfg.project.data_path)
-    assert os.path.isdir(cfg.project.data_path), 'Data path not found: {}'.format(cfg.project.data_path)
-    cfg.project.model_path = os.path.join(cfg.project.path, cfg.project.model_path)
-    assert os.path.isdir(cfg.project.model_path)
-    if cfg.reload.weights is not None:
-        # if it's not a file, assume it's a relative path within the model directory
-        if not os.path.isfile(cfg.reload.weights):
-            cfg.reload.weights = os.path.join(cfg.project.model_path, cfg.reload.weights)
-
-        assert os.path.isfile(cfg.reload.weights)
-    return cfg
+# def load_config(filename: Union[str, os.PathLike]) -> DictConfig:
+#     """ loads a yaml file as dictionary and converts to an omegaconf DictConfig """
+#     dictionary = load_yaml(filename)
+#     return OmegaConf.create(dictionary)
 
 
 def get_minimum_learning_rate(optimizer):
@@ -98,7 +44,10 @@ def get_minimum_learning_rate(optimizer):
     return (min_lr)
 
 
-def load_checkpoint(model, optimizer, checkpoint_file: Union[str, os.PathLike], config: dict,
+def load_checkpoint(model,
+                    optimizer,
+                    checkpoint_file: Union[str, os.PathLike],
+                    config: dict,
                     overwrite_args: bool = False,
                     distributed: bool = False):
     """"Reload model and optimizer weights from a checkpoint.pt file
@@ -122,7 +71,7 @@ def load_checkpoint(model, optimizer, checkpoint_file: Union[str, os.PathLike], 
     try:
         optimizer.load_state_dict(optimizer_dict)
     except Exception as e:
-        log.exception('Trouble loading optimizer state dict--might have requires-grad'\
+        log.exception('Trouble loading optimizer state dict--might have requires-grad' \
                       'for different parameters: {}'.format(e))
         log.warning('Not loading optimizer state.')
     if overwrite_args:
@@ -131,8 +80,10 @@ def load_checkpoint(model, optimizer, checkpoint_file: Union[str, os.PathLike], 
     return model, optimizer, config
 
 
-def load_weights(model, checkpoint_file: Union[str, os.PathLike], distributed: bool = False,
-                 device:torch.device=None):
+def load_weights(model,
+                 checkpoint_file: Union[str, os.PathLike],
+                 distributed: bool = False,
+                 device: torch.device = None):
     """"Reload model weights from a checkpoint.pt file
     Args:
         model: instance of torch.nn.Module class
@@ -165,12 +116,7 @@ def checkpoint(model, rundir: Union[str, os.PathLike], epoch: int, args=None):
     # rates, making sure the same keys were in the optimizer dict even when you've done something like change
     # the size of the final layer of the NN (for different number of classes). I've kept the optimizer field for
     # backwards compatibility, but this should not be used
-    state = {
-        'epoch': epoch,
-        'state_dict': model.state_dict(),
-        'optimizer': None,
-        'hyperparameters': args
-    }
+    state = {'epoch': epoch, 'state_dict': model.state_dict(), 'optimizer': None, 'hyperparameters': args}
     torch.save(state, fullfile)
 
 
@@ -198,6 +144,8 @@ def save_hidden_two_stream(model, rundir: Union[os.PathLike, str], config: dict 
     flowdir = os.path.join(rundir, 'flow_generator')
     if not os.path.isdir(flowdir):
         os.makedirs(flowdir)
+    if type(config) == DictConfig:
+        config = OmegaConf.to_container(config)
     checkpoint(model.flow_generator, flowdir, epoch, config)
     save_two_stream(model, rundir, config, epoch)
 
@@ -210,13 +158,17 @@ def save_dict_to_yaml(dictionary: dict, filename: Union[str, bytes, os.PathLike]
     """
     if os.path.isfile(filename):
         log.debug('File {} already exists, overwriting...'.format(filename))
+    if isinstance(dictionary, DictConfig):
+        dictionary = OmegaConf.to_container(dictionary)
     with open(filename, 'w') as f:
         yaml.dump(dictionary, f, default_flow_style=False)
 
 
-def tensor_to_np(tensor: torch.Tensor) -> np.ndarray:
+def tensor_to_np(tensor: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
     """Simple function for turning pytorch tensor into numpy ndarray"""
-    return tensor.to('cpu').detach().numpy()
+    if type(tensor) == np.ndarray:
+        return tensor
+    return tensor.cpu().detach().numpy()
 
 
 def in_this_dir(abs_path: Union[str, os.PathLike]) -> dict:
@@ -256,7 +208,7 @@ def get_datadir_from_paths(paths, dataset):
             datadir = v
             found = True
     if not found:
-        raise ValueError('couldn''t find dataset: {}'.format(dataset))
+        raise ValueError('couldn' 't find dataset: {}'.format(dataset))
     return datadir
 
 
@@ -284,6 +236,10 @@ def load_state_from_dict(model, state_dict):
     model_dict = model.state_dict()
     pretrained_dict = {}
     for k, v in state_dict.items():
+        if 'criterion' in k:
+            # we might have parameters from the loss function in our loaded weights. we don't want to reload these;
+            # we will specify them for whatever we are currently training.
+            continue
         if k not in model_dict:
             log.warning('{} not found in model dictionary'.format(k))
         else:
@@ -299,6 +255,62 @@ def load_state_from_dict(model, state_dict):
     # load the state dict, only for layers of same name, shape, size, etc.
     model.load_state_dict(model_dict, strict=True)
     return (model)
+
+
+def load_state_dict_from_file(weights_file, distributed: bool = False):
+    state = torch.load(weights_file, map_location='cpu')
+    # except RuntimeError as e:
+    #     log.exception(e)
+    #     log.info('loading onto cpu...')
+    #     state = torch.load(weights_file, map_location='cpu')
+
+    is_pure_weights = not 'epoch' in list(state.keys())
+    # load params
+    if is_pure_weights:
+        state_dict = state
+        start_epoch = 0
+    else:
+        start_epoch = state['epoch']
+        state_dict = state['state_dict']
+        optimizer_dict = None  # state['optimizer']
+
+    first_key = next(iter(state_dict.items()))[0]
+    trained_on_dataparallel = first_key[:7] == 'module.'
+
+    if distributed and not trained_on_dataparallel:
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            name = 'module.' + k
+            new_state_dict[name] = v
+        state_dict = new_state_dict
+    # if it was trained on multi-gpu, remove the 'module.' before variable names
+    elif not distributed and trained_on_dataparallel:
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            name = k[7:]  # remove `module.`
+            new_state_dict[name] = v
+        state_dict = new_state_dict
+    # sometimes I have the encoder in a structure called 'model', which means
+    # all weights have 'model.' prepended
+    model_prepended = first_key[:6] == 'model.'
+    if model_prepended:
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            if k[:6] == 'model.':
+                name = k[6:]
+            else:
+                name = k
+            new_state_dict[name] = v
+        state_dict = new_state_dict
+    if not is_pure_weights:
+        if 'hyperparameters' in list(state.keys()):
+            args = state['hyperparameters']
+        else:
+            args = None
+    else:
+        d = {}
+        args = SimpleNamespace(**d)
+    return state_dict, start_epoch, args
 
 
 def load_state(model, weights_file: Union[str, os.PathLike], device: torch.device = None, distributed: bool = False):
@@ -326,63 +338,12 @@ def load_state(model, weights_file: Union[str, os.PathLike], device: torch.devic
     #  args: hyperparameters
     log.info('loading from checkpoint file {}...'.format(weights_file))
 
-    if device is not None:
-        state = torch.load(weights_file, map_location=device)
-    else:
-        try:
-            state = torch.load(weights_file)
-        except RuntimeError as e:
-            log.exception(e)
-            log.info('loading onto cpu...')
-            state = torch.load(weights_file, map_location='cpu')
-
-    is_pure_weights = not 'epoch' in list(state.keys())
-    # load params
-    if is_pure_weights:
-        state_dict = state
-        start_epoch = 0
-    else:
-        start_epoch = state['epoch']
-        state_dict = state['state_dict']
-        optimizer_dict = state['optimizer']
-
-    first_key = next(iter(state_dict.items()))[0]
-    trained_on_dataparallel = first_key[:7] == 'module.'
-
-    if distributed and not trained_on_dataparallel:
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = 'module.' + k
-            new_state_dict[name] = v
-        state_dict = new_state_dict
-    # if it was trained on multi-gpu, remove the 'module.' before variable names
-    elif not distributed and trained_on_dataparallel:
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k[7:]  # remove `module.`
-            new_state_dict[name] = v
-        state_dict = new_state_dict
-    # sometimes I have the encoder in a structure called 'model', which means
-    # all weights have 'model.' prepended
-    model_prepended = first_key[:6] == 'model.'
-    if model_prepended:
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k[6:]
-            new_state_dict[name] = v
-        state_dict = new_state_dict
+    state_dict, start_epoch, args = load_state_dict_from_file(weights_file, distributed=distributed)
     # LOAD PARAMS
     model = load_state_from_dict(model, state_dict)
+    optimizer_dict = None
 
-    if not is_pure_weights:
-        if 'hyperparameters' in list(state.keys()):
-            args = state['hyperparameters']
-        else:
-            args = None
-    else:
-        d = {}
-        args = SimpleNamespace(**d)
-    return (model, optimizer_dict, start_epoch, args)
+    return model, optimizer_dict, start_epoch, args
 
 
 def print_gpus():
@@ -391,11 +352,9 @@ def print_gpus():
     """
     n_gpus = torch.cuda.device_count()
     for i in range(n_gpus):
-        print('GPU %d %s: Compute Capability %d.%d, Mem:%f' % (i,
-                                                               torch.cuda.get_device_name(i),
-                                                               int(torch.cuda.get_device_capability(i)[0]),
-                                                               int(torch.cuda.get_device_capability(i)[1]),
-                                                               torch.cuda.max_memory_allocated(i)))
+        print('GPU %d %s: Compute Capability %d.%d, Mem:%f' %
+              (i, torch.cuda.get_device_name(i), int(torch.cuda.get_device_capability(i)[0]),
+               int(torch.cuda.get_device_capability(i)[1]), torch.cuda.max_memory_allocated(i)))
 
 
 class Normalizer:
@@ -415,8 +374,8 @@ class Normalizer:
         mean: mean of input data. For images, should have 2 or 3 channels
         std: standard deviation of input data
     """
-
-    def __init__(self, mean: Union[list, np.ndarray, torch.Tensor] = None,
+    def __init__(self,
+                 mean: Union[list, np.ndarray, torch.Tensor] = None,
                  std: Union[list, np.ndarray, torch.Tensor] = None,
                  clamp: bool = True):
         """Constructor for Normalizer class.
@@ -563,7 +522,7 @@ def flow_to_img_lrcn(flow: np.ndarray, max_flow: Union[float, int] = 10) -> np.n
     img[:, :, 0] = flow[..., 0] * half_range + 128
     img[:, :, 1] = flow[..., 1] * half_range + 128
     # maximum magnitude is if x and y are both maxed
-    max_magnitude = np.sqrt(max_flow ** 2 + max_flow ** 2)
+    max_magnitude = np.sqrt(max_flow**2 + max_flow**2)
     img[:, :, 2] = mag * 255 / max_magnitude
     img = img.clip(min=0, max=255).astype(np.uint8)
     return img
@@ -602,7 +561,6 @@ def flow_img_to_flow(img: np.ndarray, max_flow: Union[int, float] = 10) -> np.nd
 #     ret, bytestring = cv2.imencode('.jpg', im)
 #     return (bytestring)
 
-
 # def decode_flow_img(bytestring, maxflow=10):
 #     im = cv2.imdecode(bytestring, 1)
 #     flow = flow_img_to_flow(im, max_flow=maxflow)
@@ -637,42 +595,6 @@ def get_models_from_module(module, get_function=False):
     return models
 
 
-# def get_latest_model(model_type: str, model_name: str, project_dir: Union[str, os.PathLike]):
-#     latest_models_file = os.path.join(project_dir, 'latest_models.yaml')
-#     root = os.path.dirname(os.path.abspath(__file__))
-#     if not os.path.isfile(latest_models_file):
-#         shutil.copy(os.path.join(root, 'defaults', 'latest_models.yaml'), latest_models_file)
-#     latest_models = load_yaml(latest_models_file)
-#     assert model_type in list(latest_models.keys())
-#     model_subtypes = latest_models[model_type]
-#     # print(model_type, model_name, latest_models)
-#     assert model_name in list(model_subtypes.keys())
-#     model_path = model_subtypes[model_name]
-#
-#     if model_path is not None:
-#         model_path = os.path.join(project_dir, 'models', model_path, 'checkpoint.pt')
-#         assert os.path.isfile(model_path)
-#     return model_path
-
-
-# def get_latest_model_and_name(project_dir: Union[str, os.PathLike], model_type: str) -> Tuple[str, str]:
-#     assert os.path.isdir(project_dir)
-#     latest_models_file = os.path.join(project_dir, 'latest_models.yaml')
-#     latest_models = load_yaml(latest_models_file)
-#     model_dict = latest_models[model_type]
-#     models = []
-#     for k, v in model_dict.items():
-#         if v is not None:
-#             models.append(k)
-#     if len(models) > 0:
-#         models.sort()
-#         model_name = models[-1]
-#     else:
-#         return None, None
-#     model_weight = model_dict[model_name]
-#     return model_name, model_weight
-
-
 def load_feature_extractor_components(model, checkpoint_file: Union[str, os.PathLike], component: str, device=None):
     """ Loads individual component from a hidden two-stream model checkpoint
 
@@ -692,26 +614,37 @@ def load_feature_extractor_components(model, checkpoint_file: Union[str, os.Path
     model: nn.Module
         pytorch model with loaded weights
     """
-    assert component in ['spatial', 'flow']
     if component == 'spatial':
         key = 'spatial_classifier' + '.'
     elif component == 'flow':
         key = 'flow_classifier' + '.'
-    directory = os.path.dirname(checkpoint_file)
-    subdir = os.path.join(directory, component)
-
+    elif component == 'fusion':
+        key = 'fusion.'
+    else:
+        raise ValueError('component not one of spatial or flow: {}'.format(component))
+    # directory = os.path.dirname(checkpoint_file)
+    # subdir = os.path.join(directory, component)
+    # log.info('device: {}'.format(device))
     log.info('loading component {} from file {}'.format(component, checkpoint_file))
 
-    if not os.path.isdir(subdir):
-        log.warning('{} directory not found in {}'.format(component, directory))
-        state = torch.load(checkpoint_file, map_location='cpu')
-        state_dict = state['state_dict']
-        params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
-        # import pdb; pdb.set_trace()
-        model = load_state_from_dict(model, params)
-    else:
-        sub_checkpoint = os.path.join(subdir, 'checkpoint.pt')
-        model, _, _, _ = load_state(model, sub_checkpoint, device=device)
+    state_dict, _, _ = load_state_dict_from_file(checkpoint_file)
+
+    # state = torch.load(checkpoint_file, map_location=device)
+    # state_dict = state['state_dict']
+    params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
+    # import pdb; pdb.set_trace()
+    model = load_state_from_dict(model, params)
+    # import pdb; pdb.set_trace()
+    # if not os.path.isdir(subdir):
+    #     log.warning('{} directory not found in {}'.format(component, directory))
+    #     state = torch.load(checkpoint_file, map_location=device)
+    #     state_dict = state['state_dict']
+    #     params = {k.replace(key, ''): v for k, v in state_dict.items() if k.startswith(key)}
+    #     # import pdb; pdb.set_trace()
+    #     model = load_state_from_dict(model, params)
+    # else:
+    #     sub_checkpoint = os.path.join(subdir, 'checkpoint.pt')
+    #     model, _, _, _ = load_state(model, sub_checkpoint, device=device)
     return model
 
 
@@ -743,3 +676,176 @@ def get_subfiles(root: Union[str, bytes, os.PathLike], return_type: str = None) 
     elif return_type == 'directory':
         files = [i for i in files if os.path.isdir(i)]
     return files
+
+
+def print_hdf5(h5py_obj, level=-1, print_full_name: bool = False, print_attrs: bool = True) -> None:
+    """ Prints the name and shape of datasets in a H5py HDF5 file.
+    Parameters
+    ----------
+    h5py_obj: [h5py.File, h5py.Group]
+        the h5py.File or h5py.Group object
+    level: int
+        What level of the file tree you are in
+    print_full_name
+        If True, the full tree will be printed as the name, e.g. /group0/group1/group2/dataset: ...
+        If False, only the current node will be printed, e.g. dataset:
+    print_attrs
+        If True: print all attributes in the file
+    Returns
+    -------
+    None
+    """
+    def is_group(f):
+        return type(f) == h5py._hl.group.Group
+
+    def is_dataset(f):
+        return type(f) == h5py._hl.dataset.Dataset
+
+    def print_level(level, n_spaces=5) -> str:
+        if level == -1:
+            return ''
+        prepend = '|' + ' ' * (n_spaces - 1)
+        prepend *= level
+        tree = '|' + '-' * (n_spaces - 2) + ' '
+        return prepend + tree
+
+    if isinstance(h5py_obj, str) or isinstance(h5py_obj, os.PathLike):
+        with h5py.File(h5py_obj, 'r') as f:
+            print_hdf5(f)
+            return
+
+    for key in h5py_obj.keys():
+        entry = h5py_obj[key]
+        name = entry.name if print_full_name else os.path.basename(entry.name)
+        if is_group(entry):
+            print('{}{}'.format(print_level(level), name))
+            print_hdf5(entry, level + 1, print_full_name=print_full_name)
+        elif is_dataset(entry):
+            shape = entry.shape
+            dtype = entry.dtype
+            print('{}{}: {} {}'.format(print_level(level), name, shape, dtype))
+    if level == -1:
+        if print_attrs:
+            print('attrs: ')
+
+
+#
+# def deep_getsizeof(o, ids):
+#     """Find the memory footprint of a Python object
+#
+#     This is a recursive function that drills down a Python object graph
+#     like a dictionary holding nested dictionaries with lists of lists
+#     and tuples and sets.
+#
+#     The sys.getsizeof function does a shallow size of only. It counts each
+#     object inside a container as pointer only regardless of how big it
+#     really is.
+#
+#     :param o: the object
+#     :param ids:
+#     :return:
+#     """
+#     d = deep_getsizeof
+#     if id(o) in ids:
+#         return 0
+#
+#     r = sys.getsizeof(o)
+#     ids.add(id(o))
+#
+#     if isinstance(o, str):
+#         return r
+#
+#     if isinstance(o, Mapping):
+#         return r + sum(d(k, ids) + d(v, ids) for k, v in o.iteritems())
+#
+#     if isinstance(o, Container):
+#         return r + sum(d(x, ids) for x in o)
+#
+#     return r
+
+
+def print_top_largest_variables(local_call, num: int = 20):
+    def sizeof_fmt(num, suffix='B'):
+        ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
+        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+            if abs(num) < 1024.0:
+                return "%3.1f %s%s" % (num, unit, suffix)
+            num /= 1024.0
+        return "%.1f %s%s" % (num, 'Yi', suffix)
+
+    for name, size in sorted(((name, sys.getsizeof(value)) for name, value in local_call.items()),
+                             key=lambda x: -x[1])[:10]:
+        print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
+
+
+def get_hparams_from_cfg(cfg, hparams):
+    hparam_dict = {key: get_dotted_from_cfg(cfg, key) for key in hparams}
+    return hparam_dict
+
+
+def get_dotted_from_cfg(cfg, dotted):
+    # cfg: DictConfig
+    # dotted: string parameter name. can be nested. e.g. 'tune.hparams.feature_extractor.dropout_p.min'
+    key_list = dotted.split('.')
+
+    cfg_chunk = cfg.get(key_list[0])
+    for i in range(1, len(key_list)):
+        cfg_chunk = cfg_chunk.get(key_list[i])
+
+    return cfg_chunk
+
+
+def get_best_epoch_from_weightfile(weightfile: Union[str, os.PathLike]) -> int:
+    """parses a checkpoint like epoch=15.ckpt to find the number 15
+    """
+    basename = os.path.basename(weightfile)
+    # in the previous version of deepethogram, load the last checkpoint
+    if basename.endswith('.pt'):
+        return -1
+    assert basename.endswith('.ckpt')
+    basename = os.path.splitext(basename)[0]
+
+    # if weightfile is the "last"
+    if 'last' in basename:
+        return -1
+
+    components = basename.split('-')
+    component = components[0]
+    assert component.startswith('epoch')
+    best_epoch = component.split('=')[1]
+    return int(best_epoch)
+
+
+def remove_nans_and_infs(array: np.ndarray, set_value: float = 0.0) -> np.ndarray:
+    """ Simple function to remove nans and infs from a numpy array """
+    bad_indices = np.logical_or(np.isinf(array), np.isnan(array))
+    array[bad_indices] = set_value
+    return array
+
+
+def get_run_files_from_weights(weightfile: Union[str, os.PathLike]) -> dict:
+    """from model weights, gets the configuration for that model and its metrics file
+
+    Parameters
+    ----------
+    weightfile : Union[str, os.PathLike]
+        path to model weights, either .pt or .ckpt
+
+    Returns
+    -------
+    dict
+        config_file: path to config file
+        metrics_file: path to metrics file
+    """
+    loaded_config_file = os.path.join(os.path.dirname(weightfile), 'config.yaml')
+    if not os.path.isfile(loaded_config_file):
+        # weight file should be at most one-subdirectory-down from rundir
+        loaded_config_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 'config.yaml')
+        assert os.path.isfile(loaded_config_file), 'no associated config file for weights! {}'.format(weightfile)
+
+    metrics_file = os.path.join(os.path.dirname(weightfile), 'classification_metrics.h5')
+    if not os.path.isfile(metrics_file):
+        metrics_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 'classification_metrics.h5')
+        assert os.path.isfile(metrics_file), 'no associated metrics file for weights! {}'.format(weightfile)
+
+    return dict(config_file=loaded_config_file, metrics_file=metrics_file)

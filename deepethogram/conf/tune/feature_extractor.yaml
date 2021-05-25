@@ -1,0 +1,58 @@
+tune:
+  name: tune_feature_extractor
+  hparams:
+    # feature_extractor.dropout_p: # each hparam key should be an attribute in a valid configuration
+    #   min: 0.0 # min: minimum of range
+    #   max: 0.9 # max: maximum of range
+    #   space: uniform # space: how to sample
+    #   short: dropout # a shortened version to view in Ray's command line interface
+    #   current_best: 0.25 # current best estimate. a moving target. used for initializing search space with hyperopt
+    # train.regularization.alpha: 
+    #   min: 1e-7
+    #   max: 1e-1
+    #   space: log
+    #   short: reg_alpha
+    #   current_best: 1e-5
+    # train.regularization.beta: 
+    #   min: 1e-4
+    #   max: 1e-1
+    #   space: log
+    #   short: reg_beta
+    #   current_best: 5e-4
+    # train.loss_gamma:
+    #   # choices: [0, 0.5, 1, 2]
+    #   min: 0
+    #   max: 2
+    #   space: uniform
+    #   short: gamma
+    #   current_best: 0.5
+    train.loss_weight_exp:
+      min: 0.0
+      max: 1.0
+      space: uniform
+      short: loss_weight_exp
+      current_best: 0.25
+    train.oversampling_exp:
+      min: 0.0
+      max: 1.0
+      space: uniform
+      short: oversampling_exp
+      current_best: 0.0
+    # train.label_smoothing:
+    #   min: 0.0
+    #   max: 0.2
+    #   space: uniform
+    #   short: label_smoothing
+    #   current_best: 0.0
+    # train.lr:
+    #   min: 1e-5
+    #   max: 1e-3
+    #   space: log
+    #   short: lr
+    #   current_best: 1e-4
+    # feature_extractor.final_bn:
+    #   choices: [True, False]
+    #   space: choice
+    #   short: final_bn
+    #   current_best: False
+# use these to overwrite default configuration parameters only when running tune jobs

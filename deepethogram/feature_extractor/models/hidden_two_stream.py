@@ -15,7 +15,6 @@ flow_generators = utils.get_models_from_module(flow_models, get_function=False)
 
 log = logging.getLogger(__name__)
 
-
 class Viewer(nn.Module):
     """ PyTorch module for extracting the middle image of a concatenated stack.
 
@@ -74,7 +73,7 @@ class FlowOnlyClassifier(nn.Module):
         with torch.no_grad():
             flows = self.flow_generator(batch)
         # flows will return a tuple of flows at different resolutions. Even in eval mode. 0th flow should be
-        # at original image resolution
+        # at original image resolution (or 1/2)
         return self.flow_classifier(flows[0])
 
 
@@ -87,12 +86,9 @@ class HiddenTwoStream(nn.Module):
     advantages, as optic flow loaded from disk is both more discrete and has compression artifacts.
     """
 
-    def __init__(self, flow_generator, spatial_classifier, flow_classifier,
+    def __init__(self, flow_generator, spatial_classifier, flow_classifier, fusion,
                  classifier_name: str, num_images: int = 11,
-                 num_classes: int = 1000,
-                 label_location: str = 'middle',
-                 fusion_style: str = 'concatenate',
-                 flow_fusion_weight: float = 1.5):
+                 label_location: str = 'middle'):
         """ Hidden two-stream constructor.
 
         Args:
@@ -101,26 +97,13 @@ class HiddenTwoStream(nn.Module):
             flow_classifier (nn.Module): CNN that classifies optic flow inputs
             classifier_name (str): name of CNN (e.g. resnet18) used in both classifiers
             num_images (int): number of input images to the flow generator. Flow outputs will be num_images - 1
-            num_classes (int): number of classes
             label_location (str): either middle or causal. Middle: the label will be selected from the middle of a
                 stack of image frames. Causal: the label will come from the last image in the stack (no look-ahead)
-            fusion_style (str): [average, concatenate] Average: logits will be averaged together (with weight on the
-                flow stream, per
-            flow_fusion_weight (float): how much to up-weight flow fusion. Set to 1.5 for the flow fusion, according
-                to the hidden two-stream paper
+
         """
         super().__init__()
         assert (isinstance(flow_generator, nn.Module) and isinstance(spatial_classifier, nn.Module)
-                and isinstance(flow_classifier, nn.Module))
-
-        if fusion_style == 'average':
-            # just so we can pass them to the fusion module
-            num_spatial_features, num_flow_features = None, None
-        elif fusion_style == 'concatenate':
-            spatial_classifier, num_spatial_features = remove_cnn_classifier_layer(spatial_classifier)
-            flow_classifier, num_flow_features = remove_cnn_classifier_layer(flow_classifier)
-        else:
-            raise ValueError('unknown fusion style: {}'.format(fusion_style))
+                and isinstance(flow_classifier, nn.Module) and isinstance(fusion, nn.Module))
 
         self.spatial_classifier = spatial_classifier
         self.flow_generator = flow_generator
@@ -128,12 +111,11 @@ class HiddenTwoStream(nn.Module):
         if '3d' in classifier_name:
             self.viewer = nn.Identity()
         else:
-            # self.viewer = torch.jit.script(Viewer(num_images, label_location))
             self.viewer = Viewer(num_images, label_location)
-        self.fusion = Fusion(fusion_style, num_spatial_features, num_flow_features, num_classes,
-                             flow_fusion_weight=flow_fusion_weight)
+        self.fusion = fusion
 
         self.frozen_state = {}
+        self.freeze('flow_generator')
 
     def freeze(self, submodel_to_freeze: str):
         """ Freezes a component of the model. Useful for curriculum training
@@ -243,6 +225,7 @@ class HiddenTwoStream(nn.Module):
             flows = self.flow_generator(batch)
         RGB = self.viewer(batch)
         spatial_features = self.spatial_classifier(RGB)
+        # flows[0] because flow returns a pyramid of spatial resolutions, zero being the highest res
         flow_features = self.flow_classifier(flows[0])
         return self.fusion(spatial_features, flow_features)
 
@@ -291,10 +274,40 @@ def hidden_two_stream(classifier: str,
                               num_classes=num_classes, reload_imagenet=reload_imagenet,
                               pos=pos, neg=neg, **kwargs)
 
-    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, classifier,
-                            fusion_style=fusion_style,
-                            num_classes=num_classes)
+    spatial_classifier, flow_classifier, fusion = build_fusion_layer(spatial_classifier, flow_classifier,
+                                                                     fusion_style, num_classes)
+
+    model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, fusion, classifier)
     return model
+
+
+def build_fusion_layer(spatial_classifier, flow_classifier, fusion_style, num_classes, flow_fusion_weight: float = 1.5):
+    """
+
+    Args:
+        spatial_classifier:
+        flow_classifier:
+        num_classes (int): number of classes
+        fusion_style (str): [average, concatenate] Average: logits will be averaged together (with weight on the
+            flow stream, per
+        flow_fusion_weight (float): how much to up-weight flow fusion. Set to 1.5 for the flow fusion, according
+            to the hidden two-stream paper
+
+    Returns:
+
+    """
+    if fusion_style == 'average' or fusion_style == 'weighted_average':
+        # just so we can pass them to the fusion module
+        num_spatial_features, num_flow_features = None, None
+    elif fusion_style == 'concatenate':
+        spatial_classifier, num_spatial_features = remove_cnn_classifier_layer(spatial_classifier)
+        flow_classifier, num_flow_features = remove_cnn_classifier_layer(flow_classifier)
+    else:
+        raise ValueError('unknown fusion style: {}'.format(fusion_style))
+
+    fusion = Fusion(fusion_style, num_spatial_features, num_flow_features, num_classes,
+                    flow_fusion_weight=flow_fusion_weight)
+    return spatial_classifier, flow_classifier, fusion
 
 
 def deg_f(num_classes: int, dropout_p: float = 0.9, reload_imagenet: bool = True,

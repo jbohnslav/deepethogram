@@ -1,8 +1,0 @@
-run:
-  type: train
-  model: sequence
-defaults:
-  - config
-  - model/sequence
-  - model/feature_extractor
-  - train

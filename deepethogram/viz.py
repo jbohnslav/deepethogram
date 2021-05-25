@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import itertools
 import logging
 import os
@@ -8,19 +9,22 @@ import cv2
 import h5py
 import matplotlib
 import numpy as np
-import tifffile as TIFF
+# import tifffile as TIFF
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.projections import get_projection_class
 from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
 from sklearn.metrics import auc
+import torch
 
 from deepethogram.flow_generator.utils import flow_to_rgb_polar
-from deepethogram.metrics import load_threshold_data
-from deepethogram.utils import tensor_to_np
+# from deepethogram.metrics import load_threshold_data
+from deepethogram.utils import tensor_to_np, print_top_largest_variables
 
 log = logging.getLogger(__name__)
 # override warning level for matplotlib, which outputs a million debugging statements
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
 
 def imshow_with_colorbar(image: np.ndarray,
                          ax_handle,
@@ -29,7 +33,7 @@ def imshow_with_colorbar(image: np.ndarray,
                          cmap: str = None,
                          interpolation: str = None,
                          symmetric: bool = False,
-                         func: str='imshow',
+                         func: str = 'imshow',
                          **kwargs) -> matplotlib.colorbar.Colorbar:
     """ Show an image in a matplotlib figure with a colorbar *with the same height as the axis!!*
 
@@ -68,7 +72,10 @@ def imshow_with_colorbar(image: np.ndarray,
     .. [2]: https://matplotlib.org/3.3.0/api/_as_gen/matplotlib.pyplot.imshow.html
     """
     assert isinstance(ax_handle, matplotlib.axes.SubplotBase)
-
+    # if we get a vector, change into a row
+    if image.ndim == 1:
+        image = image[np.newaxis, :]
+    
     if symmetric:
         cmap = 'bwr'
     divider = make_axes_locatable(ax_handle)
@@ -145,9 +152,11 @@ def plot_flow(rgb, ax, show_scale=True, height=30, maxval: float = 1.0, interpol
         # flow_colorbar = colorize_flow(np.dstack((xv, yv)), maxval=1)
         aspect = ax.get_data_ratio()
         width = int(height * aspect)
+        # https://stackoverflow.com/questions/53204267
         inset = inset_locator.inset_axes(ax, width=str(width) + '%',
                                          height=str(height) + '%',
                                          loc=1)
+        # axes_class=get_projection_class('polar'))
         inset.imshow(flow_colorbar)
         inset.invert_yaxis()
         if inset_label:
@@ -173,14 +182,18 @@ def visualize_images_and_flows(downsampled_t0, flows_reshaped, sequence_length: 
 
     axes = fig.subplots(2, 1)
 
-    images = downsampled_t0[0].detach().cpu().numpy().astype(np.float32)
-    # N is actually N * T
-    N, C, H, W = images.shape
+    N, C, H, W = downsampled_t0[0].shape
     batch_size = N // sequence_length
     if batch_ind is None:
         batch_ind = np.random.choice(batch_size)
-    image_list = [images[i, ...].transpose(1, 2, 0) for i in range(batch_ind * sequence_length,
-                                                                   batch_ind * sequence_length + sequence_length)]
+
+    inds = range(batch_ind*sequence_length, batch_ind*sequence_length + sequence_length)
+    images = downsampled_t0[0][inds].detach().cpu().numpy().astype(np.float32)
+
+    # N is actually N * T
+    image_list = [i.transpose(1,2,0) for i in images]
+    # image_list = [images[i, ...].transpose(1, 2, 0) for i in range(batch_ind * sequence_length,
+    #                                                                batch_ind * sequence_length + sequence_length)]
     stack = stack_image_list(image_list)
     minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
     stack = (stack * 255).clip(min=0, max=255).astype(np.uint8)
@@ -192,10 +205,10 @@ def visualize_images_and_flows(downsampled_t0, flows_reshaped, sequence_length: 
     ax.axis('off')
 
     ax = axes[1]
-    flows = flows_reshaped[0].detach().cpu().numpy().astype(np.float32)
-
-    flow_list = [flows[i, ...].transpose(1, 2, 0).astype(np.float32) for i in range(batch_ind * sequence_length,
-                                                                 batch_ind * sequence_length + sequence_length)]
+    flows = flows_reshaped[0][inds].detach().cpu().numpy().astype(np.float32)
+    flow_list = [i.transpose(1,2,0) for i in flows]
+    # flow_list = [flows[i, ...].transpose(1, 2, 0).astype(np.float32) for i in range(batch_ind * sequence_length,
+    #                                                                                 batch_ind * sequence_length + sequence_length)]
     stack = stack_image_list(flow_list)
     minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
     stack = flow_to_rgb_polar(stack, maxval=max_flow)
@@ -224,21 +237,25 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
     if fig is None:
         fig = plt.figure(figsize=(16, 12))
 
+    # N is actually N * T
+    N, C, H, W = downsampled_t0[0].shape
+    batch_size = N // sequence_length
+    if batch_ind is None:
+        batch_ind = np.random.choice(batch_size)
+    if sequence_ind is None:
+        sequence_ind = np.random.choice(sequence_length)
+
+    # inds = range(batch_ind * sequence_length, batch_ind * sequence_length + sequence_length)
+
     N_resolutions = len(downsampled_t0)
 
     axes = fig.subplots(4, N_resolutions)
 
     images = downsampled_t0[0].detach().cpu().numpy().astype(np.float32)
-    # N is actually N * T
-    N, C, H, W = images.shape
-    batch_size = N // sequence_length
-    if batch_ind is None:
-        batch_ind = np.random.choice(batch_size)
 
-    if sequence_ind is None:
-        sequence_ind = np.random.choice(sequence_length)
     index = batch_ind * sequence_length + sequence_ind
-    t0 = [downsampled_t0[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in range(N_resolutions)]
+    t0 = [downsampled_t0[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in
+          range(N_resolutions)]
 
     for i, image in enumerate(t0):
         ax = axes[0, i]
@@ -250,7 +267,8 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
         ax.set_title('min: {:.4f} mean: {:.4f} max: {:.4f}'.format(minimum, mean, maximum),
                      fontsize=8)
 
-    t1 = [estimated_t0[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in range(N_resolutions)]
+    t1 = [estimated_t0[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in
+          range(N_resolutions)]
     for i, image in enumerate(t1):
         ax = axes[1, i]
         minimum, mean, maximum = image.min(), image.mean(), image.max()
@@ -261,7 +279,8 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
         if i == 0:
             ax.set_ylabel('T1', fontsize=18)
 
-    flows = [flows_reshaped[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in range(N_resolutions)]
+    flows = [flows_reshaped[i][index].detach().cpu().numpy().transpose(1, 2, 0).astype(np.float32) for i in
+             range(N_resolutions)]
     for i, image in enumerate(flows):
         ax = axes[2, i]
         minimum, mean, maximum = image.min(), image.mean(), image.max()
@@ -287,64 +306,21 @@ def visualize_multiresolution(downsampled_t0, estimated_t0, flows_reshaped, sequ
         plt.tight_layout()
 
 
-def visualize_hidden(images, flows, predictions, labels, class_names: list = None, batch_ind: int = None,
-                     max_flow: float = 5.0, height: float = 15.0, fig=None, normalizer=None):
-    """ Visualize inputs and outputs of a hidden two stream model """
-    # import pdb; pdb.set_trace()
-    plt.style.use('ggplot')
-    if fig is None:
-        fig = plt.figure(figsize=(16, 12))
-
-    axes = fig.subplots(2, 1)
-
-    # images = downsampled_t0[0].detach().cpu().numpy()
-    if normalizer is not None:
-        images = normalizer.denormalize(images)
-    images = images.detach().cpu().numpy()
-    # N is actually N * T
-    batch_size = images.shape[0]
-    if batch_ind is None:
-        batch_ind = np.random.choice(batch_size)
+def tensor_to_list(images: torch.Tensor, batch_ind: int, channels: int = 3) -> list:
     if images.ndim == 4:
         N, C, H, W = images.shape
-        sequence_length = C // 3
-        image_list = [images[batch_ind, i * 3:i * 3 + 3, ...].transpose(1, 2, 0) for i in range(sequence_length)]
+        sequence_length = C // channels
+        image_list = [images[batch_ind, i * channels:i * channels + channels, ...].transpose(1, 2, 0)
+                      for i in range(sequence_length)]
     elif images.ndim == 5:
         N, C, T, H, W = images.shape
         image_list = [images[batch_ind, :, i, ...].transpose(1, 2, 0) for i in range(T)]
+    else:
+        raise ValueError('weird shape of input: {}'.format(images.shape))
+    return image_list
 
-    stack = stack_image_list(image_list)
-    minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
-    stack = (stack * 255).clip(min=0, max=255).astype(np.uint8)
 
-    ax = axes[0]
-    ax.imshow(stack, interpolation='nearest')
-    ax.set_title('min: {:.4f} mean: {:.4f} max: {:.4f}'.format(minimum, mean, maximum), fontsize=8)
-    ax.grid(False)
-    ax.axis('off')
-
-    ax = axes[1]
-    flows = flows[0].detach().cpu().numpy()
-    if flows.ndim == 4:
-        N, C, H, W = flows.shape
-        sequence_length = C // 2
-        flow_list = [flows[batch_ind, i * 2:i * 2 + 2, ...].transpose(1, 2, 0) for i in range(sequence_length)]
-    elif flows.ndim == 5:
-        N, C, T, H, W = flows.shape
-        flow_list = [flows[batch_ind, :, i, ...].transpose(1, 2, 0) for i in range(T)]
-    stack = stack_image_list(flow_list)
-    minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
-    stack = flow_to_rgb_polar(stack, maxval=max_flow)
-    plot_flow(stack, ax, maxval=max_flow, inset_label=True, height=height)
-
-    #     inset.set_xticklabels([-max_flow, 0, max_flow])
-    #     inset.set_yticklabels([-max_flow, 0, max_flow])
-    ax.set_title('min: {:.4f} mean: {:.4f} max: {:.4f}'.format(minimum, mean, maximum), fontsize=8)
-    ax.grid(False)
-    ax.axis('off')
-
-    pred = predictions[batch_ind].detach().cpu().numpy()
-    label = labels[batch_ind].detach().cpu().numpy()
+def predictions_labels_string(pred, label, class_names=None):
     if class_names is None:
         class_names = [i for i in range(len(pred))]
     inds = np.argsort(pred)[::-1]
@@ -360,9 +336,60 @@ def visualize_hidden(images, flows, predictions, labels, class_names: list = Non
         if i >= len(inds):
             break
         ind = inds[i]
-        string += '{}: {:.4f} '.format(class_names[ind], pred[ind])
+        string += '{}: {:.3f} '.format(class_names[ind], pred[ind])
         if (i % 5) == 4:
             string += '\n'
+    return string
+
+
+def visualize_hidden(images, flows, predictions, labels, class_names: list = None, batch_ind: int = None,
+                     max_flow: float = 5.0, height: float = 15.0, fig=None, normalizer=None):
+    """ Visualize inputs and outputs of a hidden two stream model """
+    # import pdb; pdb.set_trace()
+    plt.style.use('ggplot')
+    if fig is None:
+        fig = plt.figure(figsize=(16, 12))
+
+    axes = fig.subplots(2, 1)
+
+    # images = downsampled_t0[0].detach().cpu().numpy()
+    # if normalizer is not None:
+    #     images = normalizer.denormalize(images)
+    batch_size = images.shape[0]
+    if batch_ind is None:
+        batch_ind = np.random.choice(batch_size)
+
+    images = images.detach().cpu().numpy()
+    image_list = tensor_to_list(images, batch_ind)
+    del images
+
+    stack = stack_image_list(image_list)
+    minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
+    stack = (stack * 255).clip(min=0, max=255).astype(np.uint8)
+
+    ax = axes[0]
+    ax.imshow(stack, interpolation='nearest')
+    ax.set_title('min: {:.4f} mean: {:.4f} max: {:.4f}'.format(minimum, mean, maximum), fontsize=8)
+    ax.grid(False)
+    ax.axis('off')
+
+    ax = axes[1]
+    flows = flows.detach().cpu().numpy()
+    flow_list = tensor_to_list(flows, batch_ind, 2)
+    stack = stack_image_list(flow_list)
+    minimum, mean, maximum = stack.min(), stack.mean(), stack.max()
+    stack = flow_to_rgb_polar(stack, maxval=max_flow)
+    plot_flow(stack, ax, maxval=max_flow, inset_label=True, height=height)
+
+    #     inset.set_xticklabels([-max_flow, 0, max_flow])
+    #     inset.set_yticklabels([-max_flow, 0, max_flow])
+    ax.set_title('min: {:.4f} mean: {:.4f} max: {:.4f}'.format(minimum, mean, maximum), fontsize=8)
+    ax.grid(False)
+    ax.axis('off')
+
+    pred = predictions[batch_ind].detach().cpu().numpy()
+    label = labels[batch_ind].detach().cpu().numpy()
+    string = predictions_labels_string(pred, label, class_names)
 
     fig.suptitle(string)
 
@@ -370,6 +397,9 @@ def visualize_hidden(images, flows, predictions, labels, class_names: list = Non
         warnings.simplefilter("ignore")
         plt.tight_layout()
     fig.subplots_adjust(top=0.9)
+
+    # print_top_largest_variables(locals())
+    del stack, pred, label
 
 
 def to_uint8(im: np.ndarray) -> np.ndarray:
@@ -417,51 +447,103 @@ def visualize_batch_unsupervised(downsampled_t0, estimated_t0, flows_reshaped, b
     plt.tight_layout()
 
 
+def visualize_batch_spatial(images, predictions, labels, fig=None, class_names=None, num_cols: int=4):
+    """ visualize spatial stream of hidden two stream model """
+
+    plt.style.use('ggplot')
+    if fig is None:
+        fig = plt.figure(figsize=(16, 12))
+
+    batch_size = images.shape[0]
+    num_rows = int(min(np.ceil(batch_size / num_cols), 6))
+
+    total_images = min(num_rows*num_cols, batch_size)
+
+    # only use the first total_images elements in the batch, to try to reduce RAM usage
+    images = images[:total_images].detach().cpu().numpy()
+    predictions = predictions[:total_images].detach().cpu().numpy()
+    labels = labels[:total_images].detach().cpu().numpy()
+
+    images = images.clip(min=0, max=1)
+
+
+
+    axes = fig.subplots(num_rows, num_cols)
+    cnt = 0
+    if num_rows == 1:
+        axes = axes[np.newaxis, ...]
+    for i in range(num_rows):
+        for j in range(num_cols):
+            ax = axes[i, j]
+            if cnt >= batch_size:
+                ax.remove()
+                cnt += 1
+                continue
+            pred = predictions[cnt]
+            label = labels[cnt]
+            string = predictions_labels_string(pred, label, class_names)
+            string = '{:03d}: '.format(cnt) + string
+
+            # spatial stream should almost always be one single image
+            image = tensor_to_list(images, cnt)[0]
+
+            ax.imshow(image)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+            ax.set_title(string, size=8)
+            cnt += 1
+    fig.suptitle('Spatial stream')
+    plt.tight_layout()
+    del images, predictions, labels
+
 def visualize_batch_sequence(sequence, outputs, labels, N_in_batch=None, fig=None):
     """ Visualize an input sequence, probabilities, and the true labels """
     if fig is None:
         fig = plt.figure(figsize=(16, 12))
 
-    sequence = tensor_to_np(sequence)
-    outputs = tensor_to_np(outputs)
-    labels = tensor_to_np(labels)
-
-    # import pdb; pdb.set_trace()
-
     if N_in_batch is None:
         N_in_batch = np.random.choice(outputs.shape[0])
+
+    sequence = tensor_to_np(sequence[N_in_batch])
+    outputs = tensor_to_np(outputs[N_in_batch])
+    labels = tensor_to_np(labels[N_in_batch])
+
+    # import pdb; pdb.set_trace()
 
     axes = fig.subplots(4, 1)
 
     ax = axes[0]
-    seq = sequence[N_in_batch]
+    # seq = sequence[N_in_batch]
     aspect_ratio = outputs
 
-    tmp = outputs[N_in_batch]
+    # tmp = outputs[N_in_batch]
     # seq = cv2.resize(sequence[N_in_batch], (tmp.shape[1]*10,tmp.shape[0]*10), interpolation=cv2.INTER_NEAREST)
     # seq = cv2.imresize(sequence[N_in_batch], )
-    imshow_with_colorbar(seq, ax, fig, interpolation='nearest',
-                         symmetric=False, func='pcolor')
+    imshow_with_colorbar(sequence, ax, fig, interpolation='nearest',
+                         symmetric=False, func='pcolor', cmap='viridis')
     ax.invert_yaxis()
     ax.set_ylabel('inputs')
 
     ax = axes[1]
-    imshow_with_colorbar(outputs[N_in_batch], ax, fig, interpolation='nearest', symmetric=False, cmap='Reds',
+    imshow_with_colorbar(outputs, ax, fig, interpolation='nearest', symmetric=False, cmap='Reds',
                          func='pcolor', clim=[0, 1])
     ax.invert_yaxis()
     ax.set_ylabel('P')
 
     ax = axes[2]
-    imshow_with_colorbar(labels[N_in_batch], ax, fig, interpolation='nearest', cmap='Reds', func='pcolor')
+    imshow_with_colorbar(labels, ax, fig, interpolation='nearest', cmap='Reds', func='pcolor')
     ax.invert_yaxis()
     ax.set_ylabel('Labels')
 
     ax = axes[3]
-    dumb_loss = np.abs(outputs[N_in_batch] - labels[N_in_batch])
+    dumb_loss = np.abs(outputs - labels)
     imshow_with_colorbar(dumb_loss, ax, fig, interpolation='nearest', cmap='Reds', func='pcolor', clim=[0, 1])
     ax.set_title('L1 between outputs and labels (not true loss)')
     ax.invert_yaxis()
     plt.tight_layout()
+    del sequence, outputs, labels
+
 
 def fig_to_img(fig_handle: matplotlib.figure.Figure) -> np.ndarray:
     """ Convenience function for returning the RGB values of a matplotlib figure """
@@ -472,22 +554,22 @@ def fig_to_img(fig_handle: matplotlib.figure.Figure) -> np.ndarray:
     return data
 
 
-def image_list_to_tiff_stack(images, tiff_fname):
-    """ Write a list of images to a tiff stack using tifffile """
-    # WRITE ALL TO TIFF!
-    height = images[0].shape[0]
-    width = images[0].shape[1]
-    channels = images[0].shape[2]
-    N = len(images)
-    fig_mat = np.empty([N, height, width, channels], dtype='uint8')
-    for i in range(N):
-        img = images[i]
-        if img.shape != fig_mat.shape[1:2]:
-            img = cv2.resize(img, (fig_mat.shape[2], fig_mat.shape[1]), interpolation=cv2.INTER_LINEAR)
-        img = np.uint8(img)
+# def image_list_to_tiff_stack(images, tiff_fname):
+#     """ Write a list of images to a tiff stack using tifffile """
+#     # WRITE ALL TO TIFF!
+#     height = images[0].shape[0]
+#     width = images[0].shape[1]
+#     channels = images[0].shape[2]
+#     N = len(images)
+#     fig_mat = np.empty([N, height, width, channels], dtype='uint8')
+#     for i in range(N):
+#         img = images[i]
+#         if img.shape != fig_mat.shape[1:2]:
+#             img = cv2.resize(img, (fig_mat.shape[2], fig_mat.shape[1]), interpolation=cv2.INTER_LINEAR)
+#         img = np.uint8(img)
 
-        fig_mat[i, :, :, :] = img
-    TIFF.imsave(tiff_fname, fig_mat, photometric='rgb', compress=0, metadata={'axes': 'TYXC'})
+#         fig_mat[i, :, :, :] = img
+#     TIFF.imsave(tiff_fname, fig_mat, photometric='rgb', compress=0, metadata={'axes': 'TYXC'})
 
 
 def plot_histogram(array, ax, bins='auto', width_factor=0.9, rotation=30):
@@ -528,7 +610,7 @@ def errorfill(x, y, yerr, color=None, alpha_fill=0.3, ax=None, label=None):
     ax.fill_between(x, ymax, ymin, color=color, alpha=alpha_fill)
 
 
-def plot_curve(x, ys, ax, xlabel: str=None, class_names=None, colors=None):
+def plot_curve(x, ys, ax, xlabel: str = None, class_names=None, colors=None):
     """ Plots a set of curves. Will add a scatter to the maximum of each curve with text indicating location """
     if colors is None:
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -560,58 +642,6 @@ def plot_curve(x, ys, ax, xlabel: str=None, class_names=None, colors=None):
     if xlabel is not None:
         ax.set_xlabel(xlabel)
     ax.legend()
-
-def make_thresholds_figure(metrics_by_threshold, class_names=None, fig=None):
-
-    plt.style.use('ggplot')
-
-    if fig is None:
-        fig = plt.figure(figsize=(14, 14))
-    #     axes = axes.flatten()
-
-    ax = fig.add_subplot(321)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['accuracy']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('Accuracy by class, independent')
-
-    ax = fig.add_subplot(322)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['f1']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('f1 by class, independent')
-
-    ax = fig.add_subplot(323)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['precision']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('precision by class, independent')
-
-    ax = fig.add_subplot(324)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['recall']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('recall by class, independent')
-
-    ax = fig.add_subplot(325)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['mean_accuracy']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('mean accuracy by class, independent')
-
-    ax = fig.add_subplot(326)
-    x = metrics_by_threshold['thresholds']
-    y = metrics_by_threshold['informedness']
-    plot_curve(x, y, ax, class_names)
-    # ax.set_ylabel('Train')
-    ax.set_title('informedness by class, independent')
-
-    plt.tight_layout()
 
 
 def thresholds_by_epoch_figure(epoch_summaries, class_names=None, fig=None):
@@ -666,7 +696,7 @@ def thresholds_by_epoch_figure(epoch_summaries, class_names=None, fig=None):
 def plot_confusion_matrix(cm, classes, ax, fig,
                           normalize=False,
                           title='Confusion matrix',
-                          cmap='Blues', colorbar=True):
+                          cmap='Blues', colorbar=True, fontsize=None):
     """
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
@@ -680,7 +710,8 @@ def plot_confusion_matrix(cm, classes, ax, fig,
 
     # print(cm)
     if colorbar:
-        imshow_with_colorbar(cm, ax, fig, interpolation='nearest', cmap=cmap)
+        cbar = imshow_with_colorbar(cm, ax, fig, interpolation='nearest', cmap=cmap)
+
     else:
         ax.imshow(cm, cmap=cmap)
     # ax.set_title(title)
@@ -696,9 +727,19 @@ def plot_confusion_matrix(cm, classes, ax, fig,
     thresh = cm.max() / 2.
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
         j, i = remove_nan_or_inf(j), remove_nan_or_inf(i)
-        ax.text(j, i, format(cm[i, j], fmt),
+        element = cm[i,j]
+        if element < 1e-2:
+            element = 0
+            fmt = 'd'
+        else:
+            fmt = '.2f' if normalize else 'd'
+        text = format(element, fmt)
+        if text.startswith('0.'):
+            text = text[1:]
+        ax.text(j, i, text,
                 horizontalalignment="center",
-                color="white" if cm[i, j] > thresh else "black")
+                color="white" if cm[i, j] > thresh else "black",
+                fontsize=fontsize)
     ax.set_xlim([-0.5, len(classes) - 0.5])
     ax.set_ylim([len(classes) - 0.5, -0.5])
     plt.tight_layout()
@@ -713,87 +754,43 @@ def remove_nan_or_inf(value: Union[int, float]):
     return value
 
 
-def plot_metric(f, ax, name, legend=False):
-    """ plot metric from a Metrics hdf5 file. See deepethogram.metrics """
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    train = f['train/' + name][:]
-    val = f['val/' + name][:]
-    if name == 'time':
-        train *= 1000
-        val *= 1000
-        label = 'time per image (ms)'
-    else:
-        label = name
-    xs = np.arange(len(train))
-    ax.plot(xs, train, label='train')
-    if len(xs) > 0:
-        x, y = xs[len(xs) - 1], train[len(xs) - 1]
-        x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
-        string = '%.4f' % y
-        ax.text(x, y, string, color=colors[0])
-    xs = np.arange(len(val))
-    ax.plot(xs, val, label='val')
-    if len(xs) > 0:
-        y = val[len(xs) - 1]
-        string = '%.4f' % y
-        x = xs[-1]
-        x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
-        ax.text(x, y, string, color=colors[1])
-    if name == 'time':
-        test = f['test/' + name][:]
-        test *= 1000
-        xs = np.arange(len(test))
-        ax.plot(xs, test, label='test')
-        if len(xs) > 0:
-            y = test[len(xs) - 1]
-            string = '%.4f' % y
-            x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
-            ax.text(x, y, string, color=colors[2])
-    ax.set_xlim([-0.5, len(xs) - 0.5])
-    ax.set_ylabel(label)
-    ax.set_xlabel('Epochs')
-    ax.set_title(label)
-    if legend:
-        ax.legend()
-
-
-def plot_metrics(logger_file, fig):
-    """ plot all metrics in a Metrics hdf5 file. see deepethogram.metrics """
-    splits = ['train', 'val']
-    num_cols = 2
-
-    with h5py.File(logger_file, 'r') as f:
-        for split in splits:
-            keys = list(f[split].keys())
-            # all metrics files will have loss and time
-            num_custom_vars = len(keys) - 2
-            if 'confusion' in keys:
-                num_custom_vars -= 1
-    num_rows = int(np.ceil(num_custom_vars / num_cols)) + 1
-
-    forbidden = ['loss', 'time', 'confusion']
-
-    shape = (num_rows, num_cols)
-    with h5py.File(logger_file, 'r') as f:
-        ax = fig.add_subplot(num_rows, num_cols, 1)
-        plot_metric(f, ax, 'loss', legend=True)
-        ax = fig.add_subplot(num_rows, num_cols, 2)
-        plot_metric(f, ax, 'time')
-        cnt = 3
-        for key in keys:
-            if key in forbidden:
-                continue
-            ax = fig.add_subplot(num_rows, num_cols, cnt)
-            cnt += 1
-            plot_metric(f, ax, key)
-        keys = f.attrs.keys()
-        args = {}
-        for key in keys:
-            args[key] = f.attrs[key]
-    # title = 'Project {}: model:{} \nNotes: {}'.format(args['name'], args['model'], args['notes'])
-    # fig.suptitle(title, size=18)
-    plt.tight_layout()
-    fig.subplots_adjust(top=0.9)
+# def plot_metrics(logger_file, fig):
+#     """ plot all metrics in a Metrics hdf5 file. see deepethogram.metrics """
+#     splits = ['train', 'val']
+#     num_cols = 2
+#
+#     with h5py.File(logger_file, 'r') as f:
+#         for split in splits:
+#             keys = list(f[split].keys())
+#             # all metrics files will have loss and time
+#             num_custom_vars = len(keys) - 2
+#             if 'confusion' in keys:
+#                 num_custom_vars -= 1
+#     num_rows = int(np.ceil(num_custom_vars / num_cols)) + 1
+#
+#     forbidden = ['loss', 'time', 'confusion']
+#
+#     shape = (num_rows, num_cols)
+#     with h5py.File(logger_file, 'r') as f:
+#         ax = fig.add_subplot(num_rows, num_cols, 1)
+#         plot_metric(f, ax, 'loss', legend=True)
+#         ax = fig.add_subplot(num_rows, num_cols, 2)
+#         plot_metric(f, ax, 'time')
+#         cnt = 3
+#         for key in keys:
+#             if key in forbidden:
+#                 continue
+#             ax = fig.add_subplot(num_rows, num_cols, cnt)
+#             cnt += 1
+#             plot_metric(f, ax, key)
+#         keys = f.attrs.keys()
+#         args = {}
+#         for key in keys:
+#             args[key] = f.attrs[key]
+#     # title = 'Project {}: model:{} \nNotes: {}'.format(args['name'], args['model'], args['notes'])
+#     # fig.suptitle(title, size=18)
+#     plt.tight_layout()
+#     fig.subplots_adjust(top=0.9)
 
 
 def plot_confusion_from_logger(logger_file, fig, class_names=None, epoch=None):
@@ -833,250 +830,400 @@ def plot_confusion_from_logger(logger_file, fig, class_names=None, epoch=None):
     plt.tight_layout()
 
 
-def make_roc_figure(train_metrics, val_metrics, fig=None):
-    """ Plots ROC curves """
-    plt.style.use('ggplot')
+def make_precision_recall_figure(logger_file, fig=None, splits=['train', 'val']):
+    """ Plots precision vs recall """
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     if fig is None:
-        fig = plt.figure(figsize=(14, 14))
+        fig = plt.figure(figsize=(14, 7))
 
-    ax = fig.add_subplot(1, 2, 1)
-    if train_metrics is not None:
-        tpr, fpr = train_metrics['tpr'], train_metrics['fpr']
-        K = tpr.shape[1]
-        for i in range(K):
-            color = colors[i] if i < len(colors) else colors[-1]
-            x = fpr[:, i]
-            y = tpr[:, i]
-            auroc = auc(x, y)
-            string = '{}: {:4f}'.format(i, auroc)
-            ax.plot(fpr[:, i], tpr[:, i], color=color, label=string)
-        ax.legend()
-        ax.set_xlabel('FPR')
-        ax.set_ylabel('TPR')
-        ax.set_title('Train')
+    for i, split in enumerate(splits):
+        ap_by_class = load_logger_data(logger_file, 'mAP_by_class', split)
+        precision = load_logger_data(logger_file, 'precision', split, is_threshold=True)
+        recall = load_logger_data(logger_file, 'recall', split, is_threshold=True)
 
-    ax = fig.add_subplot(1, 2, 2)
-    if val_metrics is not None:
-        tpr, fpr = val_metrics['tpr'], val_metrics['fpr']
-        K = tpr.shape[1]
-        for i in range(K):
-            color = colors[i] if i < len(colors) else colors[-1]
-            x = fpr[:, i]
-            y = tpr[:, i]
-            auroc = auc(x, y)
-            string = '{}: {:.4f}'.format(i, auroc)
-            ax.plot(fpr[:, i], tpr[:, i], color=color, label=string)
+        ax = fig.add_subplot(1, len(splits), i + 1)
+        # precision, recall = train_metrics['precision'], train_metrics['recall']
+
+        K = precision.shape[1]
+        for j in range(K):
+            color = colors[j % len(colors)]
+            x = recall[:, j]
+            y = precision[:, j]
+            # there's a bug in how this is computed
+            au_prc = ap_by_class[j]
+            string = '{}: {:.4f}'.format(j, au_prc)
+            ax.plot(x, y, color=color, label=string)
+            ax.set_aspect('equal', 'box')
         ax.legend()
-        ax.set_xlabel('FPR')
-        ax.set_ylabel('TPR')
-        ax.set_title('Val')
+        ax.set_xlabel('Recall')
+        ax.set_ylabel('Precision')
+        ax.set_title(split)
+
+    fig.suptitle('Precision vs recall. Legend: Average Precision\nNote: curves are approximated with only ' +
+                 '101 thresholds. Legend is exact')
     plt.tight_layout()
+    return fig
 
 
-def visualize_binary_confusion(cms, cms_valid_bg, fig=None):
+def add_text_to_line(xs, ys, ax, color):
+    if len(xs) == 1 or len(ys) == 1:
+        return
+    x, y = xs[-1], ys[-1]
+    if np.isinf(x) or np.isnan(x) or np.isinf(y) or np.isnan(y):
+        return
+    # x, y = remove_nan_or_inf(x), remove_nan_or_inf(y)
+    ax.text(x, y, '{:.4f}'.format(y), color=color)
+
+
+def plot_metric(data: Union[dict, OrderedDict], name, ax, legend: bool = False, plot_args: dict = None,
+                color_inds: list = None):
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    # data = {'train': train, 'val': val}
+    for i, (split, array) in enumerate(data.items()):
+        xs = np.arange(len(array))
+        # use modulos to make the colors cycle if there are more items than there are colors
+        if color_inds is not None:
+            color_ind = color_inds[i] % len(colors)
+        else:
+            color_ind = i % len(colors)
+        color = colors[color_ind]
+        if plot_args is not None and split in plot_args.keys():
+            ax.plot(xs, array, label=split, **plot_args[split], color=color)
+        else:
+            ax.plot(xs, array, label=split, color=color)
+        add_text_to_line(xs, array, ax, color)
+
+    ax.set_xlim([-0.5, len(xs) - 0.5])
+    ax.set_ylabel(name)
+    ax.set_xlabel('Epochs')
+    ax.set_title(name)
+    if legend:
+        ax.legend()
+
+
+def make_learning_curves_figure_multilabel_classification(logger_file, fig=None):
+    def get_data_from_file(f, name):
+        data = OrderedDict(train=f[f'train/{name}_overall'][:],
+                           train_class_mean=f[f'train/{name}_class_mean'][:],
+                           val=f[f'val/{name}_overall'][:],
+                           val_class_mean=f[f'val/{name}_class_mean'][:])
+        return data
+
+    with h5py.File(logger_file, 'r') as f:
+        plt.style.use('seaborn')
+        if fig is None:
+            fig = plt.figure(figsize=(12, 12))
+
+        # loss and learning rate
+        ax = fig.add_subplot(4, 2, 1)
+        data = OrderedDict(train=f['train/loss'][:],
+                           val=f['val/loss'][:])
+        # import pdb; pdb.set_trace()
+        plot_metric(data, 'loss', ax)
+        ax2 = ax.twinx()
+        ax2.plot(f['train/lr'][:], 'k', label='LR', alpha=0.5)
+        ax2.set_ylabel('learning rate')
+        ax2.grid(False)
+
+        ax = fig.add_subplot(4, 2, 2)
+        data = OrderedDict(train=f['train/data_loss'][:],
+                           val=f['val/data_loss'][:])
+        # import pdb; pdb.set_trace()
+        plot_metric(data, 'data_loss', ax)
+        
+        ax = fig.add_subplot(4, 2, 3)
+        data = OrderedDict(train=f['train/reg_loss'][:],
+                           val=f['val/reg_loss'][:])
+        # import pdb; pdb.set_trace()
+        plot_metric(data, 'reg_loss', ax)
+
+        # FPS
+        ax = fig.add_subplot(4, 2, 4)
+        try:
+            data = OrderedDict(train=f['train/fps'][:],
+                               val=f['val/fps'][:],
+                               speedtest=f['speedtest/fps'][:])
+        except Exception as e:
+            # likely don't have speedtest, not too important
+            data = OrderedDict(train=f['train/fps'][:],
+                               val=f['val/fps'][:])
+
+        plot_metric(data, 'FPS', ax, legend=True)
+        ax.semilogy()
+
+        # accuracy
+        ax = fig.add_subplot(4, 2, 5)
+        data = OrderedDict(train=f['train/accuracy_overall'][:],
+                           val=f['val/accuracy_overall'][:])
+
+        plot_metric(data, 'accuracy', ax)
+
+        # F1 score!
+        ax = fig.add_subplot(4, 2, 6)
+        data = OrderedDict(train=f['train/f1_overall'][:],
+                           train_class_mean=f['train/f1_class_mean'][:],
+                           train_class_mean_nobg=f['train/f1_class_mean_nobg'][:],
+                           val=f['val/f1_overall'][:],
+                           val_class_mean=f['val/f1_class_mean'][:], 
+                           val_class_mean_nobg=f['val/f1_class_mean_nobg'][:])
+        # we'll reuse these for the following figures
+        plot_args = {'train_class_mean': {'linestyle': '--'},
+                     'train_class_mean_nobg': {'linestyle': 'dotted'},
+                     'val_class_mean': {'linestyle': '--'},
+                     'val_class_mean_nobg': {'linestyle': 'dotted'},}
+        color_inds = [0, 0, 0, 1, 1, 1]
+        # data = get_data_from_file(f, 'f1')
+        plot_metric(data, 'F1', ax, True, plot_args, color_inds)
+
+        # AUROC
+        plot_args = {'train_class_mean': {'linestyle': '--'},
+                     'val_class_mean': {'linestyle': '--'}}
+        color_inds = [0, 0, 1, 1]
+        ax = fig.add_subplot(4, 2, 7)
+        data = get_data_from_file(f, 'auroc')
+        plot_metric(data, 'AUROC', ax, False, plot_args, color_inds)
+
+        # Average precision
+        ax = fig.add_subplot(4, 2, 8)
+        data = get_data_from_file(f, 'mAP')
+        plot_metric(data, 'Average Precision', ax, False, plot_args, color_inds)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        plt.tight_layout()
+    return fig
+
+
+def plot_multilabel_by_class(logger_file):
+    def load_data(f, name):
+        data = {'train': f[f'train/{name}_by_class'][:],
+                'val': f[f'val/{name}_by_class'][:]}
+        return data
+
+    with h5py.File(logger_file, 'r') as f:
+
+        def plot_row(row, name, legend: bool = False, title: bool = False):
+            data = load_data(f, name)
+
+            for i, split in enumerate(['train', 'val']):
+                array = data[split]
+                ax = row[i]
+                # loop over classes
+                class_data = OrderedDict()
+                for j in range(array.shape[1]):
+                    class_data[j] = array[:, j]
+                plot_metric(class_data, name, ax, legend and i == 0)
+                ax.set_xlabel('')
+                if title:
+                    ax.set_title(split)
+                else:
+                    ax.set_title('')
+
+        fig, axes = plt.subplots(4, 2, figsize=(8, 12))
+
+        row = axes[0]
+        plot_row(row, 'accuracy', True, True)
+
+        row = axes[1]
+        plot_row(row, 'f1')
+
+        row = axes[2]
+        plot_row(row, 'auroc')
+
+        row = axes[3]
+        plot_row(row, 'mAP')
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            plt.tight_layout()
+    return fig
+
+
+def load_logger_data(logger_file, name, split, is_threshold: bool = False, epoch: int = -1):
+    if is_threshold:
+        key = f'{split}/metrics_by_threshold/{name}'
+    else:
+        key = f'{split}/{name}'
+    with h5py.File(logger_file, 'r') as f:
+        data = f[key][epoch, ...]
+
+    return data
+
+
+def make_thresholds_figure(logger_file, split, fig=None, class_names=None):
+    plt.style.use('seaborn')
+
+    if fig is None:
+        fig = plt.figure(figsize=(12, 12))
+    #     axes = axes.flatten()
+
+    x = load_logger_data(logger_file, 'thresholds', split, True)
+
+    for i, metric in enumerate(['accuracy', 'f1', 'precision', 'recall', 'informedness']):
+        ax = fig.add_subplot(3, 2, i + 1)
+        y = load_logger_data(logger_file, metric, split, True)
+        plot_curve(x, y, ax, class_names)
+        ax.set_title(f'{metric} by class')
+
+    plt.tight_layout()
+    return fig
+
+
+def make_roc_figure(logger_file, fig=None, splits=['train', 'val']):
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    if fig is None:
+        fig = plt.figure(figsize=(14, 7))
+
+    for i, split in enumerate(splits):
+
+        auroc_by_class = load_logger_data(logger_file, 'auroc_by_class', split)
+        tpr = load_logger_data(logger_file, 'tpr', split, is_threshold=True)
+        fpr = load_logger_data(logger_file, 'fpr', split, is_threshold=True)
+
+        ax = fig.add_subplot(1, len(splits), i + 1)
+
+        K = tpr.shape[1]
+        for j in range(K):
+            color = colors[j] if j < len(colors) else colors[-1]
+            auroc = auroc_by_class[j]
+            string = '{}: {:4f}'.format(j, auroc)
+            ax.plot(fpr[:, j], tpr[:, j], color=color, label=string)
+        ax.legend()
+        ax.set_xlabel('FPR')
+        ax.set_ylabel('TPR')
+        ax.set_title(split)
+    fig.suptitle('ROC Curves. Curves are approximate because only 101 thresholds were used. AUC values are precise')
+    plt.tight_layout()
+    return fig
+
+
+def visualize_binary_confusion(logger_file, fig=None, splits=['train', 'val']):
     """ Visualizes binary confusion matrices """
     if fig is None:
         fig = plt.figure(figsize=(14, 14))
+
+    cms = load_logger_data(logger_file, 'binary_confusion', 'train')
     # if there's more than 3 dimensions, it could be [epochs, classes, 2, 2]
     # take the last one
     if cms.ndim > 3:
         cms = cms[-1, ...]
-    if cms_valid_bg.ndim > 3:
-        cms_valid_bg = cms_valid_bg[-1, ...]
     K = cms.shape[0]
 
-    num_rows = 4
+    num_rows = len(splits)*2
     num_cols = K
     ind = 1
+
     # print(cms.shape)
-    for j in range(num_cols):
-        ax = fig.add_subplot(num_rows, num_cols, ind)
-        cm = cms[j, ...]
-        # print(cm.shape)
-        plot_confusion_matrix(cms[j, ...], range(cm.shape[0]),
-                              ax, fig, colorbar=False)
-        if j == 0:
-            ax.set_ylabel('Simple threshold\nTrue')
-            ax.set_xlabel('')
-        else:
-            ax.set_ylabel('')
-            ax.set_xlabel('')
-        ind += 1
 
-    for j in range(num_cols):
-        ax = fig.add_subplot(num_rows, num_cols, ind)
-        cm = cms[j, ...]
-        plot_confusion_matrix(cms[j, ...], range(cm.shape[0]),
-                              ax, fig, normalize=True, colorbar=False)
-        if j == 0:
-            ax.set_ylabel('Normalized\nTrue')
-            ax.set_xlabel('')
-        else:
-            ax.set_ylabel('')
-            ax.set_xlabel('')
-        ind += 1
+    def plot_cms_in_row(cms, ylabel, normalize: bool = False):
+        nonlocal ind
+        for j in range(num_cols):
+            ax = fig.add_subplot(num_rows, num_cols, ind)
+            cm = cms[j, ...]
+            # print(cm.shape)
+            plot_confusion_matrix(cms[j, ...], range(cm.shape[0]),
+                                  ax, fig, colorbar=False, normalize=normalize)
+            if j == 0:
+                ax.set_ylabel(ylabel)
+                ax.set_xlabel('')
+            else:
+                ax.set_ylabel('')
+                ax.set_xlabel('')
+            ind += 1
 
-    for j in range(num_cols):
-        ax = fig.add_subplot(num_rows, num_cols, ind)
-        cm = cms[j, ...]
-        plot_confusion_matrix(cms_valid_bg[j, ...], range(cm.shape[0]),
-                              ax, fig, normalize=False, colorbar=False)
-        if j == 0:
-            ax.set_ylabel('Valid background class\nTrue')
-            ax.set_xlabel('')
-        else:
-            ax.set_ylabel('')
-            ax.set_xlabel('')
-        ind += 1
-    for j in range(num_cols):
-        ax = fig.add_subplot(num_rows, num_cols, ind)
-        cm = cms[j, ...]
-        plot_confusion_matrix(cms_valid_bg[j, ...], range(cm.shape[0]),
-                              ax, fig, normalize=True, colorbar=False)
-        ind += 1
-        if j == 0:
-            ax.set_ylabel('Valid BG, normalized\nTrue')
-            ax.set_xlabel('Predicted')
-        else:
-            ax.set_ylabel('')
-            ax.set_xlabel('')
+    for split in splits:
+        cms = load_logger_data(logger_file, 'binary_confusion', split)
+        plot_cms_in_row(cms, split)
+        plot_cms_in_row(cms, f'{split}\nNormalized', normalize=True)
 
     plt.tight_layout()
+    return fig
 
 
-def make_precision_recall_figure(train_metrics, val_metrics, fig=None):
-    """ Plots precision vs recall """
-    plt.style.use('ggplot')
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    if fig is None:
-        fig = plt.figure(figsize=(14, 14))
-
-    ax = fig.add_subplot(1, 2, 1)
-    precision, recall = train_metrics['precision'], train_metrics['recall']
-    K = precision.shape[1]
-    for i in range(K):
-        color = colors[i] if i < len(colors) else colors[-1]
-        x = recall[:, i]
-        y = precision[:, i]
-        # there's a bug in how this is computed
-        x = x[x != 0]
-        y = y[y != 0]
-        try:
-            au_prc = auc(x, y)
-        except ValueError as e:
-            # not enough points
-            au_prc = np.nan
-        string = '{}: {:.4f}'.format(i, au_prc)
-        ax.plot(x, y, color=color, label=string)
-        ax.set_aspect('equal', 'box')
-    ax.legend()
-    ax.set_xlabel('Recall')
-    ax.set_ylabel('Precision')
-    ax.set_title('Train')
-
-    ax = fig.add_subplot(1, 2, 2)
-    precision, recall = val_metrics['precision'], val_metrics['recall']
-    K = precision.shape[1]
-    for i in range(K):
-        color = colors[i] if i < len(colors) else colors[-1]
-        x = recall[:, i]
-        y = precision[:, i]
-        x = x[x != 0]
-        y = y[y != 0]
-        try:
-            au_prc = auc(x, y)
-        except ValueError as e:
-            # not enough points
-            au_prc = np.nan
-        string = '{}: {:.4f}'.format(i, au_prc)
-        ax.plot(x, y, color=color, label=string)
-        ax.set_aspect('equal', 'box')
-    ax.legend()
-    ax.set_xlabel('Recall')
-    ax.set_ylabel('Precision')
-    ax.set_title('Val')
-    # plt.tight_layout()
-    fig.suptitle('Precision vs recall. Legend: Average Precision')
-
-
-def visualize_logger(logger_file, examples):
+def visualize_logger_multilabel_classification(logger_file):
     """ makes a bunch of figures from a Metrics hdf5 file """
-    ims = []
-    plt.style.use('ggplot')
-    fig = plt.figure(figsize=(14, 14))
+    plt.style.use('seaborn')
+    fig = make_learning_curves_figure_multilabel_classification(logger_file)
+    save_figure(fig, 'learning_curves', False, 0)
 
-    plot_metrics(logger_file, fig)
-    ims.append(fig_to_img(fig))
-    plt.close(fig)
+    fig = plot_multilabel_by_class(logger_file)
+    save_figure(fig, 'learning_curves_by_class', False, 1)
 
+    fig = make_thresholds_figure(logger_file, 'train')
+    save_figure(fig, 'thresholds_this_epoch_train', False, 2)
+
+    fig = make_thresholds_figure(logger_file, 'val')
+    save_figure(fig, 'thresholds_this_epoch_val', False, 3)
+
+    fig = visualize_binary_confusion(logger_file)
+    save_figure(fig, 'binary_confusion', False, 4)
+
+    fig = make_roc_figure(logger_file)
+    save_figure(fig, 'ROC', False, 5)
+
+    fig = make_precision_recall_figure(logger_file)
+    save_figure(fig, 'precision_recall', False, 6)
+
+    try:
+        splits = ['train', 'val', 'test']
+        fig = make_thresholds_figure(logger_file, 'test')
+        save_figure(fig, 'thresholds_this_epoch_test', False, 7)
+
+        fig = visualize_binary_confusion(logger_file, splits=splits)
+        save_figure(fig, 'binary_confusion_with_test', False, 8)
+
+        fig = make_roc_figure(logger_file, splits=splits)
+        save_figure(fig, 'ROC_with_test', False, 9)
+
+        fig = make_precision_recall_figure(logger_file, splits=['train', 'val', 'test'])
+        save_figure(fig, 'precision_recall_withtest', False, 10)
+
+    except Exception as e:
+        # no test set yet
+        log.debug('error in test set viz: {}'.format(e))
+        # pass
+    plt.close('all')
+
+
+def make_learning_curves_figure_opticalflow(logger_file, fig=None):
+    if fig is None:
+        fig = plt.figure(figsize=(12, 12))
+
+    def get_data(h5py_obj, name):
+        data = OrderedDict(train=h5py_obj[f'train/{name}'][:],
+                           val=h5py_obj[f'val/{name}'][:])
+        return data
+
+    ax = fig.add_subplot(4, 2, 1)
     with h5py.File(logger_file, 'r') as f:
-        keys = list(f.keys())
-        if 'thresholds' in keys:
-            metrics_by_threshold, epoch_summaries = load_threshold_data(logger_file)
+        data = get_data(f, 'loss')
+        plot_metric(data, 'loss', ax)
 
-            fig = plt.figure(figsize=(14, 14))
-            thresholds_by_epoch_figure(epoch_summaries, fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+        ax2 = ax.twinx()
 
-            fig = plt.figure(figsize=(14, 14))
-            make_thresholds_figure(metrics_by_threshold['train'], fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
-            fig = plt.figure(figsize=(14, 14))
-            make_thresholds_figure(metrics_by_threshold['val'], fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+        ax2.plot(f['train/lr'][:], 'k', label='LR', alpha=0.5)
+        ax2.set_ylabel('learning rate')
+        ax2.grid(False)
 
-            fig = plt.figure(figsize=(14, 14))
-            make_roc_figure(metrics_by_threshold['train'], metrics_by_threshold['val'], fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+        keys = list(f['train'].keys())
 
-            fig = plt.figure(figsize=(14, 14))
-            make_precision_recall_figure(metrics_by_threshold['train'], metrics_by_threshold['val'], fig=fig)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+        plot_ind = 2
+        for metric in ['fps','reg_loss', 'SSIM', 'L1', 'smoothness', 'sparsity']:
+            if metric in keys:
+                ax = fig.add_subplot(4, 2, plot_ind)
+                data = get_data(f, metric)
+                plot_metric(data, metric, ax, legend=metric == 'fps')
 
-            fig = plt.figure(figsize=(14, 14))
-            # import pdb
-            # pdb.set_trace()
-            visualize_binary_confusion(epoch_summaries['train']['binary_confusion'],
-                                       epoch_summaries['train']['binary_confusion_valid'], fig=fig)
-            fig.suptitle('Train')
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+                plot_ind += 1
 
-            fig = plt.figure(figsize=(14, 14))
-            visualize_binary_confusion(epoch_summaries['val']['binary_confusion'],
-                                       epoch_summaries['val']['binary_confusion_valid'], fig=fig)
-            fig.suptitle('Val')
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
+    plt.tight_layout()
+    return fig
 
-    splits = ['train', 'val']
-    with h5py.File(logger_file, 'r') as f:
-        for split in splits:
-            keys = list(f[split].keys())
 
-        if 'confusion' in keys:
-            # confusion_fig = plt.figure(figsize=(16,16))
-            fig = plt.figure(figsize=(14, 14))
-            plot_confusion_from_logger(logger_file, fig, epoch=None)
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
-
-            fig = plt.figure(figsize=(14, 14))
-            plot_confusion_from_logger(logger_file, fig, epoch='last')
-            ims.append(fig_to_img(fig))
-            plt.close(fig)
-    if examples is not None and len(examples) > 0:
-        ims.extend(examples)
-
-    fname = os.path.basename(logger_file)[:-3]
-    tiff_fname = os.path.join(os.path.dirname(logger_file), fname + '.tiff')
-    image_list_to_tiff_stack(ims, tiff_fname)
+def visualize_logger_optical_flow(logger_file):
+    """ makes a bunch of figures from a Metrics hdf5 file """
+    plt.style.use('seaborn')
+    fig = make_learning_curves_figure_opticalflow(logger_file)
+    save_figure(fig, 'learning_curves', False, 0)
 
 
 hues = [212, 4, 121, 36, 55, 276, 237, 299, 186]
@@ -1090,6 +1237,7 @@ gray_value = 102
 
 class Mapper:
     """ Applies a custom colormap to a K x T matrix. Used in the GUI to visualize probabilities and labels """
+
     def __init__(self, colormap='deepethogram'):
         if colormap == 'deepethogram':
             self.init_deepethogram()
@@ -1197,8 +1345,9 @@ def plot_ethogram(ethogram: np.ndarray, mapper, start_index: Union[int, float],
     xticks = ax.get_xticks()
     new_ticks = [i + start_index for i in xticks]
     ax.set_xticklabels([str(int(i)) for i in new_ticks])
-    ax.set_yticks(np.arange(0, len(classes)))
-    ax.set_yticklabels(classes, rotation=rotation)
+    ax.set_yticks(np.arange(0, ethogram.shape[1]))
+    if classes is not None:
+        ax.set_yticklabels(classes, rotation=rotation, fontdict={'fontsize': 12})
     ax.set_ylabel(ylabel)
     return im_h
 
@@ -1215,7 +1364,7 @@ def make_ethogram_movie(outfile: Union[str, bytes, os.PathLike],
     if mapper is None:
         mapper = Mapper()
 
-    fig = plt.figure(figsize=(6, 8))
+    fig = plt.figure(figsize=(10, 12))
     # camera = Camera(fig)
 
     # ethogram_keys = list(ethogram.keys())
@@ -1277,7 +1426,7 @@ def make_ethogram_movie(outfile: Union[str, bytes, os.PathLike],
     if outfile is None:
         out = anim.to_jshtml()
     else:
-        anim.save(outfile, fps=fps, extra_args=['-vcodec', 'libx264'])
+        anim.save(outfile, fps=fps)# , extra_args=['-vcodec', 'libx264'])
         out = None
     # have to use this ugly return syntax so that we can close the figure after saving
     plt.close(fig)
@@ -1294,6 +1443,9 @@ def make_ethogram_movie_with_predictions(outfile: Union[str, bytes, os.PathLike]
                                          width: int = 100,
                                          fps: float = 30):
     """ Makes a movie with movie, then ethogram, then model predictions """
+    
+    if mapper is None:
+        mapper = Mapper()
     fig = plt.figure(figsize=(6, 8))
     # camera = Camera(fig)
 
@@ -1384,3 +1536,26 @@ def make_ethogram_movie_with_predictions(outfile: Union[str, bytes, os.PathLike]
     # have to use this ugly return syntax so that we can close the figure after saving
     plt.close(fig)
     return out
+
+
+def make_figure_filename(name, is_example, num, split='train', overwrite:bool=True):
+    basedir = os.path.join(os.getcwd(), 'figures')
+    if is_example:
+        basedir = os.path.join(basedir, 'examples', split)
+    if not os.path.isdir(basedir):
+        os.makedirs(basedir)
+    fname = os.path.join(basedir, '{:02d}_{}.png'.format(num, name))
+    if overwrite:
+        return fname
+    cnt = 0
+    while os.path.isfile(fname):
+        fname = os.path.join(basedir, '{:02d}_{}_{}.png'.format(num, name, cnt))
+        cnt += 1
+    return fname
+
+
+def save_figure(figure, name, is_example, num, split='train', overwrite:bool=True):
+    fname = make_figure_filename(name, is_example, num, split, overwrite)
+    figure.savefig(fname)
+    plt.close(figure)
+    del figure
