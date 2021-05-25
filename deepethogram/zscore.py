@@ -98,7 +98,11 @@ def get_video_statistics(videofile, stride):
     with deepethogram.file_io.VideoReader(videofile) as reader:
         log.debug('N frames: {}'.format(len(reader)))
         for i in tqdm(range(0, len(reader), stride)):
-            image = reader[i]
+            try:
+                image = reader[i]
+            except Exception as e:
+                log.warning('Error reading frame {} from video {}'.format(i, videofile))
+                continue
             image = image.astype(float) / 255
             image = image.transpose(2, 1, 0)
             # image = image[np.newaxis,...]
