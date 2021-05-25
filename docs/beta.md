@@ -8,6 +8,11 @@ times should be dramatically reduced.
 * Basic training pipeline re-implemented with PyTorch Lightning. This gives us some great features, such as tensorboard 
 logging, automatic batch sizing, and Ray Tune integration. 
 * Image augmentations moved to GPU with Kornia. [see Performance guide for details](performance.md)
+* New, parallelized inference
+* Hyperparameter tuning
+* New defaults for all models to improve performance
+* improved unit tests
+
 
 ## Migration guide
 
@@ -18,6 +23,8 @@ There are some new dependency changes; making sure that install works correctly 
 * uninstall pytorch to upgrade: `conda uninstall pytorch`
 * uninstall pyside2 via conda: `conda uninstall pyside2`
 * upgrade pytorch. note that cudatoolkit version is not important `conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch`
+* Uninstall DeepEthogram: `pip uninstall deepethogram`
+* Install the new version: `pip install deepethogram`
 
 ### upgrade issues
 * `AttributeError: type object 'OmegaConf' has no attribute 'to_yaml'`
