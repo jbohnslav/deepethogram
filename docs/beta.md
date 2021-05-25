@@ -5,7 +5,9 @@ Model performance, measured by F1, accuracy, etc. should be higher in version 0.
 times should be dramatically reduced. 
 
 **Important note: your old project files, models, and (most importantly) human labels will all still work!** However, 
-I do recommend training new feature extractor and sequence models, as performance should improve somewhat. 
+I do recommend training new feature extractor and sequence models, as performance should improve somewhat. This will 
+be the last major refactor of DeepEthogram (model improvements and new features will still come out), however I will
+not be majorly changing dependencies after this. Future upgrades will be easier (e.g. `pip install --upgrade deepethogram`). 
 
 ## Summary of changes
 * Basic training pipeline re-implemented with PyTorch Lightning. This gives us some great features, such as tensorboard 
