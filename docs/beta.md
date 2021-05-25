@@ -4,6 +4,9 @@ DeepEthogram is now in Beta, version 0.1! There are major changes to the codebas
 Model performance, measured by F1, accuracy, etc. should be higher in version 0.1. Model training times and inference 
 times should be dramatically reduced. 
 
+**Important note: your old project files, models, and (most importantly) human labels will all still work!** However, 
+I do recommend training new feature extractor and sequence models, as performance should improve somewhat. 
+
 ## Summary of changes
 * Basic training pipeline re-implemented with PyTorch Lightning. This gives us some great features, such as tensorboard 
 logging, automatic batch sizing, and Ray Tune integration. 
@@ -12,7 +15,10 @@ logging, automatic batch sizing, and Ray Tune integration.
 * Hyperparameter tuning
 * New defaults for all models to improve performance
 * improved unit tests
-
+* new `configuration` module to make generation of configurations (e.g. `cfg`) more understandable and easy
+* Refactor of the whole data module
+* (alpha): support for importing DeepLabCut keypoints to train sequence models
+* new performance documentation, among others
 
 ## Migration guide
 
