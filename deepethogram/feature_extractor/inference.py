@@ -359,7 +359,8 @@ def extract(rgbs: list,
     assert isinstance(model, torch.nn.Module)
 
     device = torch.device(device)
-    torch.cuda.set_device(device)
+    if device.type != 'cpu':
+        torch.cuda.set_device(device)
     model = model.to(device)
     # freeze model and set to eval mode for batch normalization
     model.set_mode('inference')

@@ -372,7 +372,7 @@ class MainWindow(QMainWindow):
                 raise ValueError(pretrained_models_error)
             if os.path.isfile(weights):
                 args += ['feature_extractor.weights={}'.format(weights)]
-            flow_weights = self.get_selected_models()['flow_generator']
+            flow_weights = self.get_selected_models('flow_generator')
             assert flow_weights is not None
             args += ['flow_generator.weights={}'.format(flow_weights)]
             log.info('feature extractor train called with args: {}'.format(args))
@@ -506,7 +506,7 @@ class MainWindow(QMainWindow):
         records = projects.get_records_from_datadir(self.data_path)
         keys = list(records.keys())
         outputs = projects.has_outputfile(records)
-        sequence_weights = self.get_selected_models()['sequence']
+        sequence_weights = self.get_selected_models('sequence')
         if sequence_weights is not None and os.path.isfile(sequence_weights):
             run_files = utils.get_run_files_from_weights(sequence_weights)
             sequence_config = OmegaConf.load(run_files['config_file'])
@@ -518,8 +518,8 @@ class MainWindow(QMainWindow):
             if output_name is None:
                 output_name = sequence_config['sequence']['arch']
         else:
-            latent_name = ''
-            output_name = ''
+            raise ValueError('must specify a valid weight file to run sequence inference!')
+
         log.debug('latent name: {}'.format(latent_name))
         # sequence_name, _ = utils.get_latest_model_and_name(self.project_config['project']['path'], 'sequence')
 
@@ -935,7 +935,7 @@ class MainWindow(QMainWindow):
             raise ValueError('create or load a DEG project before loading video')
 
         options = QFileDialog.Options()
-        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg)'
+        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg *.mov)'
         prompt = "Click on video to open. If a directory full of images, click any image"
         filename, _ = QFileDialog.getOpenFileName(self, prompt, data_dir, filestring, options=options)
         if len(filename) == 0 or not os.path.isfile(filename):
@@ -957,7 +957,7 @@ class MainWindow(QMainWindow):
 
         # https://stackoverflow.com/questions/38252419/how-to-get-qfiledialog-to-select-and-return-multiple-folders
         options = QFileDialog.Options()
-        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg)'
+        filestring = 'VideoReader files (*.h5 *.avi *.mp4 *.png *.jpg *.mov)'
         prompt = "Click on video to open. If a directory full of images, click any image"
         filenames, _ = QFileDialog.getOpenFileNames(self, prompt, data_dir, filestring, options=options)
         if len(filenames) == 0:
@@ -1069,6 +1069,7 @@ class MainWindow(QMainWindow):
             arch = self.default_archs[model]['arch']
             if arch not in archs.keys():
                 continue
+            trained_dict[model]['no pretrained weights'] = None
             for run in trained_models[model][arch]:
                 key = os.path.basename(os.path.dirname(run))
                 if key == 'lightning_checkpoints':
@@ -1099,21 +1100,27 @@ class MainWindow(QMainWindow):
 
         # print(self.get_selected_models())
 
-    def get_selected_models(self):
+    def get_selected_models(self, model_type: str = None):
+        flow_model = None
+        fe_model = None
+        seq_model = None
+
+        models = {'flow_generator': flow_model, 'feature_extractor': fe_model, 'sequence': seq_model}
+
         if not hasattr(self, 'trained_model_dict'):
-            return
+            if model_type is not None:
+                log.warning('No {} weights found. Please download using the link on GitHub: {}'.format(
+                    model_type, 'https://github.com/jbohnslav/deepethogram'))
+
+            return models
 
         flow_text = self.ui.flowSelector.currentText()
         if flow_text in self.trained_model_dict['flow_generator'].keys():
-            flow_model = self.trained_model_dict['flow_generator'][flow_text]
-        else:
-            flow_model = None
+            models['flow_generator'] = self.trained_model_dict['flow_generator'][flow_text]
 
         fe_text = self.ui.feSelector.currentText()
         if fe_text in self.trained_model_dict['feature_extractor'].keys():
-            fe_model = self.trained_model_dict['feature_extractor'][fe_text]
-        else:
-            fe_model = None
+            models['feature_extractor'] = self.trained_model_dict['feature_extractor'][fe_text]
 
         seq_text = self.ui.sequenceSelector.currentText()
         if seq_text in self.trained_model_dict['sequence'].keys():

@@ -49,9 +49,7 @@ def read_label_hdf5(labelfile: Union[str, os.PathLike]) -> np.ndarray:
         elif 'labels' in keys:
             key = 'labels'
         else:
-            raise ValueError(
-                'not sure which dataset in hdf5 contains labels: {}'.format(
-                    keys))
+            raise ValueError('not sure which dataset in hdf5 contains labels: {}'.format(keys))
         label = f[key][:].astype(np.int64)
     if label.ndim == 1:
         label = label[..., np.newaxis]
@@ -79,8 +77,7 @@ def read_label_csv(labelfile: Union[str, os.PathLike]) -> np.ndarray:
     return label
 
 
-def convert_video(videofile: Union[str, os.PathLike], movie_format: str, *args,
-                  **kwargs) -> None:
+def convert_video(videofile: Union[str, os.PathLike], movie_format: str, *args, **kwargs) -> None:
     """Converts videos from one file format to another using VidIO
 
     Parameters
@@ -112,9 +109,6 @@ def convert_video(videofile: Union[str, os.PathLike], movie_format: str, *args,
             out_filename = basename
         else:
             raise ValueError('unexpected value of movie format: {}'.format(movie_format))
-        with VideoWriter(out_filename,
-                         movie_format=movie_format,
-                         *args,
-                         **kwargs) as writer:
+        with VideoWriter(out_filename, movie_format=movie_format, *args, **kwargs) as writer:
             for frame in reader:
                 writer.write(frame)

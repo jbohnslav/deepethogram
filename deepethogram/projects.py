@@ -1063,7 +1063,9 @@ def get_weightfile_from_cfg(cfg: DictConfig, model_type: str) -> Union[str, None
             return path_to_weights
         elif cfg.reload.latest or cfg[model_type].weights == 'latest':
             # print(trained_models)
-            assert len(trained_models[model_type][architecture]) > 0
+            if len(trained_models[model_type][architecture]) == 0:
+                log.warning('Trying to load *latest* weights, but found none! Using random initialization!')
+                return
             log.debug('trained models found: {}'.format(trained_models[model_type][architecture]))
             log.info('loading LATEST weights: {}'.format(trained_models[model_type][architecture][-1]))
             return trained_models[model_type][architecture][-1]

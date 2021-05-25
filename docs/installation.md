@@ -4,8 +4,8 @@
 * Install Anaconda
 * Create a new anaconda environment: `conda create --name deg python=3.7`
 * Activate your environment: `conda activate deg`
-* Install PyTorch: [Use this link for official instructions.](https://pytorch.org/) 
 * Install PySide2: `conda install -c conda-forge pyside2==5.13.2`
+* Install PyTorch: [Use this link for official instructions.](https://pytorch.org/) 
 * `pip install deepethogram`. 
 
 ## Installing from source
