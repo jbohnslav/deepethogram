@@ -4,7 +4,7 @@ with open("README.md", 'r') as f:
     long_description = f.read()
 
 setuptools.setup(name='deepethogram',
-                 version='0.1',
+                 version='0.1.1',
                  author='Jim Bohnslav',
                  author_email='jbohnslav@gmail.com',
                  description='Temporal action detection for biology',
