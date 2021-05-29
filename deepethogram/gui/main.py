@@ -367,12 +367,14 @@ class MainWindow(QMainWindow):
             args = [
                 'python', '-m', 'deepethogram.feature_extractor.train', 'project.path={}'.format(self.cfg.project.path)
             ]
+            print(self.get_selected_models())
             weights = self.get_selected_models()['feature_extractor']
+            # print(weights)
             if weights is None:
                 raise ValueError(pretrained_models_error)
             if os.path.isfile(weights):
                 args += ['feature_extractor.weights={}'.format(weights)]
-            flow_weights = self.get_selected_models('flow_generator')
+            flow_weights = self.get_selected_models()['flow_generator']  # ('flow_generator')
             assert flow_weights is not None
             args += ['flow_generator.weights={}'.format(flow_weights)]
             log.info('feature extractor train called with args: {}'.format(args))
@@ -506,7 +508,7 @@ class MainWindow(QMainWindow):
         records = projects.get_records_from_datadir(self.data_path)
         keys = list(records.keys())
         outputs = projects.has_outputfile(records)
-        sequence_weights = self.get_selected_models('sequence')
+        sequence_weights = self.get_selected_models()['sequence']
         if sequence_weights is not None and os.path.isfile(sequence_weights):
             run_files = utils.get_run_files_from_weights(sequence_weights)
             sequence_config = OmegaConf.load(run_files['config_file'])
@@ -1113,9 +1115,9 @@ class MainWindow(QMainWindow):
                     model_type, 'https://github.com/jbohnslav/deepethogram'))
 
             return models
-
+        log.info(self.trained_model_dict)
         flow_text = self.ui.flowSelector.currentText()
-        if flow_text in self.trained_model_dict['flow_generator'].keys():
+        if flow_text in list(self.trained_model_dict['flow_generator'].keys()):
             models['flow_generator'] = self.trained_model_dict['flow_generator'][flow_text]
 
         fe_text = self.ui.feSelector.currentText()
@@ -1124,10 +1126,7 @@ class MainWindow(QMainWindow):
 
         seq_text = self.ui.sequenceSelector.currentText()
         if seq_text in self.trained_model_dict['sequence'].keys():
-            seq_model = self.trained_model_dict['sequence'][seq_text]
-        else:
-            seq_model = None
-        models = {'flow_generator': flow_model, 'feature_extractor': fe_model, 'sequence': seq_model}
+            models['sequence'] = self.trained_model_dict['sequence'][seq_text]
         return models
 
     def update_frame(self, n):
