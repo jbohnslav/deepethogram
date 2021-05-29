@@ -1,5 +1,6 @@
 import logging
 from inspect import isfunction
+import warnings
 
 import numpy as np
 import torch
@@ -16,9 +17,7 @@ log = logging.getLogger(__name__)
 # https://github.com/NVIDIA/flownet2-pytorch/blob/master/utils/tools.py
 def module_to_dict(module, exclude=[]):
     return dict([(x, getattr(module, x)) for x in dir(module)
-                 if isfunction(getattr(module, x))
-                 and x not in exclude
-                 and getattr(module, x) not in exclude])
+                 if isfunction(getattr(module, x)) and x not in exclude and getattr(module, x) not in exclude])
 
 
 # model definitions can be accessed by indexing into this dictionary
@@ -31,8 +30,14 @@ for model in [alexnet, densenet, inception, vgg, resnet, squeezenet, resnet3d]:
 
 
 # https://pytorch.org/tutorials/beginner/finetuning_torchvision_models_tutorial.html
-def get_cnn(model_name: str, in_channels: int = 3, reload_imagenet: bool = True, num_classes: int = 1000,
-            freeze: bool = False, pos: np.ndarray = None, neg: np.ndarray = None, final_bn: bool=False,
+def get_cnn(model_name: str,
+            in_channels: int = 3,
+            reload_imagenet: bool = True,
+            num_classes: int = 1000,
+            freeze: bool = False,
+            pos: np.ndarray = None,
+            neg: np.ndarray = None,
+            final_bn: bool = False,
             **kwargs):
     """ Initializes a pretrained CNN from Torchvision.
 
@@ -75,14 +80,15 @@ def get_cnn(model_name: str, in_channels: int = 3, reload_imagenet: bool = True,
     # https://www.tensorflow.org/tutorials/structured_data/imbalanced_data#optional_set_the_correct_initial_bias
     if pos is not None and neg is not None:
         with torch.no_grad():
-            bias = np.nan_to_num(np.log(pos / neg), neginf=0.0)
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', category=RuntimeWarning)
+                bias = np.nan_to_num(np.log(pos / neg), neginf=0.0, posinf=1.0)
             bias = torch.nn.Parameter(torch.from_numpy(bias).float())
             if final_bn:
                 bn_layer.bias = bias
             else:
                 linear_layer.bias = bias
             log.info('Custom bias: {}'.format(bias))
-
 
     model = nn.Sequential(*modules)
     return model

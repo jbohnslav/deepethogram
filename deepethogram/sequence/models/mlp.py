@@ -46,7 +46,7 @@ class MLP(nn.Module):
         # https://www.tensorflow.org/tutorials/structured_data/imbalanced_data
         if pos is not None and neg is not None:
             with torch.no_grad():
-                bias = np.nan_to_num(np.log(pos / neg), neginf=0.0)
+                bias = np.nan_to_num(np.log(pos / neg), neginf=0.0, posinf=1.0)
                 bias = torch.nn.Parameter(torch.from_numpy(bias).float())
                 layers[-1].bias = bias
 

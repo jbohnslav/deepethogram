@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 log = logging.getLogger(__name__)
 
+
 def compute_pad(stride, k, s):
     if s % stride == 0:
         return max(k - stride, 0)
@@ -25,7 +26,12 @@ class TGMLayer(nn.Module):
           year={2019}
     }
     """
-    def __init__(self, D: int = 1024, n_filters: int = 3, filter_length: int = 30, c_in: int = 1, c_out: int = 1,
+    def __init__(self,
+                 D: int = 1024,
+                 n_filters: int = 3,
+                 filter_length: int = 30,
+                 c_in: int = 1,
+                 c_out: int = 1,
                  soft: bool = False,
                  viz: bool = False):
         super().__init__()
@@ -86,7 +92,7 @@ class TGMLayer(nn.Module):
         f = b - a[:, :, None]
         f = f / gammas[:, None, None]
 
-        f = f ** 2.0
+        f = f**2.0
         f += 1.0
         f = np.pi * gammas[:, None, None] * f
         f = 1.0 / f
@@ -159,11 +165,22 @@ class TGMLayer(nn.Module):
 
 
 class TGM(nn.Module):
-    def __init__(self, D: int = 1024, n_filters: int = 16, filter_length: int = 30, input_dropout: float = 0.5,
+    def __init__(self,
+                 D: int = 1024,
+                 n_filters: int = 16,
+                 filter_length: int = 30,
+                 input_dropout: float = 0.5,
                  dropout_p: float = 0.5,
-                 classes: int = 8, num_layers: int = 3, reduction: str = 'max', c_in: int = 1, c_out: int = 8,
-                 soft: bool = False, num_features: int = 512, viz: bool = False,
-                 nonlinear_classification: bool = False, concatenate_inputs=True):
+                 classes: int = 8,
+                 num_layers: int = 3,
+                 reduction: str = 'max',
+                 c_in: int = 1,
+                 c_out: int = 8,
+                 soft: bool = False,
+                 num_features: int = 512,
+                 viz: bool = False,
+                 nonlinear_classification: bool = False,
+                 concatenate_inputs=True):
         super().__init__()
 
         self.D = D  # dimensionality of inputs. E.G. 1024 features from a CNN penultimate layer
@@ -250,12 +267,26 @@ class TGM(nn.Module):
 
 
 class TGMJ(nn.Module):
-    def __init__(self, D: int = 1024, n_filters: int = 16, filter_length: int = 30, input_dropout: float = 0.5,
+    def __init__(self,
+                 D: int = 1024,
+                 n_filters: int = 16,
+                 filter_length: int = 30,
+                 input_dropout: float = 0.5,
                  dropout_p: float = 0.5,
-                 classes: int = 8, num_layers: int = 3, reduction: str = 'max', c_in: int = 1, c_out: int = 8,
-                 soft: bool = False, num_features: int = 512, viz: bool = False,
-                 nonlinear_classification: bool = False, concatenate_inputs=True, pos=None, neg=None,
-                 use_fe_logits: bool = True, final_bn: bool=False):
+                 classes: int = 8,
+                 num_layers: int = 3,
+                 reduction: str = 'max',
+                 c_in: int = 1,
+                 c_out: int = 8,
+                 soft: bool = False,
+                 num_features: int = 512,
+                 viz: bool = False,
+                 nonlinear_classification: bool = False,
+                 concatenate_inputs=True,
+                 pos=None,
+                 neg=None,
+                 use_fe_logits: bool = True,
+                 final_bn: bool = False):
         super().__init__()
 
         self.D = D  # dimensionality of inputs. E.G. 1024 features from a CNN penultimate layer
@@ -290,17 +321,17 @@ class TGMJ(nn.Module):
         if nonlinear_classification:
             self.h = nn.Conv1d(N, self.num_features, 1)
             self.h2 = nn.Conv1d(N, self.num_features, 1)
-            classify1 = nn.Conv1d(self.num_features, classes, 1, bias= not final_bn)
-            classify2 = nn.Conv1d(self.num_features, classes, 1, bias= not final_bn)
+            classify1 = nn.Conv1d(self.num_features, classes, 1, bias=not final_bn)
+            classify2 = nn.Conv1d(self.num_features, classes, 1, bias=not final_bn)
         else:
             self.h = None
-            classify1 = nn.Conv1d(N, classes, 1, bias= not final_bn)
-            classify2 = nn.Conv1d(N, classes, 1, bias= not final_bn)
+            classify1 = nn.Conv1d(N, classes, 1, bias=not final_bn)
+            classify2 = nn.Conv1d(N, classes, 1, bias=not final_bn)
 
         # https://www.tensorflow.org/tutorials/structured_data/imbalanced_data
         if pos is not None and neg is not None:
             with torch.no_grad():
-                bias = np.nan_to_num(np.log(pos / neg), neginf=0.0)
+                bias = np.nan_to_num(np.log(pos / neg), neginf=0.0, posinf=1.0)
                 bias = torch.nn.Parameter(torch.from_numpy(bias).float())
         else:
             bias = torch.nn.Parameter(torch.zeros(classes).float())
@@ -322,7 +353,7 @@ class TGMJ(nn.Module):
         self.viz = viz
         self.use_fe_logits = use_fe_logits
         if self.use_fe_logits:
-            self.weights = nn.Parameter(torch.Tensor([1/3, 1/3, 1/3]).float())
+            self.weights = nn.Parameter(torch.Tensor([1 / 3, 1 / 3, 1 / 3]).float())
         # self.weights = nn.Parameter(torch.normal(mean=0, std=torch.sqrt(torch.Tensor([2/3, 2/3, 2/3]))))
         # print('initial avg weights: {}'.format(self.weights))
 
@@ -364,7 +395,7 @@ class TGMJ(nn.Module):
             # print('outputs2: min {:.4f} mean {:.4f} max {:.4f}'.format(outputs2.min(), outputs2.mean(), outputs2.max()))
             weights = F.softmax(self.weights, dim=0)
             # print('weights: {}'.format(weights))
-            return weights[0]*outputs1 + weights[1]*outputs2 + weights[2]*fe_logits
+            return weights[0] * outputs1 + weights[1] * outputs2 + weights[2] * fe_logits
             # return (outputs1 + outputs2 + fe_logits) / 3
 
         return (outputs1 + outputs2) / 2

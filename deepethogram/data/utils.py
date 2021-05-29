@@ -91,19 +91,24 @@ def make_loss_weight(class_counts: np.ndarray,
     TODO: remove redundant class_counts, num_pos arguments
     """
 
-    pos_weight = num_neg / num_pos
+    # if there are zero positive examples, we don't want the pos weight to be a large number
+    # we want it to be infinity, then we will manually set it to zero
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        pos_weight = num_neg / num_pos
+    # if there are zero negative examples, loss should be 1
+    pos_weight[pos_weight == 0] = 1
     pos_weight_transformed = (pos_weight**weight_exp).astype(np.float32)
-    # don't weight losses if there are no examples
-    pos_weight_transformed = utils.remove_nans_and_infs(pos_weight_transformed)
+    # if all examples positive: will be 1
+    # if zero examples positive: will be 0
+    pos_weight_transformed = np.nan_to_num(pos_weight_transformed, nan=0.0, posinf=0.0, neginf=0)
 
-    softmax_weight = 1 / (class_counts + 1e-8)
-    # we have to get rid of invalid classes here, or else when we normalize below, it will disrupt non-zero classes
-    softmax_weight[class_counts == 0] = 0
-    # normalize
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        softmax_weight = 1 / class_counts
+    softmax_weight = np.nan_to_num(softmax_weight, nan=0.0, posinf=0.0, neginf=0)
     softmax_weight = softmax_weight / np.sum(softmax_weight)
     softmax_weight_transformed = (softmax_weight**weight_exp).astype(np.float32)
-    # don't weight losses if there are no examples
-    softmax_weight_transformed = utils.remove_nans_and_infs(softmax_weight_transformed)
 
     np.set_printoptions(suppress=True)
     log.info('Class counts: {}'.format(class_counts))
