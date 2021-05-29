@@ -297,7 +297,9 @@ def sequence_inference(cfg: DictConfig):
             thresholds = f['val']['metrics_by_threshold']['optimum'][best_epoch, :]
         except KeyError:
             # backwards compatibility
-            thresholds = f['threshold_curves']['val']['optimum'][best_epoch, :]
+            thresholds = f['threshold_curves']['val']['optimum'][:]  # [best_epoch, :]
+            if thresholds.ndim > 1:
+                thresholds = thresholds[best_epoch, :]
     log.info('thresholds: {}'.format(thresholds))
 
     class_names = list(cfg.project.class_names)
