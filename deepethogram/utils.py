@@ -108,6 +108,8 @@ def checkpoint(model, rundir: Union[str, os.PathLike], epoch: int, args=None):
         args: either an argument parser or a dictionary with hyperparameters
     """
     if args is not None:
+        if isinstance(args, DictConfig):
+            args = OmegaConf.to_container(args)
         if type(args) != dict:
             args = vars(args)
     fname = 'checkpoint.pt'
