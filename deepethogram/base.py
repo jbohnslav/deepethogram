@@ -77,7 +77,12 @@ class BaseLightningModule(pl.LightningModule):
         self.optimizer = None  # will be overridden in configure_optimizers
         self.hparams.weight_decay = None
 
-        self.scheduler_mode = 'min' if self.metrics.key_metric == 'loss' else 'max'
+        if self.metrics.key_metric == 'loss' or self.metrics.key_metric == 'SSIM':
+            self.scheduler_mode = 'min'
+        else:
+            # accuracy, F1, etc.
+            self.scheduler_mode = 'max'
+            
         # need to move this to top-level for lightning's learning rate finder
         # don't set it to auto here, so that we can automatically find batch size first
         self.lr = self.hparams.train.lr if self.hparams.train.lr != 'auto' else 1e-4
