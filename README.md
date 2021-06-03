@@ -80,6 +80,7 @@ the `zz_commandline` test module will take a few minutes, as it is an end-to-end
 and inference. Its name reflects the fact that it should come last in testing. 
 
 ## Changelog
+* 0.1.1.post0: flow generator metric bug fix
 * 0.1.1: bug fixes
 * 0.1: deepethogram beta! See above for details. 
 * 0.0.1.post1: bug fixes and video conversion scripts added
