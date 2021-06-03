@@ -57,3 +57,8 @@ environment with `conda create --name deg python=3.8` before installation.
   * If it tells you to install a new version of Visual Studio C++, please do that. 
   * Now you should be set up: let's reinstall PySide2 and libshiboken. 
   * `pip install --force-reinstall pyside2`
+* `_init_pyside_extension is not defined`
+  * This is an issue where Shiboken and PySide2 are not playing nicely together. Please `pip uninstall pyside2` and `conda remove pyside2`. Don't manually install these packages; instead, let DeepEthogram install it for you via pip. Therefore, `pip uninstall deepethogram` and `pip install deepethogram`.
+*  `qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in ".../python3.8/site-packages/cv2/qt/plugins"  even though it was found. This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.`
+   * This is an issue with a recent version of `opencv-python` not working well with Qt. Please do `pip install --force-reinstall opencv-python==4.1.2.30`
+
