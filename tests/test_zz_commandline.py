@@ -5,8 +5,7 @@ import subprocess
 
 from deepethogram import utils
 
-from setup_data import (make_project_from_archive, project_path, test_data_path, clean_test_data, get_records,
-                        config_path, data_path)
+from setup_data import (make_project_from_archive, change_to_deepethogram_directory, config_path, data_path)
 # from setup_data import get_testing_directory
 
 # testing_directory = get_testing_directory()
@@ -19,11 +18,14 @@ VIZ_EXAMPLES = 2
 
 make_project_from_archive()
 
+change_to_deepethogram_directory()
+
 
 def command_from_string(string):
     command = string.split(' ')
     if command[-1] == '':
         command = command[:-1]
+    print(command)
     return command
 
 
@@ -38,7 +40,21 @@ def add_default_arguments(string, train=True):
     return string
 
 
+# def test_python():
+#     command = ['which', 'python']
+#     ret = subprocess.run(command)
+
+#     command = ['which', 'pytest']
+#     ret = subprocess.run(command)
+#     # assert ret.returncode == 0
+#     # print(ret)
+
+#     print(os.environ['PATH'])
+#     print(os.getcwd())
+
+
 def test_flow():
+    make_project_from_archive()
     string = (f'python -m deepethogram.flow_generator.train preset=deg_f ')
     string = add_default_arguments(string)
     command = command_from_string(string)
