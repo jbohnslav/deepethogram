@@ -273,3 +273,25 @@ def make_sequence_inference_cfg(project_path: Union[str, os.PathLike], **kwargs)
     cfg = make_config(project_path=project_path, config_list=config_list, run_type=run_type, model=model, **kwargs)
 
     return cfg
+
+
+def make_postprocessing_cfg(project_path: Union[str, os.PathLike], **kwargs) -> DictConfig:
+    """Makes configuration for postprocessing predictions
+
+    Parameters
+    ----------
+    project_path : Union[str, os.PathLike]
+        Path to deepethogram project
+
+    Returns
+    -------
+    DictConfig
+        postprocessing config
+    """
+    config_list = ['config', 'model/sequence', 'postprocessor']
+    run_type = 'inference'
+    model = 'sequence'
+
+    cfg = make_config(project_path=project_path, config_list=config_list, run_type=run_type, model=model, **kwargs)
+
+    return cfg

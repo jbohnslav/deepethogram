@@ -3,8 +3,10 @@ import logging
 import os
 from typing import Type, Tuple
 
+import h5py
 import numpy as np
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
+import pandas as pd
 
 from deepethogram import projects, file_io
 
@@ -339,3 +341,26 @@ def get_postprocessor_from_cfg(cfg: DictConfig, thresholds: np.ndarray) -> Type[
         return MinBoutLengthPerBehaviorPostprocessor(thresholds, percentiles)
     else:
         raise NotImplementedError
+
+
+def postprocess_and_save(cfg, thresholds) -> None:
+
+    # the output name will be a group in the output hdf5 dataset containing probabilities, etc
+    if cfg.sequence.output_name is None:
+        output_name = cfg.sequence.arch
+    else:
+        output_name = cfg.sequence.output_name
+
+    behavior_names = OmegaConf.to_container(cfg.project.class_names)
+    records = projects.get_records_from_datadir(os.path.join(cfg.project.path, 'DATA'))
+    for _, record in records.items():
+        with h5py.File(record['output'], 'r') as f:
+            p = f[output_name]['P'][:]
+            thresholds = f[output_name]['thresholds'][:]
+            postprocessor = get_postprocessor_from_cfg(cfg, thresholds)
+
+            predictions = postprocessor(p)
+            df = pd.DataFrame(data=predictions, columns=behavior_names)
+            base = os.path.splitext(record['rgb'])[0]
+            filename = base + '_predictions.csv'
+            df.to_csv(filename)
