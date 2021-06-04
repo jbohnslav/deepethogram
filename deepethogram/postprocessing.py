@@ -343,7 +343,7 @@ def get_postprocessor_from_cfg(cfg: DictConfig, thresholds: np.ndarray) -> Type[
         raise NotImplementedError
 
 
-def postprocess_and_save(cfg, thresholds) -> None:
+def postprocess_and_save(cfg) -> None:
 
     # the output name will be a group in the output hdf5 dataset containing probabilities, etc
     if cfg.sequence.output_name is None:
