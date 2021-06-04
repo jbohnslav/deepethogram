@@ -26,6 +26,14 @@ In brief:
 * [Install PyTorch](https://pytorch.org/) 
 * `pip install deepethogram`
 
+## COLAB
+I've written a Colab notebook that shows how to upload your data and train models. You can also use this if you don't 
+have access to a decent GPU. 
+
+To use it, please [click this link to the Colab notebook](https://colab.research.google.com/drive/1Nf9FU7FD77wgvbUFc608839v2jPYgDhd?usp=sharing). 
+Then, click `copy to Drive` at the top. You won't be able to save your changes to the notebook as-is. 
+
+
 ## News
 DeepEthogram is now in Beta, version 0.1! There are major changes to the codebase and to model training and inference. Model performance, measured by F1, accuracy, etc. should be higher in version 0.1. Model training times and inference times should be dramatically reduced. For full information, see [the DeepEthogram Beta docs](docs/beta.md)
 
@@ -80,7 +88,7 @@ the `zz_commandline` test module will take a few minutes, as it is an end-to-end
 and inference. Its name reflects the fact that it should come last in testing. 
 
 ## Changelog
-* 0.1.1.post1: batch prediction
+* 0.1.1.post1/2: batch prediction
 * 0.1.1.post0: flow generator metric bug fix
 * 0.1.1: bug fixes
 * 0.1: deepethogram beta! See above for details. 
