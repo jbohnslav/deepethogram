@@ -952,7 +952,7 @@ class MainWindow(QMainWindow):
         self.user_did_something()
 
     def add_multiple_videos(self):
-        if hasattr(self, 'project_config'):
+        if self.data_path is not None:
             data_dir = self.data_path
         else:
             raise ValueError('create or load a DEG project before loading video')
