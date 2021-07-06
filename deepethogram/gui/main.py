@@ -800,10 +800,10 @@ class MainWindow(QMainWindow):
         self.initialize_label(label_array=array)
 
     def import_external_labels(self):
-        if hasattr(self, 'project_config'):
+        if self.data_path is not None:
             data_dir = self.data_path
         else:
-            raise ValueError('create or load a DEG project before loading video')
+            raise ValueError('create or load a DEG project before importing video')
 
         options = QFileDialog.Options()
         filestring = 'Label file (*.csv)'
