@@ -13,7 +13,7 @@ dependencies:
     - hydra-core==0.11.3
     - omegaconf==1.4.1
     - matplotlib
-    - opencv-python
+    - opencv-python-headless
     - opencv-transforms==0.0.3.post2
     - pandas
     - scikit-learn
