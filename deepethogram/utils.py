@@ -825,7 +825,7 @@ def remove_nans_and_infs(array: np.ndarray, set_value: float = 0.0) -> np.ndarra
     return array
 
 
-def get_run_files_from_weights(weightfile: Union[str, os.PathLike]) -> dict:
+def get_run_files_from_weights(weightfile: Union[str, os.PathLike], metrics_prefix='classification') -> dict:
     """from model weights, gets the configuration for that model and its metrics file
 
     Parameters
@@ -845,9 +845,9 @@ def get_run_files_from_weights(weightfile: Union[str, os.PathLike]) -> dict:
         loaded_config_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 'config.yaml')
         assert os.path.isfile(loaded_config_file), 'no associated config file for weights! {}'.format(weightfile)
 
-    metrics_file = os.path.join(os.path.dirname(weightfile), 'classification_metrics.h5')
+    metrics_file = os.path.join(os.path.dirname(weightfile), f'{metrics_prefix}_metrics.h5')
     if not os.path.isfile(metrics_file):
-        metrics_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), 'classification_metrics.h5')
+        metrics_file = os.path.join(os.path.dirname(os.path.dirname(weightfile)), f'{metrics_prefix}_metrics.h5')
         assert os.path.isfile(metrics_file), 'no associated metrics file for weights! {}'.format(weightfile)
 
     return dict(config_file=loaded_config_file, metrics_file=metrics_file)
