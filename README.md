@@ -26,6 +26,12 @@ In brief:
 * [Install PyTorch](https://pytorch.org/) 
 * `pip install deepethogram`
 
+## Data
+**NEW!** All datasets collected and annotated by the DeepEthogram authors are now available from this DropBox link: 
+https://www.dropbox.com/sh/3lilfob0sz21och/AABv8o8KhhRQhYCMNu0ilR8wa?dl=0
+
+If you have issues downloading the data, please raise an issue on Github. 
+
 ## COLAB
 I've written a Colab notebook that shows how to upload your data and train models. You can also use this if you don't 
 have access to a decent GPU. 
