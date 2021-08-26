@@ -430,7 +430,6 @@ def extract(rgbs: list,
                 has_worked = True
 
         try:
-
             predictions = postprocessor(outputs['probabilities'].detach().cpu().numpy())
             labelfile = projects.find_labelfiles(os.path.dirname(rgb))[0]
             labels = read_labels(labelfile)
