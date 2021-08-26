@@ -181,9 +181,11 @@ def add_label_to_project(path_to_labels: Union[str, os.PathLike], path_to_video)
         df = df.rename(columns={'none': 'background'})
     if 'background' not in list(df.columns):
         array = df.values
-        is_background = np.logical_not(np.any(array == 1, axis=1)).astype(int)
-        df2 = pd.DataFrame(data=is_background, columns=['background'])
-        df = pd.concat([df2, df], axis=1)
+        is_background = np.logical_not(np.any(array == 1, axis=1)).astype(int)[:, np.newaxis]
+        data = np.concatenate((is_background, array), axis=1)
+        # df2 = pd.DataFrame(data=is_background, columns=['background'])
+        # df = pd.concat([df2, df], axis=1)
+        df = pd.DataFrame(data=data, columns=['background'] + list(df.columns))
 
     df.to_csv(label_dst)
     record = parse_subdir(viddir)
@@ -1136,7 +1138,8 @@ def convert_config_paths_to_absolute(project_cfg: DictConfig,
         # my_project/pretrained
         # my_project/models/pretrained
         pretrained_options = [
-            os.path.join(i, pretrained_path) for i in [model_path, root, os.path.join(root, 'models')]
+            os.path.join(i, pretrained_path)
+            for i in [model_path, root, os.path.join(root, 'models')]
         ]
 
         exists = [os.path.isdir(i) for i in pretrained_options]

@@ -102,3 +102,13 @@ def test_remove_behavior():
     df = pd.read_csv(labelfile, index_col=0)
     assert df.shape[1] == 4
     assert 'face_groom' not in df.columns
+
+
+@pytest.mark.filterwarnings('ignore::UserWarning')
+def test_add_external_label():
+    mousedir = os.path.join(project_path, 'DATA', 'mouse06')
+    assert os.path.isdir(mousedir), '{} does not exist!'.format(mousedir)
+    labelfile = os.path.join(mousedir, 'test_labels.csv')
+    videofile = os.path.join(mousedir, 'mouse06.h5')
+
+    projects.add_label_to_project(labelfile, videofile)
