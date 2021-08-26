@@ -584,5 +584,4 @@ def feature_extractor_inference(cfg: DictConfig):
 if __name__ == '__main__':
     project_path = projects.get_project_path_from_cl(sys.argv)
     cfg = make_feature_extractor_inference_cfg(project_path, use_command_line=True)
-
     feature_extractor_inference(cfg)
