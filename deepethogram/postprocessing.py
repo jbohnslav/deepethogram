@@ -1,7 +1,7 @@
 from collections import defaultdict
 import logging
 import os
-from typing import Type, Tuple
+from typing import Dict, Type, Tuple
 
 import h5py
 import numpy as np
@@ -343,8 +343,17 @@ def get_postprocessor_from_cfg(cfg: DictConfig, thresholds: np.ndarray) -> Type[
         raise NotImplementedError
 
 
-def postprocess_and_save(cfg) -> None:
+def postprocess_and_save(cfg: DictConfig) -> None:
+    """Exports all predictions for the project
 
+    Parameters
+    ----------
+    cfg : DictConfig
+        a project configuration. Must have the `sequence` and `postprocessing` sections
+        
+    Goes through each "outputfile" in the project, loads the probabilities, postprocesses them, and saves to disk
+    with the name `base + _predictions.csv`.
+    """
     # the output name will be a group in the output hdf5 dataset containing probabilities, etc
     if cfg.sequence.output_name is None:
         output_name = cfg.sequence.arch

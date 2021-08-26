@@ -28,8 +28,9 @@ you can have both installed on your machine without interference.
 
 ## Installing from pip
 First install the latest version of PyTorch for your system. [Use this link for official instructions.](https://pytorch.org/) 
-It should be as simple as `conda install pytorch torchvision cudatoolkit=10.2 -c pytorch`, or 
-`pip install torch===1.5.0 torchvision===0.6.0 -f https://download.pytorch.org/whl/torch_stable.html`. 
+It should be as simple as `conda install pytorch torchvision cudatoolkit=10.2 -c pytorch`. 
+
+Note: if you have an RTX3000 series graphics card, such as a 3060 or 3090, please use `cudatoolkit=11.1` or higher. 
 
 After installing PyTorch, simply use `pip install deepethogram`. 
 
@@ -60,5 +61,5 @@ environment with `conda create --name deg python=3.8` before installation.
 * `_init_pyside_extension is not defined`
   * This is an issue where Shiboken and PySide2 are not playing nicely together. Please `pip uninstall pyside2` and `conda remove pyside2`. Don't manually install these packages; instead, let DeepEthogram install it for you via pip. Therefore, `pip uninstall deepethogram` and `pip install deepethogram`.
 *  `qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in ".../python3.8/site-packages/cv2/qt/plugins"  even though it was found. This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.`
-   * This is an issue with a recent version of `opencv-python` not working well with Qt. Please do `pip install --force-reinstall opencv-python==4.1.2.30`
+   * This is an issue with a recent version of `opencv-python` not working well with Qt. Please do `pip install --force-reinstall opencv-python-headless==4.1.2.30`
 

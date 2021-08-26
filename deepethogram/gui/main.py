@@ -424,8 +424,8 @@ class MainWindow(QMainWindow):
             raise ValueError('Dont run inference without using a proper feature extractor weights! {}'.format(weights))
 
         args = [
-            'python', '-m', 'deepethogram.feature_extractor.inference', 'project.path={}'.format(self.cfg.project.path),
-            'inference.overwrite=True', weight_arg
+            'python', '-m', 'deepethogram.feature_extractor.inference',
+            'project.path={}'.format(self.cfg.project.path), 'inference.overwrite=True', weight_arg
         ]
         flow_weights = self.get_selected_models()['flow_generator']
         assert flow_weights is not None
@@ -845,7 +845,7 @@ class MainWindow(QMainWindow):
 
         self.postprocessor = get_postprocessor_from_cfg(self.cfg, thresholds)
         estimated_labels = self.postprocessor(probabilities)
-
+        # this is for visualization purposes only
         probabilities[estimated_labels == 1] = 1
 
         self.probabilities = probabilities
