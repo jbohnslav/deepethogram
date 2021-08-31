@@ -16,7 +16,7 @@ setuptools.setup(name='deepethogram',
                  entry_points={'console_scripts': ['deepethogram = deepethogram.gui.main:entry']},
                  python_requires='>=3.6',
                  install_requires=[
-                     'chardet<4.0', 'h5py', 'kornia>=0.5', 'matplotlib', 'numpy', 'omegaconf>=2', 'opencv-python',
+                     'chardet<4.0', 'h5py', 'kornia>=0.5', 'matplotlib', 'numpy', 'omegaconf>=2', 'opencv-python-headless',
                      'opencv-transforms', 'pandas', 'PySide2', 'scikit-learn', 'scipy', 'tqdm', 'vidio',
                      'pytorch_lightning<=1.1.8'
                  ])
