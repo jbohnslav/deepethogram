@@ -87,8 +87,10 @@ Recommended GPUs: `RTX 3090`, `RTX 3080`, `Titan RTX`, `2080 Ti`, `2080 super`, 
 Some older ones might also be fine, like a `1080` or even `1070 Ti`/ `1070`. 
 
 ## testing
-Test coverage is still low, but in the future we will be expanding our unit tests. For now, email me to get a copy
-of `testing_deepethogram_archive.zip`. Make a directory in tests called `DATA`. Unzip this and move it to the `deepethogram/tests/DATA` 
+Test coverage is still low, but in the future we will be expanding our unit tests. 
+
+First, download a copy of [`testing_deepethogram_archive.zip`](https://drive.google.com/file/d/1IFz4ABXppVxyuhYik8j38k9-Fl9kYKHo/view?usp=sharing)
+ Make a directory in tests called `DATA`. Unzip this and move it to the `deepethogram/tests/DATA` 
 directory, so that the path is `deepethogram/tests/DATA/testing_deepethogram_archive/{DATA,models,project_config.yaml}`. Then run `pytest tests/` to run. 
 the `zz_commandline` test module will take a few minutes, as it is an end-to-end test that performs model training 
 and inference. Its name reflects the fact that it should come last in testing. 
