@@ -34,6 +34,7 @@ log = logging.getLogger(__name__)
 class BaseLightningModule(pl.LightningModule):
     """Base class for all Lightning modules for training
     """
+
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics: Metrics, visualization_func):
         """constructor
 
@@ -58,7 +59,12 @@ class BaseLightningModule(pl.LightningModule):
         super().__init__()
 
         self.model = model
-        self.hparams = cfg
+        try:
+            self.hparams = cfg
+        except:
+            # for pytorch lightning > 1.1.8
+            self.hparams.update(cfg)
+
         self.datasets = datasets
         self.metrics = metrics
         self.visualization_func = visualization_func
@@ -82,7 +88,7 @@ class BaseLightningModule(pl.LightningModule):
         else:
             # accuracy, F1, etc.
             self.scheduler_mode = 'max'
-            
+
         # need to move this to top-level for lightning's learning rate finder
         # don't set it to auto here, so that we can automatically find batch size first
         self.lr = self.hparams.train.lr if self.hparams.train.lr != 'auto' else 1e-4
@@ -385,7 +391,8 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                          callbacks=callback_list,
                          reload_dataloaders_every_epoch=True,
                          progress_bar_refresh_rate=refresh_rate,
-                         profiler=profiler)
+                         profiler=profiler,
+                         log_every_n_steps=1)
     torch.cuda.empty_cache()
     # gc.collect()
 
