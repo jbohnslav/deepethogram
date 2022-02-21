@@ -2,6 +2,7 @@ import glob
 import logging
 import multiprocessing as mp
 import os
+import random
 import warnings
 from typing import Tuple, Union
 
@@ -239,7 +240,7 @@ def find_labelfile(video: Union[str, os.PathLike]) -> Tuple[str, str]:
     raise ValueError('no corresponding labels found: {}'.format(video))
 
 
-def read_all_labels(labelfiles: list):
+def read_all_labels(labelfiles: list, fix: bool = True, multilabel: bool = True):
     """ Function for reading all labels into memory """
     labels = []
     for i, labelfile in enumerate(labelfiles):
@@ -255,10 +256,15 @@ def read_all_labels(labelfiles: list):
             # add a background class
             warnings.warn('binary labels found, adding background class')
             label = np.hstack((np.logical_not(label), label))
+
+        if fix:
+            label = fix_label(labelfile, label, multilabel)
+
         labels.append(label)
 
         label_no_ignores = np.copy(label)
         label_no_ignores[label_no_ignores == -1] = 0
+
         if i == 0:
             class_counts = label_no_ignores.sum(axis=0)
             num_pos = (label == 1).sum(axis=0)
@@ -267,6 +273,7 @@ def read_all_labels(labelfiles: list):
             class_counts += label_no_ignores.sum(axis=0)
             num_pos += (label == 1).sum(axis=0)
             num_neg += (label == 0).sum(axis=0)
+
     num_labels = len(labels)
     labels = np.concatenate(labels)
     class_counts = class_counts
@@ -438,7 +445,7 @@ def update_split(records: dict, split_dictionary: dict) -> dict:
     if len(new_entries) > 0:
         split_p = split_dictionary['metadata']['split']
         N = len(new_entries)
-        new_splits = np.random.choice(splits, size=(N, ), p=split_p).tolist()
+        new_splits = np.random.choice(splits, size=(N,), p=split_p).tolist()
         for i, k in enumerate(new_entries):
             split_dictionary[new_splits[i]].append(k)
             log.info('file {} assigned to split {}'.format(k, new_splits[i]))
@@ -516,3 +523,38 @@ def remove_invalid_records_from_split_dictionary(split_dictionary: dict, records
             if key in splitfiles:
                 valid_records[split][key] = records[key]
     return valid_records
+
+
+def count_unlabeled_frames(label):
+    return np.sum(label.sum(axis=1) < 1)
+
+
+def count_multilabeled_frames(label):
+    return np.sum(label.sum(axis=1) > 1)
+
+
+def fix_label(labelfile, label: np.ndarray, multilabel: bool = True) -> np.ndarray:
+    n_unlabeled = count_unlabeled_frames(label)
+    if n_unlabeled > 0:
+        logging.warning(f'file {labelfile} has {n_unlabeled} unlabeled frames!! setting to background...')
+        # set rows to 0
+        unlabeled = label.sum(axis=1) < 1
+        label[unlabeled, :] = 0
+        # set background col to 1
+        label[unlabeled, 0] = 1
+
+    if not multilabel:
+        # labels must be mutually exclusive
+        n_multilabel = count_multilabeled_frames(label)
+        if n_multilabel > 1:
+            logging.warning(f'file {labelfile} has {n_multilabel} multi-label frames! randomly selecting the label...')
+            multilabel = label.sum(axis=1) > 1
+            multilabel_inds = np.where(multilabel)[0]
+            for ind in multilabel_inds:
+                row = label[ind]
+                zeros = np.zeros_like(row)
+                label_inds = np.where(row)[0]
+                zeros[random.choice(label_inds)] = 1
+                label[ind] = zeros
+        assert count_multilabeled_frames(label) == 0
+    return label

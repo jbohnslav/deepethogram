@@ -95,11 +95,21 @@ def test_feature_extractor():
     ret = subprocess.run(command)
     assert ret.returncode == 0
 
+    # testing softmax
+    string = ('python -m deepethogram.feature_extractor.train preset=deg_m flow_generator.weights=latest '
+              'feature_extractor.final_activation=softmax ')
+    string = add_default_arguments(string)
+    command = command_from_string(string)
+    ret = subprocess.run(command)
+    assert ret.returncode == 0
 
-def test_feature_extraction():
+
+def test_feature_extraction(softmax: bool = False):
     # the reason for this complexity is that I don't want to run inference on all directories
     string = (f'python -m deepethogram.feature_extractor.inference preset=deg_f feature_extractor.weights=latest '
               'flow_generator.weights=latest ')
+    if softmax:
+        string += 'feature_extractor.final_activation=softmax '
     # datadir = os.path.join(testing_directory, 'DATA')
     subdirs = utils.get_subfiles(data_path, 'directory')
     # np.random.seed(42)
@@ -121,3 +131,40 @@ def test_sequence_train():
     print(command)
     ret = subprocess.run(command)
     assert ret.returncode == 0
+
+    # mutually exclusive
+    string = (f'python -m deepethogram.sequence.train feature_extractor.final_activation=softmax ')
+    string = add_default_arguments(string)
+    command = command_from_string(string)
+    print(command)
+    ret = subprocess.run(command)
+    assert ret.returncode == 0
+
+
+def test_softmax():
+    make_project_from_archive()
+    string = (f'python -m deepethogram.flow_generator.train preset=deg_f ')
+    string = add_default_arguments(string)
+    command = command_from_string(string)
+    ret = subprocess.run(command)
+    assert ret.returncode == 0
+
+    string = ('python -m deepethogram.feature_extractor.train preset=deg_f flow_generator.weights=latest '
+              'feature_extractor.final_activation=softmax ')
+    string = add_default_arguments(string)
+    command = command_from_string(string)
+    ret = subprocess.run(command)
+    assert ret.returncode == 0
+
+    test_feature_extraction(softmax=True)
+
+    string = (f'python -m deepethogram.sequence.train feature_extractor.final_activation=softmax ')
+    string = add_default_arguments(string)
+    command = command_from_string(string)
+    print(command)
+    ret = subprocess.run(command)
+    assert ret.returncode == 0
+
+
+if __name__ == '__main__':
+    test_softmax()
