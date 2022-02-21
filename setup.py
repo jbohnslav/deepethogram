@@ -4,7 +4,7 @@ with open("README.md", 'r') as f:
     long_description = f.read()
 
 setuptools.setup(name='deepethogram',
-                 version='0.1.1.post4',
+                 version='0.1.2',
                  author='Jim Bohnslav',
                  author_email='jbohnslav@gmail.com',
                  description='Temporal action detection for biology',
@@ -18,5 +18,5 @@ setuptools.setup(name='deepethogram',
                  install_requires=[
                      'chardet<4.0', 'h5py', 'kornia>=0.5', 'matplotlib', 'numpy', 'omegaconf>=2', 'opencv-python',
                      'opencv-transforms', 'pandas', 'PySide2', 'scikit-learn', 'scipy', 'tqdm', 'vidio',
-                     'pytorch_lightning<=1.1.8'
+                     'pytorch_lightning>=1.5.10'
                  ])
