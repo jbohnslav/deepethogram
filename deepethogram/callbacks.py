@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 
 
 class DebugCallback(Callback):
+
     def __init__(self):
         super().__init__()
         log.info('callback initialized')
@@ -19,18 +20,16 @@ class DebugCallback(Callback):
     def on_init_end(self, trainer):
         log.info('on init start')
 
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx,
-                             dataloader_idx):
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
         log.debug('on train batch start')
 
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx,
-                           dataloader_idx):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         log.debug('on train batch end')
 
     def on_train_epoch_start(self, trainer, pl_module):
         log.info('on train epoch start')
 
-    def on_train_epoch_end(self, trainer, pl_module, outputs):
+    def on_train_epoch_end(self, *args, **kwargs):
         log.info('on train epoch end')
 
     def on_validation_epoch_start(self, trainer, pl_module):
@@ -70,6 +69,7 @@ class DebugCallback(Callback):
 class FPSCallback(Callback):
     """Measures frames per second in training and inference
     """
+
     def __init__(self):
         super().__init__()
         self.times = {'train': 0.0, 'val': 0.0, 'test': 0.0, 'speedtest': 0.0}
@@ -94,28 +94,22 @@ class FPSCallback(Callback):
 
         pl_module.metrics.buffer.append(split, {'fps': fps})
 
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx,
-                             dataloader_idx):
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
         self.start_timer('train')
 
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx,
-                           dataloader_idx):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         self.end_batch('train', batch, pl_module)
 
-    def on_validation_batch_start(self, trainer, pl_module, batch, batch_idx,
-                                  dataloader_idx):
+    def on_validation_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
         self.start_timer('val')
 
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch,
-                                batch_idx, dataloader_idx):
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         self.end_batch('val', batch, pl_module)
 
-    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx,
-                            dataloader_idx):
+    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
         self.start_timer('speedtest')
 
-    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx,
-                          dataloader_idx):
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         self.end_batch('speedtest', batch, pl_module)
 
 
@@ -145,13 +139,12 @@ def log_metrics(pl_module, split):
 class MetricsCallback(Callback):
     """Uses the lightning module to log metrics and hyperparameters, e.g. for tensorboard
     """
+
     def __init__(self):
         super().__init__()
 
-    def on_train_epoch_end(self, trainer, pl_module, outputs):
-        pl_module.metrics.buffer.append(
-            'train',
-            {'lr': utils.get_minimum_learning_rate(pl_module.optimizer)})
+    def on_train_epoch_end(self, trainer, pl_module):
+        pl_module.metrics.buffer.append('train', {'lr': utils.get_minimum_learning_rate(pl_module.optimizer)})
         _ = log_metrics(pl_module, 'train')
         # latest_key = pl_module.metrics.latest_key['train']
         # key = 'train_{}'.format(pl_module.metrics.key_metric)
@@ -172,12 +165,10 @@ class MetricsCallback(Callback):
             if key in scalar_metrics.keys():
                 hparam_metrics['hp/' + key] = scalar_metrics[key]
             else:
-                log.warning(
-                    'requested hparam metric {} not found in metrics: {}'.
-                    format(key, list(scalar_metrics.keys())))
+                log.warning('requested hparam metric {} not found in metrics: {}'.format(
+                    key, list(scalar_metrics.keys())))
         print(pl_module.tune_hparams, hparam_metrics)
-        pl_module.logger.log_hyperparams(pl_module.tune_hparams,
-                                         hparam_metrics)
+        pl_module.logger.log_hyperparams(pl_module.tune_hparams, hparam_metrics)
 
         # # log the latest key metric in tensorboard as hp_metric, which will enable hparam view
         # pl_module.log('hp_metric', latest_key, on_epoch=True)
@@ -191,6 +182,7 @@ class MetricsCallback(Callback):
 
 
 class ExampleImagesCallback(Callback):
+
     def __init__(self):
         super().__init__()
 
@@ -203,7 +195,7 @@ class ExampleImagesCallback(Callback):
     def reset_cnt(self, pl_module, split):
         pl_module.viz_cnt[split] = 0
 
-    def on_train_epoch_end(self, trainer, pl_module, outputs):
+    def on_train_epoch_end(self, trainer, pl_module):
         self.reset_cnt(pl_module, 'train')
 
     def on_validation_epoch_end(self, trainer, pl_module):
@@ -212,27 +204,25 @@ class ExampleImagesCallback(Callback):
     def on_test_epoch_end(self, trainer, pl_module):
         self.reset_cnt(pl_module, 'test')
 
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx,
-                           dataloader_idx):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         pl_module.viz_cnt['train'] += 1
 
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch,
-                                batch_idx, dataloader_idx):
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         pl_module.viz_cnt['val'] += 1
 
-    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx,
-                          dataloader_idx):
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         pl_module.viz_cnt['test'] += 1
 
 
 class CheckpointCallback(Callback):
+
     def __init__(self):
         super().__init__()
 
     def checkpoint(self, pl_module):
         utils.checkpoint(pl_module.model, os.getcwd(), pl_module.current_epoch)
 
-    def on_train_epoch_end(self, trainer, pl_module, outputs):
+    def on_train_epoch_end(self, trainer, pl_module):
         self.checkpoint(pl_module)
 
     def on_keyboard_interrupt(self, trainer, pl_module):
@@ -240,12 +230,13 @@ class CheckpointCallback(Callback):
 
 
 class StopperCallback(Callback):
+
     def __init__(self, stopper):
         super().__init__()
         self.stopper = stopper
         # self.should_stop = False
 
-    def on_train_epoch_end(self, trainer, pl_module, outputs):
+    def on_train_epoch_end(self, trainer, pl_module):
         # do this when starting because we're sure that both validation and training have ended
         if pl_module.current_epoch == 0:
             return
@@ -259,12 +250,10 @@ class StopperCallback(Callback):
         elif self.stopper.name == 'num_epochs':
             should_stop = self.stopper.step()
         else:
-            raise ValueError('invalid stopping name: {}'.format(
-                self.stopper.name))
+            raise ValueError('invalid stopping name: {}'.format(self.stopper.name))
 
         if should_stop:
             # log.info('Stopping criterion reached! Raising KeyboardInterrupt to quit')
-            log.info(
-                'Stopping criterion reached! setting trainer.should_stop=True')
+            log.info('Stopping criterion reached! setting trainer.should_stop=True')
             trainer.should_stop = True
             # raise KeyboardInterrupt
