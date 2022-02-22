@@ -22,7 +22,7 @@ from deepethogram import projects
 from deepethogram.data.augs import get_cpu_transforms
 from deepethogram.data.utils import purge_unlabeled_elements_from_records, get_video_metadata, extract_metadata, \
     find_labelfile, read_all_labels, get_split_from_records, remove_invalid_records_from_split_dictionary, \
-    make_loss_weight
+    make_loss_weight, fix_label
 from deepethogram.data.keypoint_utils import load_dlcfile, interpolate_bad_values, stack_features_in_time, \
     expand_features_sturman
 from deepethogram.file_io import read_labels
@@ -41,6 +41,7 @@ class VideoIterable(data.IterableDataset):
         - Each clip is read with stride = 1. If sequence_length==3, the first clips would be frames [0, 1, 2], 
             [1, 2, 3], [2, 3, 4], ... etc
     """
+
     def __init__(self,
                  videofile: Union[str, os.PathLike],
                  transform,
@@ -97,7 +98,7 @@ class VideoIterable(data.IterableDataset):
         im = self.transform(im)
         self._image_shape = im.shape
 
-    def get_zeros_image(self, ):
+    def get_zeros_image(self,):
         if self._zeros_image is None:
             if self._image_shape is None:
                 raise ValueError('must set shape before getting zeros image')
@@ -214,6 +215,7 @@ class SingleVideoDataset(data.Dataset):
         # assuming there are 5 classes in dataset
         # ~5 x 11
     """
+
     def __init__(self,
                  videofile: Union[str, os.PathLike],
                  labelfile: Union[str, os.PathLike] = None,
@@ -256,7 +258,9 @@ class SingleVideoDataset(data.Dataset):
         if self.supervised:
             assert os.path.isfile(labelfile)
             # self.video_list, self.label_list = purge_unlabeled_videos(self.video_list, self.label_list)
-            labels, class_counts, num_labels, num_pos, num_neg = read_all_labels([self.labelfile])
+            labels, class_counts, num_labels, num_pos, num_neg = read_all_labels([self.labelfile],
+                                                                                 True,
+                                                                                 multilabel=not self.reduce)
             self.labels = labels
             self.class_counts = class_counts
             self.num_labels = num_labels
@@ -363,13 +367,18 @@ class SingleVideoDataset(data.Dataset):
         if self.supervised:
             label = self.labels[index]
             if self.reduce:
-                label = np.where(label)[0][0].astype(np.int64)
+                try:
+                    label = np.where(label)[0][0].astype(np.int64)
+                except IndexError:
+                    logging.error(f'label {index} from video {self.videofile} has no positive labels! {label}')
+                    raise
             outputs['labels'] = label
         return outputs
 
 
 class VideoDataset(data.Dataset):
     """ Simple wrapper around SingleVideoDataset for smoothly loading multiple videos """
+
     def __init__(self, videofiles: list, labelfiles: list, *args, **kwargs):
         datasets, labels = [], []
         for i in range(len(videofiles)):
@@ -425,6 +434,7 @@ class SingleSequenceDataset(data.Dataset):
             # assuming there are 5 classes in dataset
             # ~5 x 180
         """
+
     def __init__(self,
                  data_file: Union[str, os.PathLike],
                  labelfile: Union[str, os.PathLike],
@@ -435,21 +445,26 @@ class SingleSequenceDataset(data.Dataset):
                  reduce: bool = False,
                  stack_in_time: bool = False):
 
+        self.reduce = reduce
+
         assert os.path.isfile(data_file)
         if labelfile is not None:
             assert os.path.isfile(labelfile)
             self.supervised = True
             # after transpose, label will be of shape N_behaviors x T
-            self.label = read_labels(labelfile).T
+            self.label = read_labels(labelfile)
+            self.label = fix_label(labelfile, self.label, multilabel=not self.reduce).T
             self.class_counts = (self.label == 1).sum(axis=1)
             self.num_pos = (self.label == 1).sum(axis=1)
             self.num_neg = np.logical_not((self.label == 1)).sum(axis=1)
+            if self.reduce:
+                self.label = np.where(self.label)[0].astype(np.int64)
         else:
             self.supervised = False
 
         self.sequence_length = sequence_length
         self.nonoverlapping = nonoverlapping
-        self.reduce = reduce
+
         self.starts = None
         self.ends = None
         # self.num_features = None
@@ -560,10 +575,15 @@ class SingleSequenceDataset(data.Dataset):
         # print(index)
         if self.supervised:
             # print(label_indices)
-            labels = self.label[:, label_indices].astype(np.int64)
-            if labels.ndim == 1:
-                labels = labels[:, np.newaxis]
-            labels = np.pad(labels, ((0, 0), (pad_left, pad_right)), mode='constant', constant_values=-1)
+            if not self.reduce:
+                labels = self.label[:, label_indices].astype(np.int64)
+                if labels.ndim == 1:
+                    labels = labels[:, np.newaxis]
+                labels = np.pad(labels, ((0, 0), (pad_left, pad_right)), mode='constant', constant_values=-1)
+            else:
+                labels = self.label[label_indices].astype(np.int64)
+                labels = np.pad(labels, (pad_left, pad_right), mode='constant', constant_values=-1)
+
             # if we stack in time, we want to make sure we have labels of shape (N_behaviors,)
             # not (N_behaviors, 1)
             labels = labels.squeeze()
@@ -571,8 +591,8 @@ class SingleSequenceDataset(data.Dataset):
             output['labels'] = labels
 
             if labels.ndim > 1 and labels.shape[1] != output['features'].shape[1]:
-                import pdb
-                pdb.set_trace()
+                out_shape = output['features'].shape
+                raise ValueError(f'problem in label shape! {labels.shape}, {out_shape}')
 
         return output
 
@@ -585,6 +605,7 @@ class KeypointDataset(SingleSequenceDataset):
         accuracy and is capable of outperforming commercial solutions. Neuropsychopharmacol. 45, 1942–1952 (2020). 
         https://doi.org/10.1038/s41386-020-0776-y
     """
+
     def __init__(self,
                  data_file: Union[str, os.PathLike],
                  labelfile: Union[str, os.PathLike],
@@ -665,6 +686,7 @@ class KeypointDataset(SingleSequenceDataset):
 class FeatureVectorDataset(SingleSequenceDataset):
     """Reads image and flow feature vectors from HDF5 files. 
     """
+
     def __init__(self,
                  data_file,
                  labelfile,
@@ -745,6 +767,7 @@ class FeatureVectorDataset(SingleSequenceDataset):
 
 class SequenceDataset(data.Dataset):
     """ Simple wrapper around SingleSequenceDataset for smoothly loading multiple sequences """
+
     def __init__(self,
                  datafiles: list,
                  labelfiles: list,
@@ -1163,6 +1186,8 @@ def get_datasets_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 
                                                 mean_by_channels=cfg.augs.normalization.mean)
 
     elif model_type == 'sequence':
+        if cfg.feature_extractor.final_activation == 'softmax':
+            reduce = True
         datasets, info = get_sequence_datasets(cfg.project.data_path,
                                                cfg.sequence.latent_name,
                                                cfg.sequence.sequence_length,

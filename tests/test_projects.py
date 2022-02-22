@@ -16,18 +16,22 @@ def test_initialization():
     clean_test_data()
 
     with pytest.raises(AssertionError):
-        project_dict = projects.initialize_project(test_data_path, 'testing', ['scratch', 'itch'])
+        project_dict = projects.initialize_project(test_data_path, 'testing',
+                                                   ['scratch', 'itch'])
 
-    project_dict = projects.initialize_project(test_data_path, 'testing', ['background', 'scratch', 'itch'])
+    project_dict = projects.initialize_project(
+        test_data_path, 'testing', ['background', 'scratch', 'itch'])
     # print(project_dict)
     # print(project_dict['project'])
     assert os.path.isdir(project_dict['project']['path'])
     assert project_dict['project']['path'] == project_path
 
-    data_abs = os.path.join(project_dict['project']['path'], project_dict['project']['data_path'])
+    data_abs = os.path.join(project_dict['project']['path'],
+                            project_dict['project']['data_path'])
     assert os.path.isdir(data_abs)
 
-    model_abs = os.path.join(project_dict['project']['path'], project_dict['project']['model_path'])
+    model_abs = os.path.join(project_dict['project']['path'],
+                             project_dict['project']['model_path'])
     assert os.path.isdir(model_abs)
 
 
@@ -36,7 +40,8 @@ def test_initialization():
 def test_add_video(key):
     make_project_from_archive()
 
-    project_dict = projects.load_config(os.path.join(project_path, 'project_config.yaml'))
+    project_dict = projects.load_config(
+        os.path.join(project_path, 'project_config.yaml'))
     # project_dict = utils.load_yaml()
     key_path = os.path.join(project_path, 'DATA', key)
     assert os.path.isdir(key_path)
@@ -49,7 +54,8 @@ def test_add_video(key):
     # this also z-scores, which is pretty slow
     projects.add_video_to_project(project_dict, videofile)
     assert os.path.isdir(os.path.join(project_path, 'DATA', key))
-    assert os.path.exists(os.path.join(project_path, 'DATA', key, os.path.basename(videofile)))
+    assert os.path.exists(
+        os.path.join(project_path, 'DATA', key, os.path.basename(videofile)))
 
 
 @pytest.mark.parametrize('key', ['mouse00', 'mouse01'])
@@ -106,9 +112,14 @@ def test_remove_behavior():
 
 @pytest.mark.filterwarnings('ignore::UserWarning')
 def test_add_external_label():
+    make_project_from_archive()
     mousedir = os.path.join(project_path, 'DATA', 'mouse06')
     assert os.path.isdir(mousedir), '{} does not exist!'.format(mousedir)
-    labelfile = os.path.join(mousedir, 'test_labels.csv')
+    labelfile = os.path.join(mousedir, 'labels.csv')
     videofile = os.path.join(mousedir, 'mouse06.h5')
 
     projects.add_label_to_project(labelfile, videofile)
+
+
+if __name__ == '__main__':
+    test_add_external_label()

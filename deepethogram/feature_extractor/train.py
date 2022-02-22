@@ -20,7 +20,7 @@ from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
 from deepethogram.configuration import make_feature_extractor_train_cfg
 from deepethogram.data.augs import get_gpu_transforms
 from deepethogram.data.datasets import get_datasets_from_cfg
-from deepethogram.feature_extractor.losses import ClassificationLoss, BinaryFocalLoss
+from deepethogram.feature_extractor.losses import ClassificationLoss, BinaryFocalLoss, CrossEntropyLoss
 from deepethogram.feature_extractor.models.CNN import get_cnn
 from deepethogram.feature_extractor.models.hidden_two_stream import HiddenTwoStream, FlowOnlyClassifier, \
     build_fusion_layer
@@ -274,6 +274,7 @@ def build_model_from_cfg(cfg: DictConfig,
 class HiddenTwoStreamLightning(BaseLightningModule):
     """Lightning Module for training Feature Extractor models
     """
+
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, criterion: nn.Module):
         """constructor
 
@@ -583,7 +584,7 @@ def get_criterion(cfg: DictConfig, model, data_info: dict, device=None):
             weight = data_info['loss_weight']
         else:
             weight = None
-        data_criterion = nn.CrossEntropyLoss(weight=weight)
+        data_criterion = CrossEntropyLoss(weight=weight)
 
     elif final_activation == 'sigmoid':
         pos_weight = data_info['pos_weight']

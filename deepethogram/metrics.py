@@ -226,8 +226,12 @@ def confusion_alias(inp):
     return binary_confusion_matrix(*inp)
 
 
-def binary_confusion_matrix_parallel(probs_or_preds, labels, thresholds=None, chunk_size: int = 100,
-                                     num_workers: int = 4, parallel_chunk: int = 100):
+def binary_confusion_matrix_parallel(probs_or_preds,
+                                     labels,
+                                     thresholds=None,
+                                     chunk_size: int = 100,
+                                     num_workers: int = 4,
+                                     parallel_chunk: int = 100):
     # log.info('num workers binary confusion parallel: {}'.format(num_workers))
     if slurm:
         parallel_chunk = 1
@@ -367,7 +371,9 @@ def fast_auc(y_true, y_prob):
 
 
 # @profile
-def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, thresholds: np.ndarray = None,
+def evaluate_thresholds(probabilities: np.ndarray,
+                        labels: np.ndarray,
+                        thresholds: np.ndarray = None,
                         num_workers: int = 4) -> Tuple[dict, dict]:
     """ Given probabilities and labels, compute a bunch of metrics at each possible threshold value
 
@@ -400,7 +406,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
 
     if thresholds is None:
         # using 200 means that approximated mAP, AUROC is almost exactly the same as exact
-        thresholds = np.linspace(1e-4,1,200)
+        thresholds = np.linspace(1e-4, 1, 200)
     # log.info('num workers in evaluate thresholds: {}'.format(num_workers))
     # log.debug('probabilities shape in metrics calc: {}'.format(probabilities.shape))
     metrics_by_threshold = {}
@@ -427,7 +433,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     optimum_thresholds_info = thresholds[optimum_indices_info]
     optimum_info = metrics_by_threshold['informedness'][optimum_indices_info, range(len(optimum_indices_info))]
     optimum_thresholds_info = remove_low_thresholds(optimum_thresholds_info, f1s=optimum_info)
-    
+
     metrics_by_threshold['optimum'] = optimum_thresholds
     metrics_by_threshold['optimum_info'] = optimum_thresholds_info
 
@@ -435,7 +441,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     predictions = probabilities > optimum_thresholds
     # ALWAYS REPORT THE PERFORMANCE WITH "VALID" BACKGROUND
     predictions[:, 0] = np.logical_not(np.any(predictions[:, 1:], axis=1))
-    
+
     # log.info('computing metric thresholds again')
     # re-use our confusion matrix calculation. returns N x N x K values
     # log.info('second metircs call')
@@ -445,7 +451,10 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
     # summing over classes is the same as flattening the array. ugly syntax
     # TODO: make function that computes metrics from a stack of confusion matrices rather than this none None business
     # log.info('third metrics call')
-    overall_metrics = compute_metrics_by_threshold(None, None, thresholds=None, num_workers=num_workers,
+    overall_metrics = compute_metrics_by_threshold(None,
+                                                   None,
+                                                   thresholds=None,
+                                                   num_workers=num_workers,
                                                    cm=metrics_by_class['confusion'].sum(axis=2))
     # log.info('third metrics call ended')
     epoch_metrics = {
@@ -453,7 +462,7 @@ def evaluate_thresholds(probabilities: np.ndarray, labels: np.ndarray, threshold
         'accuracy_by_class': metrics_by_class['accuracy'],
         'f1_overall': overall_metrics['f1'],
         'f1_class_mean': metrics_by_class['f1'].mean(),
-        'f1_class_mean_nobg': metrics_by_class['f1'][1:].mean(), 
+        'f1_class_mean_nobg': metrics_by_class['f1'][1:].mean(),
         'f1_by_class': metrics_by_class['f1'],
         'binary_confusion': metrics_by_class['confusion'].transpose(2, 0, 1),
         'auroc_by_class': metrics_by_threshold['auroc'],
@@ -508,8 +517,8 @@ def get_denominator(expression: Union[float, np.ndarray]):
 def compute_f1(precision: float, recall: float, beta: float = 1.0) -> float:
     """ compute f1 if you already have precison and recall. Prevents re-computing confusion matrix, etc """
 
-    num = (1 + beta ** 2) * (precision * recall)
-    denom = get_denominator((beta ** 2) * precision + recall)
+    num = (1 + beta**2) * (precision * recall)
+    denom = get_denominator((beta**2) * precision + recall)
     return num / denom
 
 
@@ -606,6 +615,7 @@ def append_to_hdf5(f, name, value, axis=0):
 
 
 class Buffer:
+
     def __init__(self):
         self.data = {}
         self.splits = ['train', 'val', 'test', 'speedtest']
@@ -655,6 +665,7 @@ class Buffer:
 
 
 class EmptyBuffer:
+
     def __init__(self):
         self.data = {}
         self.splits = ['train', 'val', 'test', 'speedtest']
@@ -677,7 +688,8 @@ class EmptyBuffer:
 class Metrics:
     """Class for saving a list of per-epoch metrics to disk as an HDF5 file"""
 
-    def __init__(self, run_dir: Union[str, bytes, os.PathLike],
+    def __init__(self,
+                 run_dir: Union[str, bytes, os.PathLike],
                  key_metric: str,
                  name: str,
                  num_parameters: int,
@@ -780,8 +792,8 @@ class Metrics:
                         group.create_dataset(key, shape, maxshape=maxshape, dtype=array.dtype)
                     group[key][-1] = array
                 else:
-                    raise ValueError('Metrics must contain dicts of np.ndarrays, not {} of type {}'.format(array,
-                                                                                                           type(array)))
+                    raise ValueError('Metrics must contain dicts of np.ndarrays, not {} of type {}'.format(
+                        array, type(array)))
 
     def end_epoch(self, split: str):
         """ End the current training epoch. Saves any metrics in memory to disk
@@ -810,13 +822,14 @@ class Metrics:
         with h5py.File(self.fname, 'r') as f:
             assert split in f.keys(), 'split {} not found in file: {}'.format(split, list(f.keys()))
             group = f[split]
-            assert metric_name in group.keys(), 'metric {} not found in group: {}'.format(metric_name,
-                                                                                          list(group.keys()))
+            assert metric_name in group.keys(), 'metric {} not found in group: {}'.format(
+                metric_name, list(group.keys()))
             data = group[metric_name][epoch_number, ...]
         return data
 
 
 class EmptyMetrics(Metrics):
+
     def __init__(self, *args, **kwargs):
         super().__init__(os.getcwd(), [], 'loss', 'empty', 0)
         self.buffer = EmptyBuffer()
@@ -833,10 +846,15 @@ class EmptyMetrics(Metrics):
 class Classification(Metrics):
     """ Metrics class for saving multiclass or multilabel classifcation metrics to disk """
 
-    def __init__(self, run_dir: Union[str, bytes, os.PathLike], key_metric: str, num_parameters: int,
+    def __init__(self,
+                 run_dir: Union[str, bytes, os.PathLike],
+                 key_metric: str,
+                 num_parameters: int,
                  num_classes: int = None,
                  splits: list = ['train', 'val'],
-                 ignore_index: int = -1, evaluate_threshold: bool = False, num_workers: int = 4):
+                 ignore_index: int = -1,
+                 evaluate_threshold: bool = False,
+                 num_workers: int = 4):
         """ Constructor for classification metrics class
 
         Parameters
@@ -898,7 +916,11 @@ class Classification(Metrics):
 
         # if data are from sequence models, stack into N*T x K not N x K x T
         probs = self.stack_sequence_data(data['probs'])
-        labels = self.stack_sequence_data(data['labels'])
+        if data['probs'].ndim == 3 and data['labels'].ndim == 2:
+            # special case for sequence models with final_activation==softmax, aka multiclass classification
+            labels = data['labels'].transpose(0, 1).flatten()
+        else:
+            labels = self.stack_sequence_data(data['labels'])
 
         num_classes = probs.shape[1]
         one_hot = probs.shape[-1] == labels.shape[-1]
@@ -914,8 +936,7 @@ class Classification(Metrics):
         if self.evaluate_threshold:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                metrics_by_threshold, epoch_metrics = evaluate_thresholds(probs, labels, None,
-                                                                          self.num_workers)
+                metrics_by_threshold, epoch_metrics = evaluate_thresholds(probs, labels, None, self.num_workers)
                 metrics['metrics_by_threshold'] = metrics_by_threshold
                 for key, value in epoch_metrics.items():
                     metrics[key] = value
@@ -944,8 +965,7 @@ class Classification(Metrics):
 class OpticalFlow(Metrics):
     """ Metrics class for saving optic flow metrics to disk """
 
-    def __init__(self, run_dir, key_metric, num_parameters,
-                 splits=['train', 'val']):
+    def __init__(self, run_dir, key_metric, num_parameters, splits=['train', 'val']):
         super().__init__(run_dir, key_metric, 'opticalflow', num_parameters, splits)
 
     def compute(self, data: dict) -> dict:
