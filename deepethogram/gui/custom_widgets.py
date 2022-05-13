@@ -108,11 +108,18 @@ class VideoFrame(QtWidgets.QGraphicsView):
                 factor = 0.8
                 self._zoom -= 1
             if self._zoom > 0:
+                # https://stackoverflow.com/questions/58965209/zoom-on-mouse-position-qgraphicsview
+                view_pos = event.pos()
+                scene_pos = self.mapToScene(view_pos)
+                self.centerOn(scene_pos)
                 self.scale(factor, factor)
+                delta = self.mapToScene(view_pos) - self.mapToScene(self.viewport().rect().center())
+                self.centerOn(scene_pos - delta)
             elif self._zoom == 0:
                 self.fitInView()
             else:
                 self._zoom = 0
+                self.fitInView()
 
     def update_frame(self, value, force: bool = False):
         # print('updating')
