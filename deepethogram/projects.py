@@ -676,6 +676,21 @@ def is_config_dict(config: dict) -> bool:
     return True
 
 
+def get_unfinalized_records(config: dict) -> list:
+    """ Finds the number of label files with no unlabeled frames  """
+    records = get_records_from_datadir(os.path.join(config['project']['path'], config['project']['data_path']))
+    unfinalized = []
+    for k, v in records.items():
+        if v['label'] is None or len(v['label']) == 0:
+            unfinalized.append(v)
+        else:
+            label = read_labels(v['label'])
+            has_unlabeled_frames = np.any(label == -1)
+            if has_unlabeled_frames:
+                unfinalized.append(v)
+    return unfinalized
+
+
 def get_number_finalized_labels(config: dict) -> int:
     """ Finds the number of label files with no unlabeled frames  """
     records = get_records_from_datadir(os.path.join(config['project']['path'], config['project']['data_path']))
@@ -1112,8 +1127,8 @@ def convert_config_paths_to_absolute(project_cfg: DictConfig,
         pretrained_path = 'pretrained_models'
     cfg_path = os.path.join(root, project_cfg['project']['config_file'])
 
-    if (os.path.isdir(model_path) and os.path.isdir(data_path) and os.path.isfile(cfg_path)
-            and os.path.isdir(pretrained_path)):
+    if (os.path.isdir(model_path) and os.path.isdir(data_path) and os.path.isfile(cfg_path) and
+            os.path.isdir(pretrained_path)):
         # already absolute
         return project_cfg
 
@@ -1138,8 +1153,7 @@ def convert_config_paths_to_absolute(project_cfg: DictConfig,
         # my_project/pretrained
         # my_project/models/pretrained
         pretrained_options = [
-            os.path.join(i, pretrained_path)
-            for i in [model_path, root, os.path.join(root, 'models')]
+            os.path.join(i, pretrained_path) for i in [model_path, root, os.path.join(root, 'models')]
         ]
 
         exists = [os.path.isdir(i) for i in pretrained_options]
