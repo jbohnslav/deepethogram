@@ -41,7 +41,8 @@ Then, click `copy to Drive` at the top. You won't be able to save your changes t
 
 
 ## News
-DeepEthogram is now in Beta, version 0.1! There are major changes to the codebase and to model training and inference. Model performance, measured by F1, accuracy, etc. should be higher in version 0.1. Model training times and inference times should be dramatically reduced. For full information, see [the DeepEthogram Beta docs](docs/beta.md)
+We now support docker! Docker is a way to run `deepethogram` in completely reproducible environments, without interacting
+with other system dependencies. [See docs/Docker for more information](docs/docker.md)
 
 ## Pretrained models
 Rather than start from scratch, we will start with model weights pretrained on the Kinetics700 dataset. Go to 
@@ -96,6 +97,7 @@ the `zz_commandline` test module will take a few minutes, as it is an end-to-end
 and inference. Its name reflects the fact that it should come last in testing. 
 
 ## Changelog
+* 0.1.4: bugfixes for dependencies; added zoom
 * 0.1.2/3: fixes for multiclass (not multilabel) training
 * 0.1.1.post1/2: batch prediction
 * 0.1.1.post0: flow generator metric bug fix
