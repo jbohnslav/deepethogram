@@ -97,7 +97,7 @@ the `zz_commandline` test module will take a few minutes, as it is an end-to-end
 and inference. Its name reflects the fact that it should come last in testing. 
 
 ## Changelog
-* 0.1.4: bugfixes for dependencies; added zoom
+* 0.1.4: bugfixes for dependencies; added docker
 * 0.1.2/3: fixes for multiclass (not multilabel) training
 * 0.1.1.post1/2: batch prediction
 * 0.1.1.post0: flow generator metric bug fix
