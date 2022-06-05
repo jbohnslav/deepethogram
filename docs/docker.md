@@ -17,7 +17,8 @@ Explanation
 
 ## Running the GUI without training support (no pytorch, etc.)
 Again, change `/media` to your hard drive with your training data
-`docker run --gpus all -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v /media:/media -it deepethogram:gui python -m deepethogram`
+
+`docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v /media:/media -it jbohnslav/deepethogram:gui python -m deepethogram`
 
 ## Running the CLI without GUI support
 `docker run --gpus all -v /media:/media -it jbohnslav/deepethogram:headless pytest tests/`
