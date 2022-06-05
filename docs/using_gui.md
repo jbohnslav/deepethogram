@@ -146,6 +146,9 @@ There are multiple ways to change video frames using the GUI.
 2. Use the scroll bar and arrows (**12i**)
 3. Edit the frame number in the frame text box (**12ii**)
 
+## Zoom
+As of 0.1.4, you can zoom in/out of videos. Double-click on the video to make it fit to your current window. Use the 
+mouse scroll wheel to zoom in/out.
 
  
 

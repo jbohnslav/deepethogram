@@ -93,6 +93,8 @@ class MainWindow(QMainWindow):
         self.ui.actionSave_Project.triggered.connect(self.save)
         save_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence('Ctrl+S'), self)
         save_shortcut.activated.connect(self.save)
+        finalize_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence('Ctrl+F'), self)
+        finalize_shortcut.activated.connect(self.finalize)
         open_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence('Ctrl+O'), self)
         open_shortcut.activated.connect(self.load_project)
         self.ui.finalize_labels.clicked.connect(self.finalize)
@@ -192,6 +194,9 @@ class MainWindow(QMainWindow):
         if self.has_trained('sequence') and n_output_files > 0:
             self.ui.sequence_infer.setEnabled(True)
             self.ui.classifierInference.setEnabled(True)
+
+        self.unfinalized = projects.get_unfinalized_records(self.cfg)
+        self.unfinalized_idx = 0
 
     def video_loaded_buttons(self):
         self.ui.finalize_labels.setEnabled(True)
@@ -424,8 +429,8 @@ class MainWindow(QMainWindow):
             raise ValueError('Dont run inference without using a proper feature extractor weights! {}'.format(weights))
 
         args = [
-            'python', '-m', 'deepethogram.feature_extractor.inference',
-            'project.path={}'.format(self.cfg.project.path), 'inference.overwrite=True', weight_arg
+            'python', '-m', 'deepethogram.feature_extractor.inference', 'project.path={}'.format(self.cfg.project.path),
+            'inference.overwrite=True', weight_arg
         ]
         flow_weights = self.get_selected_models()['flow_generator']
         assert flow_weights is not None
@@ -756,16 +761,21 @@ class MainWindow(QMainWindow):
             return
 
         if not self.saved:
-            if simple_popup_question(
-                    self, 'You have unsaved changes. You must save before labels can be finalized. '
-                    'Do you want to save?'):
-                self.save()
-            else:
-                return
+            self.save()
+            # if simple_popup_question(
+            #         self, 'You have unsaved changes. You must save before labels can be finalized. '
+            #         'Do you want to save?'):
+            #     self.save()
+            # else:
+            #     return
         log.info('finalizing labels for file {}'.format(self.videofile))
         fname, _ = os.path.splitext(self.videofile)
         label_fname = fname + '_labels.csv'
-        df = pd.read_csv(label_fname, index_col=0)
+        if not os.path.isfile(label_fname):
+            label = self.ui.labels.label.array
+            df = pd.DataFrame(label, columns=self.cfg.project.class_names)
+        else:
+            df = pd.read_csv(label_fname, index_col=0)
         array = df.values
         array[array == -1] = 0
         background_frames = np.logical_not(np.any(array[:, 1:], axis=1))
@@ -777,6 +787,11 @@ class MainWindow(QMainWindow):
         self.ui.labels.label.array = array
         self.ui.labels.label.recreate_label_image()
         self.user_did_something()
+        self.unfinalized_idx += 1
+        if self.unfinalized_idx >= len(self.unfinalized):
+            raise ValueError('no more videos to label! you can still use the GUI to browse or fix labels')
+        self.initialize_video(self.unfinalized[self.unfinalized_idx]['rgb'])
+        
 
     def save(self):
         if self.saved:
@@ -1016,7 +1031,10 @@ class MainWindow(QMainWindow):
         self.project_loaded_buttons()
         if len(records) == 0:
             return
-        last_record = list(records.values())[-1]
+        if len(self.unfinalized) == 0:
+            last_record = list(records.values())[-1]
+        else:
+            last_record = self.unfinalized[0]
         if last_record['rgb'] is not None:
             self.initialize_video(last_record['rgb'])
         if last_record['label'] is not None:
@@ -1147,7 +1165,7 @@ class MainWindow(QMainWindow):
         # all rows that have not been changed by the labeler should be labeled -1!
         # this signifies unknown label. If we left it 0, an unlabeled frame would be indistinguishable from a
         # negative example
-        null_row = np.ones((n_behaviors, )) * -1
+        null_row = np.ones((n_behaviors,)) * -1
         label[np.logical_not(changed), :] = null_row
         # print(array.shape, len(self.label.behaviors))
         # print(self.label.behaviors)

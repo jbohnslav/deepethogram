@@ -4,7 +4,7 @@ from pprint import pformat
 import cv2
 import numpy as np
 import torch
-from kornia import augmentation as K # , adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue, pi
+from kornia import augmentation as K  # , adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue, pi
 from kornia.augmentation.container import VideoSequential
 from omegaconf import DictConfig
 from opencv_transforms import transforms
@@ -29,6 +29,7 @@ def get_normalization_layer(mean: list, std: list, num_images: int = 1, mode: st
 class Transpose:
     """Module to transpose image stacks.
     """
+
     def __call__(self, images: np.ndarray) -> np.ndarray:
         shape = images.shape
         if len(shape) == 4:
@@ -45,6 +46,7 @@ class Transpose:
 class NormalizeVideo(nn.Module):
     """Z-scores input video sequences
     """
+
     def __init__(self, mean, std):
         super().__init__()
 
@@ -56,7 +58,7 @@ class NormalizeVideo(nn.Module):
         self.mean = mean.reshape(1, -1, 1, 1, 1)
         self.std = std.reshape(1, -1, 1, 1, 1)
         self.ndim = self.mean.ndim
-        
+
         assert self.ndim == self.std.ndim
 
     def normalize(self, tensor):
@@ -66,7 +68,7 @@ class NormalizeVideo(nn.Module):
         if self.std.device != tensor.device:
             self.std = self.std.to(tensor.device)
         return (tensor.float() - self.mean) / self.std
-    
+
     def forward(self, tensor):
         return self.normalize(tensor)
 
@@ -74,6 +76,7 @@ class NormalizeVideo(nn.Module):
 class DenormalizeVideo(nn.Module):
     """Un-z-scores input video sequences
     """
+
     def __init__(self, mean, std):
         super().__init__()
 
@@ -93,7 +96,7 @@ class DenormalizeVideo(nn.Module):
         if self.std.device != tensor.device:
             self.std = self.std.to(tensor.device)
 
-        return torch.clamp( tensor*self.std + self.mean , 0, 1)
+        return torch.clamp(tensor * self.std + self.mean, 0, 1)
 
     def forward(self, tensor):
         return self.normalize(tensor)
@@ -102,6 +105,7 @@ class DenormalizeVideo(nn.Module):
 class ToFloat(nn.Module):
     """Module for converting input uint8 tensors to floats, dividing by 255
     """
+
     def __init__(self):
         super().__init__()
 
@@ -115,6 +119,7 @@ class ToFloat(nn.Module):
 class StackClipInChannels(nn.Module):
     """Module to convert image from N,C,T,H,W -> N,C*T,H,W
     """
+
     def __init__(self):
         super().__init__()
 
@@ -128,6 +133,7 @@ class StackClipInChannels(nn.Module):
 class UnstackClip(nn.Module):
     """Module to convert image from N,C*T,H,W -> N,C,T,H,W
     """
+
     def __init__(self):
         super().__init__()
 
@@ -172,9 +178,7 @@ def get_cpu_transforms(augs: DictConfig) -> dict:
     train_transforms = transforms.Compose(train_transforms)
     val_transforms = transforms.Compose(val_transforms)
 
-    xform = {'train': train_transforms,
-             'val': val_transforms,
-             'test': val_transforms}
+    xform = {'train': train_transforms, 'val': val_transforms, 'test': val_transforms}
     log.debug('CPU transforms: {}'.format(xform))
     return xform
 
@@ -198,61 +202,47 @@ def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
     # input is a tensor of shape N x C x F x H x W
     train_transforms = [ToFloat()]
     val_transforms = [ToFloat()]
-    
+
     kornia_transforms = []
-    
+
     if augs.LR > 0:
-        kornia_transforms.append(K.RandomHorizontalFlip(p=augs.LR,
-                                                        same_on_batch=False,
-                                                        return_transform=False))
+        kornia_transforms.append(K.RandomHorizontalFlip(p=augs.LR, same_on_batch=False))
     if augs.UD > 0:
-        kornia_transforms.append(K.RandomVerticalFlip(p=augs.UD,
-                                                     same_on_batch=False, return_transform=False))
+        kornia_transforms.append(K.RandomVerticalFlip(p=augs.UD, same_on_batch=False))
     if augs.degrees > 0:
         kornia_transforms.append(K.RandomRotation(augs.degrees))
 
     if augs.brightness > 0 or augs.contrast > 0 or augs.saturation > 0 or augs.hue > 0:
-        kornia_transforms.append(K.ColorJitter(brightness=augs.brightness,
-                                              contrast=augs.contrast, 
-                                              saturation=augs.saturation, 
-                                              hue=augs.hue, 
-                                              p=augs.color_p, 
-                                              same_on_batch=False, 
-                                              return_transform=False))
+        kornia_transforms.append(
+            K.ColorJitter(brightness=augs.brightness,
+                          contrast=augs.contrast,
+                          saturation=augs.saturation,
+                          hue=augs.hue,
+                          p=augs.color_p,
+                          same_on_batch=False))
     if augs.grayscale > 0:
         kornia_transforms.append(K.RandomGrayscale(p=augs.grayscale))
-    
-    
-    norm = NormalizeVideo(mean=augs.normalization.mean,
-                          std=augs.normalization.std)
+
+    norm = NormalizeVideo(mean=augs.normalization.mean, std=augs.normalization.std)
     # kornia_transforms.append(norm)
-    
-    kornia_transforms = VideoSequential(*kornia_transforms, 
-                                        data_format='BCTHW', 
-                                        same_on_frame=True)    
-    
-    train_transforms = [ToFloat(), 
-                        kornia_transforms, 
-                        norm]
-    val_transforms = [ToFloat(), 
-                      norm]
+
+    kornia_transforms = VideoSequential(*kornia_transforms, data_format='BCTHW', same_on_frame=True)
+
+    train_transforms = [ToFloat(), kornia_transforms, norm]
+    val_transforms = [ToFloat(), norm]
 
     denormalize = []
     if mode == '2d':
         train_transforms.append(StackClipInChannels())
         val_transforms.append(StackClipInChannels())
         denormalize.append(UnstackClip())
-    denormalize.append(DenormalizeVideo(mean=augs.normalization.mean,
-                                        std=augs.normalization.std))
+    denormalize.append(DenormalizeVideo(mean=augs.normalization.mean, std=augs.normalization.std))
 
     train_transforms = nn.Sequential(*train_transforms)
     val_transforms = nn.Sequential(*val_transforms)
     denormalize = nn.Sequential(*denormalize)
 
-    gpu_transforms = dict(train=train_transforms,
-                val=val_transforms,
-                test=val_transforms,
-                denormalize=denormalize)
+    gpu_transforms = dict(train=train_transforms, val=val_transforms, test=val_transforms, denormalize=denormalize)
     log.info('GPU transforms: {}'.format(gpu_transforms))
     return gpu_transforms
 
@@ -277,13 +267,11 @@ def get_gpu_transforms_inference(augs: DictConfig, mode: str = '2d') -> dict:
     # import pdb; pdb.set_trace()
     # norm = get_normalization_layer(np.array(augs.normalization.mean), np.array(augs.normalization.std),
     #                                num_images, mode)
-    xform = [NormalizeVideo(mean=augs.normalization.mean,
-                          std=augs.normalization.std)]
+    xform = [NormalizeVideo(mean=augs.normalization.mean, std=augs.normalization.std)]
     if mode == '2d':
         xform.append(StackClipInChannels())
     xform = nn.Sequential(*xform)
-    gpu_transforms = dict(val=xform,
-                          test=xform)
+    gpu_transforms = dict(val=xform, test=xform)
     return gpu_transforms
 
 
@@ -296,8 +284,5 @@ def get_empty_gpu_transforms() -> dict:
         keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations. 
         Example: auged_images = xform['train'](images)
     """
-    gpu_transforms = dict(train=nn.Identity(),
-                          val=nn.Identity(),
-                          test=nn.Identity(),
-                          denormalize=nn.Identity())
+    gpu_transforms = dict(train=nn.Identity(), val=nn.Identity(), test=nn.Identity(), denormalize=nn.Identity())
     return gpu_transforms
