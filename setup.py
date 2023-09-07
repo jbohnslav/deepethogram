@@ -18,5 +18,5 @@ setuptools.setup(name='deepethogram',
                  install_requires=[
                      'chardet<4.0', 'h5py', 'kornia>=0.5', 'matplotlib', 'numpy', 'omegaconf>=2',
                      'opencv-python-headless', 'opencv-transforms', 'pandas<1.4', 'PySide2', 'scikit-learn<1.1',
-                     'scipy<1.8', 'tqdm', 'vidio', 'pytorch_lightning>=1.5.10'
+                     'scipy<1.8', 'tqdm', 'vidio', 'pytorch_lightning>=2.0.7'
                  ])
