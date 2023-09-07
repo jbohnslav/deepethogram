@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks.progress import TQDMProgressBar
 try:
     from ray.tune.integration.pytorch_lightning import TuneReportCallback, \
         TuneReportCheckpointCallback
@@ -275,8 +276,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
     # learning rate schedule.
 
     if cfg.compute.batch_size == 'auto' or cfg.train.lr == 'auto':
-        trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
-                             precision=16 if cfg.compute.fp16 else 32,
+        trainer = pl.Trainer(precision=16 if cfg.compute.fp16 else 32,
                              limit_train_batches=1.0,
                              limit_val_batches=1.0,
                              limit_test_batches=1.0,
@@ -378,13 +378,13 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
     else:
         tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(os.getcwd())
         refresh_rate = 1
+        callback_list.append(TQDMProgressBar(refresh_rate=refresh_rate))
 
     # tuning messes with the callbacks
     try:
         # will be deprecated in the future; pytorch lightning updated their kwargs for this function
         # don't like how they keep updating the api without proper deprecation warnings, etc.
-        trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
-                             precision=16 if cfg.compute.fp16 else 32,
+        trainer = pl.Trainer(precision=16 if cfg.compute.fp16 else 32,
                              limit_train_batches=steps_per_epoch['train'],
                              limit_val_batches=steps_per_epoch['val'],
                              limit_test_batches=steps_per_epoch['test'],
@@ -393,13 +393,11 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                              num_sanity_val_steps=0,
                              callbacks=callback_list,
                              reload_dataloaders_every_epoch=True,
-                             progress_bar_refresh_rate=refresh_rate,
                              profiler=profiler,
                              log_every_n_steps=1)
 
     except TypeError:
-        trainer = pl.Trainer(gpus=[cfg.compute.gpu_id],
-                             precision=16 if cfg.compute.fp16 else 32,
+        trainer = pl.Trainer(precision=16 if cfg.compute.fp16 else 32,
                              limit_train_batches=steps_per_epoch['train'],
                              limit_val_batches=steps_per_epoch['val'],
                              limit_test_batches=steps_per_epoch['test'],
@@ -408,7 +406,6 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
                              num_sanity_val_steps=0,
                              callbacks=callback_list,
                              reload_dataloaders_every_n_epochs=1,
-                             progress_bar_refresh_rate=refresh_rate,
                              profiler=profiler,
                              log_every_n_steps=1)
     torch.cuda.empty_cache()
