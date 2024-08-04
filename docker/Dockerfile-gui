@@ -39,12 +39,9 @@ RUN pip install setuptools --upgrade && pip install --upgrade pip
 
 # TODO: REFACTOR CODE SO IT'S POSSIBLE TO RUN GUI WITHOUT TORCH
 RUN conda install pytorch cpuonly -c pytorch
-RUN pip install  "chardet<4.0" h5py matplotlib numpy omegaconf>=2 "pandas<1.4" PySide2 \
-    "scikit-learn<1.1" "scipy<1.8" tqdm opencv-python-headless vidio>=0.0.4 pytest \
-    opencv-transforms
 
 # # needed for pandas for some reason
 ADD . /app/deepethogram
 WORKDIR /app/deepethogram
 ENV DEG_VERSION='gui'
-RUN pip install -e . --no-dependencies
+RUN pip install -e .
