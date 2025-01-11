@@ -16,7 +16,7 @@ def compute_pad(stride, k, s):
 
 
 class TGMLayer(nn.Module):
-    """ THIS LAYER HAS BEEN EDITED ONLY SLIGHTLY FROM THE AUTHOR'S ORIGINAL.
+    """THIS LAYER HAS BEEN EDITED ONLY SLIGHTLY FROM THE AUTHOR'S ORIGINAL.
     https://github.com/piergiaj/tgm-icml19/
 
     @inproceedings{piergiovanni2018super,
@@ -26,14 +26,17 @@ class TGMLayer(nn.Module):
           year={2019}
     }
     """
-    def __init__(self,
-                 D: int = 1024,
-                 n_filters: int = 3,
-                 filter_length: int = 30,
-                 c_in: int = 1,
-                 c_out: int = 1,
-                 soft: bool = False,
-                 viz: bool = False):
+
+    def __init__(
+        self,
+        D: int = 1024,
+        n_filters: int = 3,
+        filter_length: int = 30,
+        c_in: int = 1,
+        c_out: int = 1,
+        soft: bool = False,
+        viz: bool = False,
+    ):
         super().__init__()
         self.D = D
         self.n_filters = n_filters
@@ -139,7 +142,7 @@ class TGMLayer(nn.Module):
             # output of C_in xDxT
             # indexing selects one row of k of shape C_in x1x1xL
             # grouped convolution applies to every C_in (of shape 1xDxT)
-            r = F.conv2d(x, k[i * self.c_in:(i + 1) * self.c_in], groups=self.c_in).squeeze(1)
+            r = F.conv2d(x, k[i * self.c_in : (i + 1) * self.c_in], groups=self.c_in).squeeze(1)
             # print('r: {}'.format(r.shape))
             # now, you have a stack of NxC_in x D x T
             # 1x1 conv to combine C_in to 1
@@ -165,22 +168,24 @@ class TGMLayer(nn.Module):
 
 
 class TGM(nn.Module):
-    def __init__(self,
-                 D: int = 1024,
-                 n_filters: int = 16,
-                 filter_length: int = 30,
-                 input_dropout: float = 0.5,
-                 dropout_p: float = 0.5,
-                 classes: int = 8,
-                 num_layers: int = 3,
-                 reduction: str = 'max',
-                 c_in: int = 1,
-                 c_out: int = 8,
-                 soft: bool = False,
-                 num_features: int = 512,
-                 viz: bool = False,
-                 nonlinear_classification: bool = False,
-                 concatenate_inputs=True):
+    def __init__(
+        self,
+        D: int = 1024,
+        n_filters: int = 16,
+        filter_length: int = 30,
+        input_dropout: float = 0.5,
+        dropout_p: float = 0.5,
+        classes: int = 8,
+        num_layers: int = 3,
+        reduction: str = "max",
+        c_in: int = 1,
+        c_out: int = 8,
+        soft: bool = False,
+        num_features: int = 512,
+        viz: bool = False,
+        nonlinear_classification: bool = False,
+        concatenate_inputs=True,
+    ):
         super().__init__()
 
         self.D = D  # dimensionality of inputs. E.G. 1024 features from a CNN penultimate layer
@@ -190,7 +195,7 @@ class TGM(nn.Module):
         self.input_dropout = nn.Dropout(input_dropout)  # probability to dropout input channels
         self.output_dropout = nn.Dropout(dropout_p)  # probability to dropout final layer before FC
         self.num_layers = num_layers  # how many TGM layers
-        assert (reduction in ['max', 'mean', 'conv1x1'])
+        assert reduction in ["max", "mean", "conv1x1"]
         self.reduction = reduction  # NEW: how to go from N x C_out x D x T -> N x D x T. Paper: max
         self.c_in = c_in  # how many DxT representations there are in inputs
         self.c_out = c_out  # how many representations of the input DxT matrix in TGM layers
@@ -207,7 +212,7 @@ class TGM(nn.Module):
 
         self.tgm_layers = nn.Sequential(*modules)
 
-        if self.reduction == 'conv1x1':
+        if self.reduction == "conv1x1":
             self.reduction_layer = nn.Conv2d(self.c_out, 1, kernel_size=1, padding=0, stride=1)
         # self.sub_event1 = TGM(inp, 16, 5, c_in=1, c_out=8, soft=False)
         # self.sub_event2 = TGM(inp, 16, 5, c_in=8, c_out=8, soft=False)
@@ -224,14 +229,13 @@ class TGM(nn.Module):
         self.viz = viz
 
     def forward(self, inp):
-
         smoothed = self.tgm_layers(inp)
         # print('smoothed before max:{}'.format(smoothed.shape))
-        if self.reduction == 'max':
+        if self.reduction == "max":
             smoothed = torch.max(smoothed, dim=1)[0]
-        elif self.reduction == 'mean':
+        elif self.reduction == "mean":
             smoothed = torch.mean(smoothed, dim=1)
-        elif self.reduction == 'conv1x1':
+        elif self.reduction == "conv1x1":
             smoothed = self.reduction_layer(smoothed).squeeze()
         # sub_event = self.dropout(torch.max(sub_event, dim=1)[0])
         # print('sub_event:{}'.format(smoothed.shape))
@@ -241,8 +245,9 @@ class TGM(nn.Module):
             if inp.ndim == 3 and smoothed.ndim == 2:
                 smoothed = smoothed.unsqueeze(0)
             else:
-                print('ERROR')
+                print("ERROR")
                 import pdb
+
                 pdb.set_trace()
 
         if self.concatenate_inputs:
@@ -267,26 +272,28 @@ class TGM(nn.Module):
 
 
 class TGMJ(nn.Module):
-    def __init__(self,
-                 D: int = 1024,
-                 n_filters: int = 16,
-                 filter_length: int = 30,
-                 input_dropout: float = 0.5,
-                 dropout_p: float = 0.5,
-                 classes: int = 8,
-                 num_layers: int = 3,
-                 reduction: str = 'max',
-                 c_in: int = 1,
-                 c_out: int = 8,
-                 soft: bool = False,
-                 num_features: int = 512,
-                 viz: bool = False,
-                 nonlinear_classification: bool = False,
-                 concatenate_inputs=True,
-                 pos=None,
-                 neg=None,
-                 use_fe_logits: bool = True,
-                 final_bn: bool = False):
+    def __init__(
+        self,
+        D: int = 1024,
+        n_filters: int = 16,
+        filter_length: int = 30,
+        input_dropout: float = 0.5,
+        dropout_p: float = 0.5,
+        classes: int = 8,
+        num_layers: int = 3,
+        reduction: str = "max",
+        c_in: int = 1,
+        c_out: int = 8,
+        soft: bool = False,
+        num_features: int = 512,
+        viz: bool = False,
+        nonlinear_classification: bool = False,
+        concatenate_inputs=True,
+        pos=None,
+        neg=None,
+        use_fe_logits: bool = True,
+        final_bn: bool = False,
+    ):
         super().__init__()
 
         self.D = D  # dimensionality of inputs. E.G. 1024 features from a CNN penultimate layer
@@ -296,7 +303,7 @@ class TGMJ(nn.Module):
         self.input_dropout = nn.Dropout(input_dropout)  # probability to dropout input channels
         self.output_dropout = nn.Dropout(dropout_p)  # probability to dropout final layer before FC
         self.num_layers = num_layers  # how many TGM layers
-        assert (reduction in ['max', 'mean', 'conv1x1'])
+        assert reduction in ["max", "mean", "conv1x1"]
         self.reduction = reduction  # NEW: how to go from N x C_out x D x T -> N x D x T. Paper: max
         self.c_in = c_in  # how many DxT representations there are in inputs
         self.c_out = c_out  # how many representations of the input DxT matrix in TGM layers
@@ -312,7 +319,7 @@ class TGMJ(nn.Module):
 
         self.tgm_layers = nn.Sequential(*modules)
 
-        if self.reduction == 'conv1x1':
+        if self.reduction == "conv1x1":
             self.reduction_layer = nn.Conv2d(self.c_out, 1, kernel_size=1, padding=0, stride=1)
         # self.sub_event1 = TGM(inp, 16, 5, c_in=1, c_out=8, soft=False)
         # self.sub_event2 = TGM(inp, 16, 5, c_in=8, c_out=8, soft=False)
@@ -360,11 +367,11 @@ class TGMJ(nn.Module):
     def forward(self, inp, fe_logits=None):
         smoothed = self.tgm_layers(inp)
         # print('smoothed before max:{}'.format(smoothed.shape))
-        if self.reduction == 'max':
+        if self.reduction == "max":
             smoothed = torch.max(smoothed, dim=1)[0]
-        elif self.reduction == 'mean':
+        elif self.reduction == "mean":
             smoothed = torch.mean(smoothed, dim=1)
-        elif self.reduction == 'conv1x1':
+        elif self.reduction == "conv1x1":
             smoothed = self.reduction_layer(smoothed).squeeze()
         # sub_event = self.dropout(torch.max(sub_event, dim=1)[0])
         # print('sub_event:{}'.format(smoothed.shape))
@@ -374,8 +381,9 @@ class TGMJ(nn.Module):
             if inp.ndim == 3 and smoothed.ndim == 2:
                 smoothed = smoothed.unsqueeze(0)
             else:
-                print('ERROR')
+                print("ERROR")
                 import pdb
+
                 pdb.set_trace()
         outputs1 = self.input_dropout(inp)
         outputs2 = self.input_dropout(smoothed)

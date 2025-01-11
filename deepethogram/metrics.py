@@ -20,14 +20,14 @@ EPS = 1e-7
 
 # using multiprocessing on slurm causes a termination signal
 try:
-    slurm_job_id = os.environ['SLURM_JOB_ID']
+    slurm_job_id = os.environ["SLURM_JOB_ID"]
     slurm = True
 except:
     slurm = False
 
 
 def index_to_onehot(index: np.ndarray, n_classes: int) -> np.ndarray:
-    """ Convert an array if indices to one-hot vectors.
+    """Convert an array if indices to one-hot vectors.
 
     Parameters
     ----------
@@ -56,7 +56,7 @@ def index_to_onehot(index: np.ndarray, n_classes: int) -> np.ndarray:
 
 
 def hardmax(probabilities: np.ndarray) -> np.ndarray:
-    """ Convert probability array to prediction by converting the max of each row to 1
+    """Convert probability array to prediction by converting the max of each row to 1
 
     Parameters
     ----------
@@ -101,8 +101,8 @@ def onehot_to_index(onehot: np.ndarray) -> np.ndarray:
     return np.argmax(onehot, axis=1)
 
 
-def f1(predictions: np.ndarray, labels: np.ndarray, average: str = 'macro') -> np.ndarray:
-    """ simple wrapper around sklearn.metrics.f1_score
+def f1(predictions: np.ndarray, labels: np.ndarray, average: str = "macro") -> np.ndarray:
+    """simple wrapper around sklearn.metrics.f1_score
 
     References
     -------
@@ -118,8 +118,8 @@ def f1(predictions: np.ndarray, labels: np.ndarray, average: str = 'macro') -> n
     return F1
 
 
-def roc_auc(predictions: np.ndarray, labels: np.ndarray, average: str = 'macro') -> np.ndarray:
-    """ simple wrapper around sklearn.metrics.roc_auc_score
+def roc_auc(predictions: np.ndarray, labels: np.ndarray, average: str = "macro") -> np.ndarray:
+    """simple wrapper around sklearn.metrics.roc_auc_score
 
     References
     -------
@@ -127,7 +127,7 @@ def roc_auc(predictions: np.ndarray, labels: np.ndarray, average: str = 'macro')
     .. [2] https://en.wikipedia.org/wiki/Receiver_operating_characteristic
     """
     if predictions.ndim == 1:
-        raise ValueError('Predictions must be class probabilities before max!')
+        raise ValueError("Predictions must be class probabilities before max!")
     if labels.ndim == 1:
         labels = index_to_onehot(labels, predictions.shape[1])
     score = roc_auc_score(labels, predictions, average=average)
@@ -135,12 +135,12 @@ def roc_auc(predictions: np.ndarray, labels: np.ndarray, average: str = 'macro')
 
 
 def accuracy(predictions: np.ndarray, labels: np.ndarray):
-    """ Return the fraction of elements in predictions that are equal to labels """
+    """Return the fraction of elements in predictions that are equal to labels"""
     return np.mean(predictions == labels)
 
 
 def confusion(predictions: np.ndarray, labels: np.ndarray, K: int = None) -> np.ndarray:
-    """ Computes confusion matrix. Much faster than sklearn.metrics.confusion_matrix for large numbers of predictions
+    """Computes confusion matrix. Much faster than sklearn.metrics.confusion_matrix for large numbers of predictions
 
     Parameters
     ----------
@@ -189,7 +189,7 @@ def binary_confusion_matrix(predictions, labels) -> np.ndarray:
         # 2 x 2
         cms = np.zeros((2, 2), dtype=int)
     else:
-        raise ValueError('unknown input shape: {}'.format(predictions.shape))
+        raise ValueError("unknown input shape: {}".format(predictions.shape))
 
     neg_lab = np.logical_not(labels)
     neg_pred = np.logical_not(predictions)
@@ -226,12 +226,9 @@ def confusion_alias(inp):
     return binary_confusion_matrix(*inp)
 
 
-def binary_confusion_matrix_parallel(probs_or_preds,
-                                     labels,
-                                     thresholds=None,
-                                     chunk_size: int = 100,
-                                     num_workers: int = 4,
-                                     parallel_chunk: int = 100):
+def binary_confusion_matrix_parallel(
+    probs_or_preds, labels, thresholds=None, chunk_size: int = 100, num_workers: int = 4, parallel_chunk: int = 100
+):
     # log.info('num workers binary confusion parallel: {}'.format(num_workers))
     if slurm:
         parallel_chunk = 1
@@ -254,7 +251,7 @@ def binary_confusion_matrix_parallel(probs_or_preds,
         elif probs_or_preds.ndim == 1:
             cm = np.zeros((2, 2), dtype=int)
         else:
-            raise ValueError('weird shape in probs_or_preds: {}'.format(probs_or_preds.shape))
+            raise ValueError("weird shape in probs_or_preds: {}".format(probs_or_preds.shape))
         func = confusion_alias
     # log.info('parallel start')
     if num_workers > 1:
@@ -268,9 +265,10 @@ def binary_confusion_matrix_parallel(probs_or_preds,
     return cm
 
 
-def compute_binary_confusion(predictions: np.ndarray, labels: np.ndarray,
-                             thresholds: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """ compute binary confusion matrices for input probabilities, labels, and thresholds. See confusion  """
+def compute_binary_confusion(
+    predictions: np.ndarray, labels: np.ndarray, thresholds: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """compute binary confusion matrices for input probabilities, labels, and thresholds. See confusion"""
     estimates = postprocess(predictions, thresholds, valid_bg=False)
     K = predictions.shape[1]
 
@@ -288,21 +286,21 @@ def compute_binary_confusion(predictions: np.ndarray, labels: np.ndarray,
 
 
 def mean_class_accuracy(predictions, labels):
-    """ computes the mean of diagonal elements of a confusion matrix """
+    """computes the mean of diagonal elements of a confusion matrix"""
     if predictions.ndim > 1:
         predictions = onehot_to_index(hardmax(predictions))
     if labels.ndim > 1:
         labels = onehot_to_index(labels)
     cm = confusion_matrix(labels, predictions)
-    cm = cm.astype('float') / (cm.sum(axis=1)[:, np.newaxis] + 1e-9)
+    cm = cm.astype("float") / (cm.sum(axis=1)[:, np.newaxis] + 1e-9)
     on_diag = cm[np.where(np.eye(cm.shape[0], dtype=np.uint32))]
     return on_diag.mean()
 
 
-def remove_invalid_values_predictions_and_labels(predictions: np.ndarray, labels: np.ndarray,
-                                                 invalid_value: Union[int, float] = -1) -> \
-        Tuple[np.ndarray, np.ndarray]:
-    """ remove any rows where labels are equal to invalid_value.
+def remove_invalid_values_predictions_and_labels(
+    predictions: np.ndarray, labels: np.ndarray, invalid_value: Union[int, float] = -1
+) -> Tuple[np.ndarray, np.ndarray]:
+    """remove any rows where labels are equal to invalid_value.
 
     Used when (for example) the last sequence in a video is padded to have the proper sequence length. the padded inputs
     are paired with -1 labels, indicating that loss and metrics should not be applied there
@@ -338,18 +336,18 @@ def compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers:
     auroc = auc_on_array(fp, tp)
     mAP = auc_on_array(r, p)
     metrics_by_threshold = {
-        'thresholds': thresholds,
-        'accuracy': acc,
-        'f1': f1,
-        'precision': p,
-        'recall': r,
-        'fbeta_2': fbeta_2,
-        'informedness': info,
-        'tpr': tp,
-        'fpr': fp,
-        'auroc': auroc,
-        'mAP': mAP,
-        'confusion': cm
+        "thresholds": thresholds,
+        "accuracy": acc,
+        "f1": f1,
+        "precision": p,
+        "recall": r,
+        "fbeta_2": fbeta_2,
+        "informedness": info,
+        "tpr": tp,
+        "fpr": fp,
+        "auroc": auroc,
+        "mAP": mAP,
+        "confusion": cm,
     }
     return metrics_by_threshold
 
@@ -366,16 +364,15 @@ def fast_auc(y_true, y_prob):
     nfalse = np.cumsum(1 - y_true)
     auc = np.cumsum((y_true * nfalse))[-1]
     # print(auc)
-    auc /= (nfalse[-1] * (n - nfalse[-1]))
+    auc /= nfalse[-1] * (n - nfalse[-1])
     return auc
 
 
 # @profile
-def evaluate_thresholds(probabilities: np.ndarray,
-                        labels: np.ndarray,
-                        thresholds: np.ndarray = None,
-                        num_workers: int = 4) -> Tuple[dict, dict]:
-    """ Given probabilities and labels, compute a bunch of metrics at each possible threshold value
+def evaluate_thresholds(
+    probabilities: np.ndarray, labels: np.ndarray, thresholds: np.ndarray = None, num_workers: int = 4
+) -> Tuple[dict, dict]:
+    """Given probabilities and labels, compute a bunch of metrics at each possible threshold value
 
     Also computes a number of metrics for which there is a single value for the input predictions / labels, something
     like the maximum F1 score across thresholds.
@@ -401,7 +398,7 @@ def evaluate_thresholds(probabilities: np.ndarray,
     # log.info('evaluating thresholds. P: {} lab: {} n_workers: {}'.format(probabilities.shape, labels.shape, num_workers))
     # log.info('SLURM in metrics file: {}'.format(slurm))
     if slurm and num_workers != 1:
-        warnings.warn('using multiprocessing on slurm can cause issues. setting num_workers to 1')
+        warnings.warn("using multiprocessing on slurm can cause issues. setting num_workers to 1")
         num_workers = 1
 
     if thresholds is None:
@@ -411,7 +408,7 @@ def evaluate_thresholds(probabilities: np.ndarray,
     # log.debug('probabilities shape in metrics calc: {}'.format(probabilities.shape))
     metrics_by_threshold = {}
     if probabilities.ndim == 1:
-        raise ValueError('To calc threshold, predictions must be probabilities, not classes')
+        raise ValueError("To calc threshold, predictions must be probabilities, not classes")
     K = probabilities.shape[1]
     if labels.ndim == 1:
         labels = index_to_onehot(labels, K)
@@ -422,20 +419,20 @@ def evaluate_thresholds(probabilities: np.ndarray,
     # log.info('first metrics call finished')
     # log.info('finished computing binary confusion matrices')
     # optimum threshold: one that maximizes F1
-    optimum_indices = np.argmax(metrics_by_threshold['f1'], axis=0)
+    optimum_indices = np.argmax(metrics_by_threshold["f1"], axis=0)
     optimum_thresholds = thresholds[optimum_indices]
     # if the threshold or the F1 is very low, these are erroneous: set to 0.5
-    optimum_f1s = metrics_by_threshold['f1'][optimum_indices, range(len(optimum_indices))]
+    optimum_f1s = metrics_by_threshold["f1"][optimum_indices, range(len(optimum_indices))]
     optimum_thresholds = remove_low_thresholds(optimum_thresholds, f1s=optimum_f1s)
 
     # optimum info: maximizes informedness
-    optimum_indices_info = np.argmax(metrics_by_threshold['informedness'], axis=0)
+    optimum_indices_info = np.argmax(metrics_by_threshold["informedness"], axis=0)
     optimum_thresholds_info = thresholds[optimum_indices_info]
-    optimum_info = metrics_by_threshold['informedness'][optimum_indices_info, range(len(optimum_indices_info))]
+    optimum_info = metrics_by_threshold["informedness"][optimum_indices_info, range(len(optimum_indices_info))]
     optimum_thresholds_info = remove_low_thresholds(optimum_thresholds_info, f1s=optimum_info)
 
-    metrics_by_threshold['optimum'] = optimum_thresholds
-    metrics_by_threshold['optimum_info'] = optimum_thresholds_info
+    metrics_by_threshold["optimum"] = optimum_thresholds
+    metrics_by_threshold["optimum_info"] = optimum_thresholds_info
 
     # vectorized
     predictions = probabilities > optimum_thresholds
@@ -451,27 +448,25 @@ def evaluate_thresholds(probabilities: np.ndarray,
     # summing over classes is the same as flattening the array. ugly syntax
     # TODO: make function that computes metrics from a stack of confusion matrices rather than this none None business
     # log.info('third metrics call')
-    overall_metrics = compute_metrics_by_threshold(None,
-                                                   None,
-                                                   thresholds=None,
-                                                   num_workers=num_workers,
-                                                   cm=metrics_by_class['confusion'].sum(axis=2))
+    overall_metrics = compute_metrics_by_threshold(
+        None, None, thresholds=None, num_workers=num_workers, cm=metrics_by_class["confusion"].sum(axis=2)
+    )
     # log.info('third metrics call ended')
     epoch_metrics = {
-        'accuracy_overall': overall_metrics['accuracy'],
-        'accuracy_by_class': metrics_by_class['accuracy'],
-        'f1_overall': overall_metrics['f1'],
-        'f1_class_mean': metrics_by_class['f1'].mean(),
-        'f1_class_mean_nobg': metrics_by_class['f1'][1:].mean(),
-        'f1_by_class': metrics_by_class['f1'],
-        'binary_confusion': metrics_by_class['confusion'].transpose(2, 0, 1),
-        'auroc_by_class': metrics_by_threshold['auroc'],
-        'auroc_class_mean': metrics_by_threshold['auroc'].mean(),
-        'mAP_by_class': metrics_by_threshold['mAP'],
-        'mAP_class_mean': metrics_by_threshold['mAP'].mean(),
+        "accuracy_overall": overall_metrics["accuracy"],
+        "accuracy_by_class": metrics_by_class["accuracy"],
+        "f1_overall": overall_metrics["f1"],
+        "f1_class_mean": metrics_by_class["f1"].mean(),
+        "f1_class_mean_nobg": metrics_by_class["f1"][1:].mean(),
+        "f1_by_class": metrics_by_class["f1"],
+        "binary_confusion": metrics_by_class["confusion"].transpose(2, 0, 1),
+        "auroc_by_class": metrics_by_threshold["auroc"],
+        "auroc_class_mean": metrics_by_threshold["auroc"].mean(),
+        "mAP_by_class": metrics_by_threshold["mAP"],
+        "mAP_class_mean": metrics_by_threshold["mAP"].mean(),
         # to compute these, would need to make confusion matrices on flattened array, which is slow
-        'auroc_overall': np.nan,
-        'mAP_overall': np.nan
+        "auroc_overall": np.nan,
+        "mAP_overall": np.nan,
     }
     # it is too much of a pain to increase the speed on roc_auc_score and mAP
     # try:
@@ -496,9 +491,9 @@ def evaluate_thresholds(probabilities: np.ndarray,
 
 
 def compute_tpr_fpr(cm: np.ndarray) -> Tuple[float, float]:
-    """ compute true positives and false positives from a non-normalized confusion matrix """
+    """compute true positives and false positives from a non-normalized confusion matrix"""
     # normalize so that each are rates
-    cm_normalized = cm.astype('float') / (cm.sum(axis=1)[:, np.newaxis] + 1e-9)
+    cm_normalized = cm.astype("float") / (cm.sum(axis=1)[:, np.newaxis] + 1e-9)
     fp = cm_normalized[0, 1]
     tp = cm_normalized[1, 1]
     return tp, fp
@@ -515,7 +510,7 @@ def get_denominator(expression: Union[float, np.ndarray]):
 
 
 def compute_f1(precision: float, recall: float, beta: float = 1.0) -> float:
-    """ compute f1 if you already have precison and recall. Prevents re-computing confusion matrix, etc """
+    """compute f1 if you already have precison and recall. Prevents re-computing confusion matrix, etc"""
 
     num = (1 + beta**2) * (precision * recall)
     denom = get_denominator((beta**2) * precision + recall)
@@ -523,7 +518,7 @@ def compute_f1(precision: float, recall: float, beta: float = 1.0) -> float:
 
 
 def compute_precision_recall(cm: np.ndarray) -> Tuple[float, float]:
-    """ computes precision and recall from a confusion matrix """
+    """computes precision and recall from a confusion matrix"""
     tn = cm[0, 0]
     tp = cm[1, 1]
     fp = cm[0, 1]
@@ -535,15 +530,15 @@ def compute_precision_recall(cm: np.ndarray) -> Tuple[float, float]:
 
 
 def compute_mean_accuracy(cm: np.ndarray) -> float:
-    """ compute the mean of true positive rate and true negative rate from a confusion matrix """
-    cm = cm.astype('float') / get_denominator(cm.sum(axis=1)[:, np.newaxis])
+    """compute the mean of true positive rate and true negative rate from a confusion matrix"""
+    cm = cm.astype("float") / get_denominator(cm.sum(axis=1)[:, np.newaxis])
     tp = cm[1, 1]
     tn = cm[0, 0]
     return np.mean([tp, tn])
 
 
 def compute_informedness(cm: np.ndarray, eps: float = 1e-7) -> float:
-    """ compute informedness from a confusion matrix. Also known as Youden's J statistic
+    """compute informedness from a confusion matrix. Also known as Youden's J statistic
 
     Parameters
     ----------
@@ -572,11 +567,11 @@ def compute_informedness(cm: np.ndarray, eps: float = 1e-7) -> float:
 
 
 def postprocess(predictions: np.ndarray, thresholds: np.ndarray, valid_bg: bool = True) -> np.ndarray:
-    """ Turn probabilities into predictions, with special handling of background.
+    """Turn probabilities into predictions, with special handling of background.
     TODO: Should be removed in favor of deepethogram.prostprocessing
     """
     N, n_classes = predictions.shape
-    assert (len(thresholds) == n_classes)
+    assert len(thresholds) == n_classes
     estimates = np.zeros((N, n_classes), dtype=np.int64)
 
     for i in range(0, n_classes):
@@ -587,11 +582,11 @@ def postprocess(predictions: np.ndarray, thresholds: np.ndarray, valid_bg: bool 
 
 
 all_metrics = {
-    'accuracy': accuracy,
-    'mean_class_accuracy': mean_class_accuracy,
-    'f1': f1,
-    'roc_auc': roc_auc,
-    'confusion': binary_confusion_matrix
+    "accuracy": accuracy,
+    "mean_class_accuracy": mean_class_accuracy,
+    "f1": f1,
+    "roc_auc": roc_auc,
+    "confusion": binary_confusion_matrix,
 }
 
 
@@ -604,21 +599,20 @@ def list_to_mean(values):
         else:
             value = np.concatenate(np.array(values)).mean()
     else:
-        raise TypeError('Input should be numpy array or torch tensor. Type: ', type(values[0]))
+        raise TypeError("Input should be numpy array or torch tensor. Type: ", type(values[0]))
     return value
 
 
 def append_to_hdf5(f, name, value, axis=0):
-    """ resizes an HDF5 dataset and appends value """
+    """resizes an HDF5 dataset and appends value"""
     f[name].resize(f[name].shape[axis] + 1, axis=axis)
     f[name][-1] = value
 
 
 class Buffer:
-
     def __init__(self):
         self.data = {}
-        self.splits = ['train', 'val', 'test', 'speedtest']
+        self.splits = ["train", "val", "test", "speedtest"]
         for split in self.splits:
             self.initialize(split)
 
@@ -665,10 +659,9 @@ class Buffer:
 
 
 class EmptyBuffer:
-
     def __init__(self):
         self.data = {}
-        self.splits = ['train', 'val', 'test', 'speedtest']
+        self.splits = ["train", "val", "test", "speedtest"]
         for split in self.splits:
             self.initialize(split)
 
@@ -688,14 +681,16 @@ class EmptyBuffer:
 class Metrics:
     """Class for saving a list of per-epoch metrics to disk as an HDF5 file"""
 
-    def __init__(self,
-                 run_dir: Union[str, bytes, os.PathLike],
-                 key_metric: str,
-                 name: str,
-                 num_parameters: int,
-                 splits: list = ['train', 'val'],
-                 num_workers: int = 4):
-        """ Metrics constructor
+    def __init__(
+        self,
+        run_dir: Union[str, bytes, os.PathLike],
+        key_metric: str,
+        name: str,
+        num_parameters: int,
+        splits: list = ["train", "val"],
+        num_workers: int = 4,
+    ):
+        """Metrics constructor
 
         Parameters
         ----------
@@ -710,9 +705,9 @@ class Metrics:
         splits: list
             either ['train', 'val'] or ['train', 'val', 'test']
         """
-        assert (os.path.isdir(run_dir))
-        self.fname = os.path.join(run_dir, '{}_metrics.h5'.format(name))
-        log.debug('making metrics file at {}'.format(self.fname))
+        assert os.path.isdir(run_dir)
+        self.fname = os.path.join(run_dir, "{}_metrics.h5".format(name))
+        log.debug("making metrics file at {}".format(self.fname))
         self.key_metric = key_metric
         self.splits = splits
         self.num_parameters = num_parameters
@@ -728,7 +723,7 @@ class Metrics:
         self.learning_rate = lr
 
     def compute(self, data: dict) -> dict:
-        """ Computes metrics from one epoch's batch of data
+        """Computes metrics from one epoch's batch of data
 
         Args:
             data: dict
@@ -740,33 +735,33 @@ class Metrics:
         """
         metrics = {}
         keys = list(data.keys())
-        if 'loss' in keys:
-            metrics['loss'] = np.mean(data['loss'])
-        if 'time' in keys:
+        if "loss" in keys:
+            metrics["loss"] = np.mean(data["loss"])
+        if "time" in keys:
             # assume it's seconds per image
-            FPS = 1 / get_denominator(np.mean(data['time']))
-            metrics['fps'] = FPS
-        elif 'fps' in keys:
-            FPS = np.mean(data['fps'])
-            metrics['fps'] = FPS
-        if 'lr' in keys:
+            FPS = 1 / get_denominator(np.mean(data["time"]))
+            metrics["fps"] = FPS
+        elif "fps" in keys:
+            FPS = np.mean(data["fps"])
+            metrics["fps"] = FPS
+        if "lr" in keys:
             # note: this should always be a scalar, but set to mean just in case there's multiple
-            metrics['lr'] = np.mean(data['lr'])
+            metrics["lr"] = np.mean(data["lr"])
         return metrics
 
     def initialize_file(self):
-        mode = 'r+' if os.path.isfile(self.fname) else 'w'
+        mode = "r+" if os.path.isfile(self.fname) else "w"
         with h5py.File(self.fname, mode) as f:
-            f.attrs['num_parameters'] = self.num_parameters
-            f.attrs['key_metric'] = self.key_metric
+            f.attrs["num_parameters"] = self.num_parameters
+            f.attrs["key_metric"] = self.key_metric
             # make an HDF5 group for each split
             for split in self.splits:
                 group = f.create_group(split)
                 # all splits and datasets will have loss values-- others will come from self.compute()
-                group.create_dataset('loss', (0,), maxshape=(None,), dtype=np.float32)
+                group.create_dataset("loss", (0,), maxshape=(None,), dtype=np.float32)
 
     def save_metrics_to_disk(self, metrics: dict, split: str) -> None:
-        with h5py.File(self.fname, 'r+') as f:
+        with h5py.File(self.fname, "r+") as f:
             # utils.print_hdf5(f)
             if split not in f.keys():
                 # should've created top-level groups in initialize_file; this is for nesting
@@ -778,7 +773,7 @@ class Metrics:
                     array = np.array(array)
                 # ALLOW FOR NESTING
                 if isinstance(array, dict):
-                    group_name = split + '/' + key
+                    group_name = split + "/" + key
                     self.save_metrics_to_disk(array, group_name)
                 elif isinstance(array, np.ndarray):
                     if key in datasets:
@@ -788,15 +783,16 @@ class Metrics:
                         # create dataset
                         shape = (1, *array.shape)
                         maxshape = (None, *array.shape)
-                        log.debug('creating dataset {}/{}: shape {}'.format(split, key, shape))
+                        log.debug("creating dataset {}/{}: shape {}".format(split, key, shape))
                         group.create_dataset(key, shape, maxshape=maxshape, dtype=array.dtype)
                     group[key][-1] = array
                 else:
-                    raise ValueError('Metrics must contain dicts of np.ndarrays, not {} of type {}'.format(
-                        array, type(array)))
+                    raise ValueError(
+                        "Metrics must contain dicts of np.ndarrays, not {} of type {}".format(array, type(array))
+                    )
 
     def end_epoch(self, split: str):
-        """ End the current training epoch. Saves any metrics in memory to disk
+        """End the current training epoch. Saves any metrics in memory to disk
 
         Parameters
         ----------
@@ -808,10 +804,10 @@ class Metrics:
 
         # import pdb; pdb.set_trace()
 
-        if split != 'speedtest':
-            assert 'loss' in data.keys()
+        if split != "speedtest":
+            assert "loss" in data.keys()
             # store most recent loss and key metric as attributes, for use in scheduling, stopping, etc.
-            self.latest_loss[split] = metrics['loss']
+            self.latest_loss[split] = metrics["loss"]
             self.latest_key[split] = metrics[self.key_metric]
 
         self.save_metrics_to_disk(metrics, split)
@@ -819,21 +815,21 @@ class Metrics:
 
     def __getitem__(self, inp: tuple) -> np.ndarray:
         split, metric_name, epoch_number = inp
-        with h5py.File(self.fname, 'r') as f:
-            assert split in f.keys(), 'split {} not found in file: {}'.format(split, list(f.keys()))
+        with h5py.File(self.fname, "r") as f:
+            assert split in f.keys(), "split {} not found in file: {}".format(split, list(f.keys()))
             group = f[split]
-            assert metric_name in group.keys(), 'metric {} not found in group: {}'.format(
-                metric_name, list(group.keys()))
+            assert metric_name in group.keys(), "metric {} not found in group: {}".format(
+                metric_name, list(group.keys())
+            )
             data = group[metric_name][epoch_number, ...]
         return data
 
 
 class EmptyMetrics(Metrics):
-
     def __init__(self, *args, **kwargs):
-        super().__init__(os.getcwd(), [], 'loss', 'empty', 0)
+        super().__init__(os.getcwd(), [], "loss", "empty", 0)
         self.buffer = EmptyBuffer()
-        self.key_metric = 'loss'
+        self.key_metric = "loss"
 
     def end_epoch(self, split, *args, **kwargs):
         # calling this clears the buffer
@@ -844,18 +840,20 @@ class EmptyMetrics(Metrics):
 
 
 class Classification(Metrics):
-    """ Metrics class for saving multiclass or multilabel classifcation metrics to disk """
+    """Metrics class for saving multiclass or multilabel classifcation metrics to disk"""
 
-    def __init__(self,
-                 run_dir: Union[str, bytes, os.PathLike],
-                 key_metric: str,
-                 num_parameters: int,
-                 num_classes: int = None,
-                 splits: list = ['train', 'val'],
-                 ignore_index: int = -1,
-                 evaluate_threshold: bool = False,
-                 num_workers: int = 4):
-        """ Constructor for classification metrics class
+    def __init__(
+        self,
+        run_dir: Union[str, bytes, os.PathLike],
+        key_metric: str,
+        num_parameters: int,
+        num_classes: int = None,
+        splits: list = ["train", "val"],
+        ignore_index: int = -1,
+        evaluate_threshold: bool = False,
+        num_workers: int = 4,
+    ):
+        """Constructor for classification metrics class
 
         Parameters
         ----------
@@ -877,7 +875,7 @@ class Classification(Metrics):
             Hack for multi-label classification problems. If True, at each epoch will compute a bunch of metrics for
             each potential threshold. See evaluate_thresholds
         """
-        super().__init__(run_dir, key_metric, 'classification', num_parameters, splits, num_workers)
+        super().__init__(run_dir, key_metric, "classification", num_parameters, splits, num_workers)
 
         self.metric_funcs = all_metrics
 
@@ -905,22 +903,22 @@ class Classification(Metrics):
         # computes mean loss, etc
         metrics = super().compute(data)
 
-        if 'probs' not in data.keys():
+        if "probs" not in data.keys():
             # might happen during speedtest
             return metrics
 
         # automatically handle loss components
         for key in data.keys():
-            if 'loss' in key and key != 'loss':
+            if "loss" in key and key != "loss":
                 metrics[key] = np.mean(data[key])
 
         # if data are from sequence models, stack into N*T x K not N x K x T
-        probs = self.stack_sequence_data(data['probs'])
-        if data['probs'].ndim == 3 and data['labels'].ndim == 2:
+        probs = self.stack_sequence_data(data["probs"])
+        if data["probs"].ndim == 3 and data["labels"].ndim == 2:
             # special case for sequence models with final_activation==softmax, aka multiclass classification
-            labels = data['labels'].transpose(0, 1).flatten()
+            labels = data["labels"].transpose(0, 1).flatten()
         else:
-            labels = self.stack_sequence_data(data['labels'])
+            labels = self.stack_sequence_data(data["labels"])
 
         num_classes = probs.shape[1]
         one_hot = probs.shape[-1] == labels.shape[-1]
@@ -937,7 +935,7 @@ class Classification(Metrics):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 metrics_by_threshold, epoch_metrics = evaluate_thresholds(probs, labels, None, self.num_workers)
-                metrics['metrics_by_threshold'] = metrics_by_threshold
+                metrics["metrics_by_threshold"] = metrics_by_threshold
                 for key, value in epoch_metrics.items():
                     metrics[key] = value
         else:
@@ -949,12 +947,12 @@ class Classification(Metrics):
 
             with warnings.catch_warnings():
                 for metric in self.metrics:
-                    if metric == 'confusion':
+                    if metric == "confusion":
                         warnings.simplefilter("ignore")
                         metrics[metric] = confusion(predictions, labels, K=self.num_classes)
                         # import pdb
                         # pdb.set_trace()
-                    elif metric == 'binary_confusion':
+                    elif metric == "binary_confusion":
                         pass
                     else:
                         warnings.simplefilter("ignore")
@@ -963,13 +961,13 @@ class Classification(Metrics):
 
 
 class OpticalFlow(Metrics):
-    """ Metrics class for saving optic flow metrics to disk """
+    """Metrics class for saving optic flow metrics to disk"""
 
-    def __init__(self, run_dir, key_metric, num_parameters, splits=['train', 'val']):
-        super().__init__(run_dir, key_metric, 'opticalflow', num_parameters, splits)
+    def __init__(self, run_dir, key_metric, num_parameters, splits=["train", "val"]):
+        super().__init__(run_dir, key_metric, "opticalflow", num_parameters, splits)
 
     def compute(self, data: dict) -> dict:
-        """ Computes metrics from one epoch's batch of data
+        """Computes metrics from one epoch's batch of data
 
         Args:
             data: dict
@@ -981,7 +979,7 @@ class OpticalFlow(Metrics):
         """
         metrics = super().compute(data)
 
-        for key in ['reg_loss', 'SSIM', 'L1', 'smoothness', 'sparsity', 'L1']:
+        for key in ["reg_loss", "SSIM", "L1", "smoothness", "sparsity", "L1"]:
             if key in data.keys():
                 metrics[key] = data[key].mean()
         return metrics

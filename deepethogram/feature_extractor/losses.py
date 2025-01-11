@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 
 
 class NLLLossCNN(nn.Module):
-    """ A simple wrapper around Pytorch's NLL loss. Appropriate for models with a softmax activation function.
+    """A simple wrapper around Pytorch's NLL loss. Appropriate for models with a softmax activation function.
     Adds:
         optional label smoothing
         set loss to zero if label = ignore_index (when images have been added at beginning or end of a video, for
@@ -36,8 +36,9 @@ class NLLLossCNN(nn.Module):
             if (1, *label.shape) == outputs.shape:
                 label = label.unsqueeze(0)
 
-        assert outputs.shape == label.shape, 'Outputs shape must match labels! {}, {}'.format(
-            outputs.shape, label.shape)
+        assert outputs.shape == label.shape, "Outputs shape must match labels! {}, {}".format(
+            outputs.shape, label.shape
+        )
         # N, K, T = outputs.shape
         label = label.float()
 
@@ -61,8 +62,9 @@ class NLLLossCNN(nn.Module):
         loss = loss.mean()
 
         if loss < 0 or loss != loss or torch.isinf(loss).sum() > 0:
-            msg = 'invalid loss! loss: {}, outputs: {} labels: {}\nUse Torch anomaly detection'.format(
-                loss, outputs, label)
+            msg = "invalid loss! loss: {}, outputs: {} labels: {}\nUse Torch anomaly detection".format(
+                loss, outputs, label
+            )
             raise ValueError(msg)
 
         return loss
@@ -71,7 +73,7 @@ class NLLLossCNN(nn.Module):
 class BinaryFocalLoss(nn.Module):
     """Simple wrapper around nn.BCEWithLogitsLoss. Adds masking if label = ignore_index, and support for sequence
     inputs of shape N,K,T
-    
+
     References:
     - https://github.com/Hsuxu/Loss_ToolBox-PyTorch/blob/master/FocalLoss/focal_loss.py
     - https://arxiv.org/pdf/1708.02002.pdf
@@ -88,16 +90,16 @@ class BinaryFocalLoss(nn.Module):
         ignore_index : int, optional
             Labels with these values will not count toward loss, by default -1
         gamma : float, optional
-            focal loss gamma. see above paper. Higher values: "focus more" on hard examples rather than increasing 
+            focal loss gamma. see above paper. Higher values: "focus more" on hard examples rather than increasing
             confidence on easy examples. 0 means simple BCELoss, not focal loss, by default 0
         label_smoothing : float, optional
             Targets for BCELoss will be, instead of 0 and 1, 0+label_smoothing, 1-label_smoothing, by default 0.0
         """
         super().__init__()
 
-        log.info('Focal loss: gamma {:.2f} smoothing: {:.2f}'.format(gamma, label_smoothing))
+        log.info("Focal loss: gamma {:.2f} smoothing: {:.2f}".format(gamma, label_smoothing))
 
-        self.bcewithlogitsloss = nn.BCEWithLogitsLoss(weight=None, reduction='none', pos_weight=pos_weight)
+        self.bcewithlogitsloss = nn.BCEWithLogitsLoss(weight=None, reduction="none", pos_weight=pos_weight)
         self.ignore_index = ignore_index
         self.gamma = gamma
         # self.alpha = alpha
@@ -112,8 +114,9 @@ class BinaryFocalLoss(nn.Module):
             # see if it's just a batch issue
             if (1, *label.shape) == outputs.shape:
                 label = label.unsqueeze(0)
-        assert outputs.shape == label.shape, 'Outputs shape must match labels! {}, {}'.format(
-            outputs.shape, label.shape)
+        assert outputs.shape == label.shape, "Outputs shape must match labels! {}, {}".format(
+            outputs.shape, label.shape
+        )
 
         if outputs.ndim == 3:
             sequence = True
@@ -188,18 +191,18 @@ class BinaryFocalLoss(nn.Module):
         loss = loss.mean()
 
         if loss < 0 or loss != loss or torch.isinf(loss).sum() > 0:
-            msg = 'invalid loss! loss: {}, outputs: {} labels: {}\nUse Torch anomaly detection'.format(
-                loss, outputs, label)
+            msg = "invalid loss! loss: {}, outputs: {} labels: {}\nUse Torch anomaly detection".format(
+                loss, outputs, label
+            )
             raise ValueError(msg)
 
         return loss
 
 
 class CrossEntropyLoss(nn.Module):
-
     def __init__(self, weight=None, **kwargs):
         super().__init__()
-        self.cross_entropy = nn.CrossEntropyLoss(weight, reduction='none', ignore_index=-1, **kwargs)
+        self.cross_entropy = nn.CrossEntropyLoss(weight, reduction="none", ignore_index=-1, **kwargs)
 
     def forward(self, outputs: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
         if outputs.ndim == 3 and label.ndim == 2:
@@ -223,8 +226,7 @@ class CrossEntropyLoss(nn.Module):
 
 
 class ClassificationLoss(nn.Module):
-    """Simple wrapper to compute data loss and regularization loss at once
-    """
+    """Simple wrapper to compute data loss and regularization loss at once"""
 
     def __init__(self, data_criterion: nn.Module, regularization_criterion: nn.Module):
         super().__init__()
@@ -237,11 +239,12 @@ class ClassificationLoss(nn.Module):
 
         loss = data_loss + reg_loss
 
-        loss_dict = {'data_loss': data_loss.detach(), 'reg_loss': reg_loss.detach()}
+        loss_dict = {"data_loss": data_loss.detach(), "reg_loss": reg_loss.detach()}
 
         if loss < 0 or loss != loss or torch.isinf(loss).sum() > 0:
-            msg = 'invalid loss! loss: {}, outputs: {} labels: {}\nUse Torch anomaly detection'.format(
-                loss, outputs, label)
+            msg = "invalid loss! loss: {}, outputs: {} labels: {}\nUse Torch anomaly detection".format(
+                loss, outputs, label
+            )
             raise ValueError(msg)
 
         return loss, loss_dict

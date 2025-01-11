@@ -7,21 +7,24 @@ from torch.optim.optimizer import Optimizer
 
 log = logging.getLogger(__name__)
 
+
 class _LRScheduler:
     def __init__(self, optimizer, last_epoch=-1):
         if not isinstance(optimizer, Optimizer):
-            raise TypeError('{} is not an Optimizer'.format(
-                type(optimizer).__name__))
+            raise TypeError("{} is not an Optimizer".format(type(optimizer).__name__))
         self.optimizer = optimizer
         if last_epoch == -1:
             for group in optimizer.param_groups:
-                group.setdefault('initial_lr', group['lr'])
+                group.setdefault("initial_lr", group["lr"])
         else:
             for i, group in enumerate(optimizer.param_groups):
-                if 'initial_lr' not in group:
-                    raise KeyError("param 'initial_lr' is not specified "
-                                   "in param_groups[{}] when resuming an optimizer".format(i))
-        self.base_lrs = list(map(lambda group: group['initial_lr'], optimizer.param_groups))
+                if "initial_lr" not in group:
+                    raise KeyError(
+                        "param 'initial_lr' is not specified " "in param_groups[{}] when resuming an optimizer".format(
+                            i
+                        )
+                    )
+        self.base_lrs = list(map(lambda group: group["initial_lr"], optimizer.param_groups))
         self.step(last_epoch + 1)
         self.last_epoch = last_epoch
 
@@ -30,7 +33,7 @@ class _LRScheduler:
         It contains an entry for every variable in self.__dict__ which
         is not the optimizer.
         """
-        return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}
+        return {key: value for key, value in self.__dict__.items() if key != "optimizer"}
 
     def load_state_dict(self, state_dict):
         """Loads the schedulers state.
@@ -48,7 +51,7 @@ class _LRScheduler:
             epoch = self.last_epoch + 1
         self.last_epoch = epoch
         for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
-            param_group['lr'] = lr
+            param_group["lr"] = lr
 
 
 # UNMERGED PULL REQUEST! NOT WRITTEN BY ME BUT SUPER USEFUL!
@@ -92,7 +95,7 @@ class CosineAnnealingRestartsLR(_LRScheduler):
         self.eta_mult = eta_mult
 
         if T_mult < 1:
-            raise ValueError('T_mult should be >= 1.0.')
+            raise ValueError("T_mult should be >= 1.0.")
         self.T_mult = T_mult
 
         super(CosineAnnealingRestartsLR, self).__init__(optimizer, last_epoch)
@@ -107,20 +110,18 @@ class CosineAnnealingRestartsLR(_LRScheduler):
         else:
             # computation of the last restarting epoch is based on sum of geometric series:
             # last_restart = T * (1 + T_mult + T_mult ** 2 + ... + T_mult ** i_restarts)
-            i_restarts = int(math.log(1 - self.last_epoch * (1 - self.T_mult) / self.T,
-                                      self.T_mult))
-            last_restart = int(self.T * (1 - self.T_mult ** i_restarts) / (1 - self.T_mult))
+            i_restarts = int(math.log(1 - self.last_epoch * (1 - self.T_mult) / self.T, self.T_mult))
+            last_restart = int(self.T * (1 - self.T_mult**i_restarts) / (1 - self.T_mult))
 
         if self.last_epoch == last_restart:
             T_i1 = self.T * self.T_mult ** (i_restarts - 1)  # T_{i-1}
             lr_update = self.eta_mult / self._decay(T_i1 - 1, T_i1)
         else:
-            T_i = self.T * self.T_mult ** i_restarts
+            T_i = self.T * self.T_mult**i_restarts
             t = self.last_epoch - last_restart
             lr_update = self._decay(t, T_i) / self._decay(t - 1, T_i)
 
-        return [lr_update * (group['lr'] - self.eta_min) + self.eta_min
-                for group in self.optimizer.param_groups]
+        return [lr_update * (group["lr"] - self.eta_min) + self.eta_min for group in self.optimizer.param_groups]
 
     @staticmethod
     def _decay(t, T):
@@ -128,8 +129,8 @@ class CosineAnnealingRestartsLR(_LRScheduler):
         return 0.5 * (1 + math.cos(math.pi * t / T))
 
 
-def initialize_scheduler(optimizer, cfg: DictConfig, mode: str = 'max', reduction_factor: float = 0.1):
-    """ Makes a learning rate scheduler from an OmegaConf DictConfig
+def initialize_scheduler(optimizer, cfg: DictConfig, mode: str = "max", reduction_factor: float = 0.1):
+    """Makes a learning rate scheduler from an OmegaConf DictConfig
 
     Parameters
     ----------
@@ -150,19 +151,24 @@ def initialize_scheduler(optimizer, cfg: DictConfig, mode: str = 'max', reductio
     scheduler
         Learning rate scheduler
     """
-    if cfg.train.scheduler == 'multistep':
+    if cfg.train.scheduler == "multistep":
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg.train.milestones, gamma=0.5)
         # for convenience
-        scheduler.name = 'multistep'
-    elif cfg.train.scheduler == 'cosine':
+        scheduler.name = "multistep"
+    elif cfg.train.scheduler == "cosine":
         # todo: reconfigure this to use pytorch's new built-in cosine annealing
         scheduler = CosineAnnealingRestartsLR(optimizer, T=25, T_mult=1, eta_mult=0.5, eta_min=1e-7)
-        scheduler.name = 'cosine'
-    elif cfg.train.scheduler == 'plateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=mode, factor=reduction_factor,
-                                                               patience=cfg.train.patience, verbose=True,
-                                                               min_lr=cfg.train.min_lr)
-        scheduler.name = 'plateau'
+        scheduler.name = "cosine"
+    elif cfg.train.scheduler == "plateau":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode=mode,
+            factor=reduction_factor,
+            patience=cfg.train.patience,
+            verbose=True,
+            min_lr=cfg.train.min_lr,
+        )
+        scheduler.name = "plateau"
     else:
         scheduler = None
     return scheduler

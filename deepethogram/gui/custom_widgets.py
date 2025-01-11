@@ -11,6 +11,7 @@ from PySide2 import QtCore, QtGui, QtWidgets
 from PySide2.QtCore import Signal, Slot
 
 from deepethogram.file_io import VideoReader
+
 # these define the parameters of the deepethogram colormap below
 from deepethogram.viz import Mapper
 
@@ -26,10 +27,10 @@ def numpy_to_qpixmap(image: np.ndarray) -> QtGui.QPixmap:
     elif C == 3:
         format = QtGui.QImage.Format_RGB888
     else:
-        raise ValueError('Aberrant number of channels: {}'.format(C))
+        raise ValueError("Aberrant number of channels: {}".format(C))
     qpixmap = QtGui.QPixmap(QtGui.QImage(image, W, H, image.strides[0], format))
     # print(type(qpixmap))
-    return (qpixmap)
+    return qpixmap
 
 
 def float_to_uint8(image: np.ndarray) -> np.ndarray:
@@ -40,7 +41,7 @@ def float_to_uint8(image: np.ndarray) -> np.ndarray:
 
 
 def initializer(nframes: int):
-    print('initialized with {}'.format(nframes))
+    print("initialized with {}".format(nframes))
 
 
 class VideoFrame(QtWidgets.QGraphicsView):
@@ -75,7 +76,7 @@ class VideoFrame(QtWidgets.QGraphicsView):
         # print(self.palette())
 
     def initialize_video(self, videofile: Union[str, os.PathLike]):
-        if hasattr(self, 'vid'):
+        if hasattr(self, "vid"):
             self.vid.close()
             # if hasattr(self.vid, 'cap'):
             #     self.vid.cap.release()
@@ -100,7 +101,7 @@ class VideoFrame(QtWidgets.QGraphicsView):
         super().mousePressEvent(event)
 
     def wheelEvent(self, event):
-        if hasattr(self, 'vid'):
+        if hasattr(self, "vid"):
             if event.angleDelta().y() > 0:
                 factor = 1.25
                 self._zoom += 1
@@ -126,10 +127,10 @@ class VideoFrame(QtWidgets.QGraphicsView):
         # print('update to: {}'.format(value))
         # print(self.current_fnum)
         # previous_frame = self.current_fnum
-        if not hasattr(self, 'vid'):
+        if not hasattr(self, "vid"):
             return
         value = int(value)
-        if hasattr(self, 'current_fnum'):
+        if hasattr(self, "current_fnum"):
             if self.current_fnum == value and not force:
                 # print('already there')
                 return
@@ -165,9 +166,9 @@ class VideoFrame(QtWidgets.QGraphicsView):
             self._zoom = 0
 
     def adjust_aspect_ratio(self):
-        if not hasattr(self, 'vid'):
-            raise ValueError('Trying to set GraphicsView aspect ratio before video loaded.')
-        if not hasattr(self.vid, 'width'):
+        if not hasattr(self, "vid"):
+            raise ValueError("Trying to set GraphicsView aspect ratio before video loaded.")
+        if not hasattr(self.vid, "width"):
             self.vid.width, self.vid.height = self.frame.shape[1], self.frame.shape[0]
         video_aspect = self.vid.width / self.vid.height
         H, W = self.height(), self.width()
@@ -186,7 +187,7 @@ class VideoFrame(QtWidgets.QGraphicsView):
         # self.show()
 
     def resizeEvent(self, event):
-        if hasattr(self, 'vid'):
+        if hasattr(self, "vid"):
             pass
             # self.fitInView()
 
@@ -263,8 +264,8 @@ class ScrollbarWithText(QtWidgets.QWidget):
 
     @Slot(int)
     def update_state(self, value: int):
-        if self.plainTextEdit.document().toPlainText() != '{}'.format(value):
-            self.plainTextEdit.setPlainText('{}'.format(value))
+        if self.plainTextEdit.document().toPlainText() != "{}".format(value):
+            self.plainTextEdit.setPlainText("{}".format(value))
 
         if self.horizontalScrollBar.value() != value:
             self.horizontalScrollBar.setValue(value)
@@ -277,7 +278,7 @@ class ScrollbarWithText(QtWidgets.QWidget):
         # self.horizontalScrollBar.sliderMoved.connect(self.scrollbar_change)
         # self.horizontalScrollBar.valueChanged.connect(self.scrollbar_change)
         self.horizontalScrollBar.setValue(0)
-        self.plainTextEdit.setPlainText('{}'.format(0))
+        self.plainTextEdit.setPlainText("{}".format(0))
         # self.plainTextEdit.textChanged.connect(self.text_change)
         # self.update()
 
@@ -313,7 +314,7 @@ class VideoPlayer(QtWidgets.QWidget):
         self.videoView.frameNum.connect(self.scrollbartext.update_state)
 
         # I have to do this here because I think emitting a signal doesn't work from within the widget's constructor
-        if hasattr(self.videoView, 'vid'):
+        if hasattr(self.videoView, "vid"):
             self.videoView.initialized.emit(len(self.videoView.vid))
 
         self.update()
@@ -381,18 +382,20 @@ class LabelViewer(QtWidgets.QGraphicsView):
         if self.fixed:
             self.fixed_settings()
 
-    def initialize(self,
-                   n: int = 1,
-                   n_timepoints: int = 31,
-                   debug: bool = False,
-                   colormap: str = 'Reds',
-                   unlabeled_alpha: float = 0.1,
-                   desired_pixel_size: int = 25,
-                   array: np.ndarray = None,
-                   fixed: bool = False,
-                   opacity: np.ndarray = None):
+    def initialize(
+        self,
+        n: int = 1,
+        n_timepoints: int = 31,
+        debug: bool = False,
+        colormap: str = "Reds",
+        unlabeled_alpha: float = 0.1,
+        desired_pixel_size: int = 25,
+        array: np.ndarray = None,
+        fixed: bool = False,
+        opacity: np.ndarray = None,
+    ):
         if self.initialized:
-            raise ValueError('only initialize once!')
+            raise ValueError("only initialize once!")
         if array is not None:
             # print(array.shape)
             self.n_timepoints = array.shape[0]
@@ -416,7 +419,7 @@ class LabelViewer(QtWidgets.QGraphicsView):
         try:
             self.cmap = Mapper(colormap)
         except ValueError:
-            raise ('Colormap not in matplotlib' 's defaults! {}'.format(colormap))
+            raise ("Colormap not in matplotlib" "s defaults! {}".format(colormap))
         if self.debug:
             self.make_debug()
 
@@ -481,14 +484,14 @@ class LabelViewer(QtWidgets.QGraphicsView):
         super().mouseMoveEvent(event)
 
     def change_rectangle(self, rect):
-        if not hasattr(self, 'item_rect'):
+        if not hasattr(self, "item_rect"):
             return
         self.item_rect.setRect(rect)
 
     def _fit_label_photo(self):
-        if not hasattr(self, 'x'):
+        if not hasattr(self, "x"):
             self.x = 0
-        if not hasattr(self, 'view_x'):
+        if not hasattr(self, "view_x"):
             self.view_x = 0
         # gets the bounding rectangle (in pixels) for the image of the label array
         geometry = self.geometry()
@@ -518,9 +521,9 @@ class LabelViewer(QtWidgets.QGraphicsView):
         if x < 0 or x >= self.n_timepoints:
             # print('return 1')
             return
-        if not hasattr(self, 'view_width'):
+        if not hasattr(self, "view_width"):
             self._fit_label_photo()
-        if not hasattr(self, 'n'):
+        if not hasattr(self, "n"):
             # print('return 2')
             return
 
@@ -564,7 +567,7 @@ class LabelViewer(QtWidgets.QGraphicsView):
         # self.show()
 
     def fixed_settings(self):
-        if not hasattr(self, 'changed'):
+        if not hasattr(self, "changed"):
             return
         self.changed = np.ones(self.changed.shape)
         self.recreate_label_image()
@@ -573,17 +576,17 @@ class LabelViewer(QtWidgets.QGraphicsView):
         # print('adding')
         if self.fixed:
             return
-        if not hasattr(self, 'array'):
+        if not hasattr(self, "array"):
             return
         n_behaviors = self.image.shape[0]
         if type(behaviors) != np.ndarray:
             behaviors = np.array(behaviors)
         if max(behaviors) > n_behaviors:
-            raise ValueError('Not enough behaviors for number: {}'.format(behaviors))
+            raise ValueError("Not enough behaviors for number: {}".format(behaviors))
         if fstart < 0:
-            raise ValueError('Behavior start frame must be > 0: {}'.format(fstart))
+            raise ValueError("Behavior start frame must be > 0: {}".format(fstart))
         if fend > self.n_timepoints:
-            raise ValueError('Behavior end frame must be < nframes: {}'.format(fend))
+            raise ValueError("Behavior end frame must be < nframes: {}".format(fend))
         # log.debug('Behaviors: {} fstart: {} fend: {}'.format(behaviors, fstart, fend))
         # go backwards to erase
         if fstart <= fend:
@@ -611,10 +614,11 @@ class LabelViewer(QtWidgets.QGraphicsView):
             # print('l shape: {}'.format(self.image[1:, time_indices, :].shape))
             # print('r_shape: {}'.format(np.tile(self.neg_color[1:], [1, len(time_indices), 1]).shape))
             self.image[0, time_indices, :] = self.pos_color[0]
-            self.image[1:, time_indices, :] = np.dstack([self.neg_color[1:] for _ in range(len(time_indices))
-                                                        ]).swapaxes(1, 2)
+            self.image[1:, time_indices, :] = np.dstack(
+                [self.neg_color[1:] for _ in range(len(time_indices))]
+            ).swapaxes(1, 2)
         else:
-            xv, yv = np.meshgrid(time_indices, behaviors, indexing='ij')
+            xv, yv = np.meshgrid(time_indices, behaviors, indexing="ij")
             xv = xv.flatten()
             yv = yv.flatten()
             # log.debug('xv: {} yv: {}'.format(xv, yv))
@@ -647,7 +651,7 @@ class LabelViewer(QtWidgets.QGraphicsView):
     def _array_to_image(self, array: np.ndarray, alpha: Union[float, int, np.ndarray] = None):
         image = self.cmap(array.T * 255)
         image[..., 3] = alpha
-        return (image)
+        return image
 
     def _add_row(self):
         self.array = np.concatenate((self.array, np.zeros((self.array.shape[0], 1), dtype=self.array.dtype)), axis=1)
@@ -662,7 +666,7 @@ class LabelViewer(QtWidgets.QGraphicsView):
         self._fit_label_photo()
 
     def _change_n_timepoints(self, n_timepoints: int):
-        warnings.warn('Changing number of timepoints will erase any labels!')
+        warnings.warn("Changing number of timepoints will erase any labels!")
         self.array = np.zeros((n_timepoints, self.n), dtype=np.uint8)
         self.changed = np.zeros((n_timepoints,), dtype=np.uint8)
         self.n_timepoints = n_timepoints
@@ -670,20 +674,20 @@ class LabelViewer(QtWidgets.QGraphicsView):
         self.image = self._array_to_image(self.array, alpha=self.unlabeled_alpha)
 
     def make_debug(self, num_rows: int = 15000):
-        print('debug')
-        assert (hasattr(self, 'array'))
+        print("debug")
+        assert hasattr(self, "array")
         rows, cols = self.shape
         # print(rows, cols)
         # behav = 0
         for i in range(rows):
-            behav = (i % cols)
+            behav = i % cols
             self.array[i, behav] = 1
         # self.array = self.array[:num_rows,:]
         # print(self.array)
 
     def calculate_background_class(self, array: np.ndarray):
         array[:, 0] = np.logical_not(np.any(array[:, 1:], axis=1))
-        return (array)
+        return array
 
     def update_background_class(self):
         # import pdb
@@ -716,13 +720,13 @@ class LabelViewer(QtWidgets.QGraphicsView):
 
     @Slot(int)
     def toggle_behavior(self, index: int):
-        if not hasattr(self, 'array') or self.array is None or self.fixed:
+        if not hasattr(self, "array") or self.array is None or self.fixed:
             return
         n_behaviors = self.image.shape[0]
         if index > n_behaviors:
-            raise ValueError('Not enough behaviors for number: {}'.format(index))
+            raise ValueError("Not enough behaviors for number: {}".format(index))
         if index < 0:
-            raise ValueError('Behavior index cannot be below 0')
+            raise ValueError("Behavior index cannot be below 0")
         self.label_toggled[index] = ~self.label_toggled[index]
         if self.label_toggled[index]:
             # if background is selected, deselect all others
@@ -742,7 +746,6 @@ class LabelViewer(QtWidgets.QGraphicsView):
 
 
 class LabelButtons(QtWidgets.QWidget):
-
     def __init__(self, parent=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -755,11 +758,10 @@ class LabelButtons(QtWidgets.QWidget):
         self.enabled = None
         self.minimum_height = None
 
-    def initialize(self,
-                   behaviors: Union[list, np.ndarray] = ['background'],
-                   enabled: bool = True,
-                   minimum_height: int = 25):
-        assert (len(behaviors) > 0)
+    def initialize(
+        self, behaviors: Union[list, np.ndarray] = ["background"], enabled: bool = True, minimum_height: int = 25
+    ):
+        assert len(behaviors) > 0
         layout = QtWidgets.QVBoxLayout()
         self.buttons = []
         self.behaviors = behaviors
@@ -780,18 +782,19 @@ class LabelButtons(QtWidgets.QWidget):
     def _make_button(self, behavior: str, index: int):
         string = str(behavior)
         if index < 10:
-            string = '[{:01d}] '.format(index) + string
+            string = "[{:01d}] ".format(index) + string
         button = QtWidgets.QPushButton(string, parent=self)
         button.setEnabled(self.enabled)
         button.setMinimumHeight(self.minimum_height)
         button.setCheckable(True)
-        button.setStyleSheet("QPushButton { text-align: left; }"
-                             "QPushButton:checked { background-color: rgb(30, 30, 30)}")
+        button.setStyleSheet(
+            "QPushButton { text-align: left; }" "QPushButton:checked { background-color: rgb(30, 30, 30)}"
+        )
         return button
 
     def add_behavior(self, behavior: str):
         if behavior in self.behaviors:
-            warnings.warn('behavior {} already in list'.format(behavior))
+            warnings.warn("behavior {} already in list".format(behavior))
         else:
             self.behaviors.append(behavior)
         button = self._make_button(behavior, len(self.behaviors))
@@ -805,7 +808,6 @@ class LabelButtons(QtWidgets.QWidget):
 
 
 class LabelImg(QtWidgets.QScrollArea):
-
     def __init__(self, parent=None, *args, **kwargs):
         super().__init__(parent=parent, *args, **kwargs)
 
@@ -839,34 +841,37 @@ class LabelImg(QtWidgets.QScrollArea):
                 button.setChecked(toggle)
         self.update()
 
-    def initialize(self,
-                   behaviors: Union[list, np.ndarray] = ['background'],
-                   n_timepoints: int = 31,
-                   debug: bool = False,
-                   colormap: str = 'Reds',
-                   unlabeled_alpha: float = 0.1,
-                   desired_pixel_size: int = 25,
-                   array: np.ndarray = None,
-                   fixed: bool = False,
-                   opacity: np.ndarray = None):
-
+    def initialize(
+        self,
+        behaviors: Union[list, np.ndarray] = ["background"],
+        n_timepoints: int = 31,
+        debug: bool = False,
+        colormap: str = "Reds",
+        unlabeled_alpha: float = 0.1,
+        desired_pixel_size: int = 25,
+        array: np.ndarray = None,
+        fixed: bool = False,
+        opacity: np.ndarray = None,
+    ):
         layout = QtWidgets.QHBoxLayout()
         # assert (n == len(behaviors))
-        assert (behaviors[0] == 'background')
+        assert behaviors[0] == "background"
 
         self.label = LabelViewer()
         # print(behaviors)
         self.behaviors = behaviors
         self.n = len(self.behaviors)
-        self.label.initialize(len(self.behaviors),
-                              n_timepoints,
-                              debug,
-                              colormap,
-                              unlabeled_alpha,
-                              desired_pixel_size,
-                              array,
-                              fixed,
-                              opacity=opacity)
+        self.label.initialize(
+            len(self.behaviors),
+            n_timepoints,
+            debug,
+            colormap,
+            unlabeled_alpha,
+            desired_pixel_size,
+            array,
+            fixed,
+            opacity=opacity,
+        )
         self.buttons = LabelButtons()
         enabled = not fixed
         self.buttons.initialize(self.behaviors, enabled, desired_pixel_size)
@@ -890,16 +895,16 @@ class LabelImg(QtWidgets.QScrollArea):
         self.update()
 
     def add_behavior(self, behavior: str):
-        print('1: ', self.behaviors, behavior)
+        print("1: ", self.behaviors, behavior)
         if behavior in self.behaviors:
-            warnings.warn('behavior {} already in list'.format(behavior))
+            warnings.warn("behavior {} already in list".format(behavior))
         # add a button
         self.buttons.add_behavior(behavior)
-        print('2: {}'.format(self.behaviors))
-        print('2 buttons: {}'.format(self.buttons.behaviors))
+        print("2: {}".format(self.behaviors))
+        print("2 buttons: {}".format(self.buttons.behaviors))
         # add to our list of behaviors
         # self.behaviors.append(behavior)
-        print('3: {}'.format(self.behaviors))
+        print("3: {}".format(self.behaviors))
         # hook up button to toggling behavior
         i = len(self.behaviors) - 1
         print(self.behaviors)
@@ -936,7 +941,6 @@ class ListenForPipeCompletion(QtCore.QThread):
 
 
 class SubprocessChainer(QtCore.QThread):
-
     def __init__(self, calls: list):
         QtCore.QThread.__init__(self)
         for call in calls:
@@ -974,7 +978,6 @@ class SubprocessChainer(QtCore.QThread):
 
 
 class UnclickButtonOnPipeCompletion(QtCore.QThread):
-
     def __init__(self, button, pipe):
         QtCore.QThread.__init__(self)
         # super().__init__(self)
@@ -989,7 +992,7 @@ class UnclickButtonOnPipeCompletion(QtCore.QThread):
 
     @Slot(bool)
     def get_click(self, value):
-        print('clicked')
+        print("clicked")
         self.has_been_clicked = True
 
     def run(self):
@@ -1008,23 +1011,24 @@ class UnclickButtonOnPipeCompletion(QtCore.QThread):
 
 
 class MainWindow(QtWidgets.QMainWindow):
-
     def __init__(self):
         super().__init__()
         self.label = LabelImg(self)
-        self.label.initialize(behaviors=['background', 'itch', 'lick', 'scratch', 'shit', 'fuck', 'ass', 'bitch'],
-                              n_timepoints=500,
-                              debug=True,
-                              fixed=False)
+        self.label.initialize(
+            behaviors=["background", "itch", "lick", "scratch", "shit", "fuck", "ass", "bitch"],
+            n_timepoints=500,
+            debug=True,
+            fixed=False,
+        )
 
         # self.label = LabelViewer()
         # self.label.initialize(n=4, n_timepoints=40, debug=True, fixed=True)
         # # self.labelImg = DebuggingDrawing()
         #
-        next_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence('Right'), self)
+        next_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Right"), self)
         next_shortcut.activated.connect(partial(self.label.label.change_view_dx, 1))
         # next_shortcut.activated.connect(partial(self.label.change_view_dx, 1))
-        back_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence('Left'), self)
+        back_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Left"), self)
         back_shortcut.activated.connect(partial(self.label.label.change_view_dx, -1))
         #
         # if hasattr(self, 'label'):
@@ -1047,14 +1051,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update()
 
     def sizeHint(self):
-        return (QtCore.QSize(600, 600))
+        return QtCore.QSize(600, 600)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QtWidgets.QApplication([])
     # volume = VideoPlayer(r'C:\DATA\mouse_reach_processed\M134_20141203_v001.h5')
     testing = LabelImg()
-    testing.initialize(behaviors=['background', 'a', 'b', 'c', 'd', 'e'], n_timepoints=15000, debug=True)
+    testing.initialize(behaviors=["background", "a", "b", "c", "d", "e"], n_timepoints=15000, debug=True)
     # testing = ShouldRunInference(['M134_20141203_v001',
     #                               'M134_20141203_v002',
     #                               'M134_20141203_v004'],

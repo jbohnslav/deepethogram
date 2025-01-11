@@ -7,9 +7,10 @@ log = logging.getLogger(__name__)
 
 
 class Stopper:
-    """ Base class for stopping training """
+    """Base class for stopping training"""
+
     def __init__(self, name: str, start_epoch: int = 0, num_epochs: int = 1000):
-        """ constructor for stopper
+        """constructor for stopper
 
         Parameters
         ----------
@@ -25,7 +26,7 @@ class Stopper:
         self.num_epochs = num_epochs
 
     def step(self, *args, **kwargs):
-        """ increment internal counter """
+        """increment internal counter"""
         self.epoch_counter += 1
 
     def __call__(self, *args, **kwargs):
@@ -33,7 +34,7 @@ class Stopper:
 
 
 class NumEpochsStopper(Stopper):
-    def __init__(self, name: str = 'num_epochs', start_epoch: int = 0, num_epochs: int = 1000):
+    def __init__(self, name: str = "num_epochs", start_epoch: int = 0, num_epochs: int = 1000):
         super().__init__(name, start_epoch, num_epochs)
 
     def step(self, *args, **kwargs):
@@ -53,8 +54,9 @@ class EarlyStopping(Stopper):
     https://github.com/pytorch/ignite/blob/master/ignite/handlers/early_stopping.py
     """
 
-    def __init__(self, name='early', start_epoch=0, num_epochs=1000, patience=5, is_error=False,
-                 early_stopping_begins: int = 0):
+    def __init__(
+        self, name="early", start_epoch=0, num_epochs=1000, patience=5, is_error=False, early_stopping_begins: int = 0
+    ):
         super().__init__(name, start_epoch, num_epochs)
         if patience < 1:
             raise ValueError("Argument patience should be positive integer")
@@ -88,7 +90,9 @@ class EarlyStopping(Stopper):
         if self.epoch_counter > self.num_epochs:
             should_stop = True
 
-        import pdb; pdb.set_trace()
+        import pdb
+
+        pdb.set_trace()
 
         return best, should_stop
 
@@ -108,8 +112,14 @@ class LearningRateStopper(Stopper):
                 break
     """
 
-    def __init__(self, name='learning_rate', minimum_learning_rate: float = 5e-7, start_epoch=0, num_epochs=1000,
-                 eps: float = 1e-8):
+    def __init__(
+        self,
+        name="learning_rate",
+        minimum_learning_rate: float = 5e-7,
+        start_epoch=0,
+        num_epochs=1000,
+        eps: float = 1e-8,
+    ):
         super().__init__(name, start_epoch, num_epochs)
         """Constructor for LearningRateStopper.
         Args:
@@ -129,7 +139,7 @@ class LearningRateStopper(Stopper):
         should_stop = False
         # print('epoch counter: {} num_epochs: {}'.format(self.epoch_counter, self.num_epochs))
         if lr < self.minimum_learning_rate + self.eps or self.epoch_counter >= self.num_epochs:
-            print('Reached learning rate {}, stopping...'.format(lr))
+            print("Reached learning rate {}, stopping...".format(lr))
             should_stop = True
         return should_stop
 
@@ -148,15 +158,20 @@ def get_stopper(cfg: DictConfig) -> Type[Stopper]:
     """
     # ASSUME WE'RE USING LOSS AS THE KEY METRIC, WHICH IS AN ERROR
     stopping_type = cfg.train.stopping_type
-    log.debug('Using stopper type {}'.format(stopping_type))
-    if stopping_type == 'early':
-        return EarlyStopping(start_epoch=0, num_epochs=cfg.train.num_epochs,
-                             patience=cfg.train.patience,
-                             is_error=True, early_stopping_begins=cfg.train.early_stopping_begins)
-    elif stopping_type == 'learning_rate':
-        return LearningRateStopper(start_epoch=0, num_epochs=cfg.train.num_epochs,
-                                   minimum_learning_rate=cfg.train.min_lr)
-    elif stopping_type == 'num_epochs':
-        return NumEpochsStopper('num_epochs', start_epoch=0, num_epochs=cfg.train.num_epochs)
+    log.debug("Using stopper type {}".format(stopping_type))
+    if stopping_type == "early":
+        return EarlyStopping(
+            start_epoch=0,
+            num_epochs=cfg.train.num_epochs,
+            patience=cfg.train.patience,
+            is_error=True,
+            early_stopping_begins=cfg.train.early_stopping_begins,
+        )
+    elif stopping_type == "learning_rate":
+        return LearningRateStopper(
+            start_epoch=0, num_epochs=cfg.train.num_epochs, minimum_learning_rate=cfg.train.min_lr
+        )
+    elif stopping_type == "num_epochs":
+        return NumEpochsStopper("num_epochs", start_epoch=0, num_epochs=cfg.train.num_epochs)
     else:
-        raise ValueError('invalid stopping name detected! {}'.format(stopping_type))
+        raise ValueError("invalid stopping name detected! {}".format(stopping_type))

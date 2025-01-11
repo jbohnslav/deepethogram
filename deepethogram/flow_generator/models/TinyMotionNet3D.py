@@ -22,9 +22,9 @@ import logging
 from .components import *
 # import warnings
 
+
 class TinyMotionNet3D(nn.Module):
-    def __init__(self, num_images=11, input_channels=3, batchnorm=True, flow_div=1,
-                 channel_base=16):
+    def __init__(self, num_images=11, input_channels=3, batchnorm=True, flow_div=1, channel_base=16):
         super().__init__()
         self.num_images = num_images
         if input_channels is None:
@@ -35,26 +35,39 @@ class TinyMotionNet3D(nn.Module):
         # self.out_channels = int((num_images-1)*2)
         self.batchnorm = batchnorm
         bias = not self.batchnorm
-        logging.debug('ignoring flow div value of {}: setting to 1 instead'.format(flow_div))
+        logging.debug("ignoring flow div value of {}: setting to 1 instead".format(flow_div))
         self.flow_div = 1
 
-        self.channels = [channel_base * (2 ** i) for i in range(0, 3)]
+        self.channels = [channel_base * (2**i) for i in range(0, 3)]
         print(self.channels)
 
         self.conv1 = conv3d(self.input_channels, self.channels[0], kernel_size=7, batchnorm=batchnorm, bias=bias)
-        self.conv2 = conv3d(self.channels[0], self.channels[1], stride=(1, 2, 2), kernel_size=5, batchnorm=batchnorm,
-                            bias=bias)
+        self.conv2 = conv3d(
+            self.channels[0], self.channels[1], stride=(1, 2, 2), kernel_size=5, batchnorm=batchnorm, bias=bias
+        )
         self.conv3 = conv3d(self.channels[1], self.channels[2], stride=(1, 2, 2), batchnorm=batchnorm, bias=bias)
         self.conv4 = conv3d(self.channels[2], self.channels[1], stride=(1, 2, 2), batchnorm=batchnorm, bias=bias)
 
         self.conv5 = conv3d(self.channels[1], self.channels[1], kernel_size=(2, 3, 3), batchnorm=batchnorm, bias=bias)
 
-        self.deconv3 = deconv3d(self.channels[1], self.channels[1], kernel_size=(1, 4, 4), stride=(1, 2, 2),
-                                padding=(0, 1, 1),
-                                batchnorm=batchnorm, bias=bias)
-        self.deconv2 = deconv3d(self.channels[1], self.channels[0], kernel_size=(1, 4, 4), stride=(1, 2, 2),
-                                padding=(0, 1, 1),
-                                batchnorm=batchnorm, bias=bias)
+        self.deconv3 = deconv3d(
+            self.channels[1],
+            self.channels[1],
+            kernel_size=(1, 4, 4),
+            stride=(1, 2, 2),
+            padding=(0, 1, 1),
+            batchnorm=batchnorm,
+            bias=bias,
+        )
+        self.deconv2 = deconv3d(
+            self.channels[1],
+            self.channels[0],
+            kernel_size=(1, 4, 4),
+            stride=(1, 2, 2),
+            padding=(0, 1, 1),
+            batchnorm=batchnorm,
+            bias=bias,
+        )
 
         self.iconv3 = conv3d(self.channels[2], self.channels[2], kernel_size=(2, 3, 3), batchnorm=batchnorm, bias=bias)
         self.iconv2 = conv3d(self.channels[1], self.channels[1], kernel_size=(2, 3, 3), batchnorm=batchnorm, bias=bias)

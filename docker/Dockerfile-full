@@ -1,18 +1,18 @@
 FROM --platform=linux/amd64 nvidia/cuda:11.5.2-cudnn8-devel-ubuntu20.04
 
-# modified from here 
+# modified from here
 # https://github.com/anibali/docker-pytorch/blob/master/dockerfiles/1.10.0-cuda11.3-ubuntu20.04/Dockerfile
 # Install some basic utilities
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    curl ca-certificates sudo git bzip2 libx11-6 \ 
+    curl ca-certificates sudo git bzip2 libx11-6 \
     ffmpeg libsm6 libxext6 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 \
     libxcb-xkb-dev libxkbcommon-x11-0 libpulse-mainloop-glib0 ubuntu-restricted-extras libqt5multimedia5-plugins vlc \
-    libkrb5-3 libgssapi-krb5-2 libkrb5support0 \ 
+    libkrb5-3 libgssapi-krb5-2 libkrb5support0 \
     && rm -rf /var/lib/apt/lists/*
 
 # don't ask for location etc user input when building
 # this is for opencv, apparently
-RUN apt-get update &&  apt-get install -y 
+RUN apt-get update &&  apt-get install -y
 
 # Create a working directory and data directory
 RUN mkdir /app
@@ -29,8 +29,8 @@ RUN curl -sLo ~/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-py39
     && rm ~/miniconda.sh \
     && conda update conda
 
-# install 
-RUN conda install python=3.7 -y 
+# install
+RUN conda install python=3.7 -y
 RUN pip install setuptools --upgrade && pip install --upgrade "pip<24.0"
 RUN pip install torch==1.11.0+cu115 torchvision==0.12.0+cu115 -f https://download.pytorch.org/whl/torch_stable.html
 

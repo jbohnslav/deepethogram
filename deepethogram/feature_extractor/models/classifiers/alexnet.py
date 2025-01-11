@@ -33,15 +33,15 @@ import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
 
-__all__ = ['AlexNet', 'alexnet']
+__all__ = ["AlexNet", "alexnet"]
 
 
 model_urls = {
-    'alexnet': 'https://download.pytorch.org/models/alexnet-owt-4df8aa71.pth',
+    "alexnet": "https://download.pytorch.org/models/alexnet-owt-4df8aa71.pth",
 }
 
-class AlexNet(nn.Module):
 
+class AlexNet(nn.Module):
     def __init__(self, in_channels=3, num_classes=1000, dropout_p=0.5):
         super(AlexNet, self).__init__()
         self.features = nn.Sequential(
@@ -58,7 +58,7 @@ class AlexNet(nn.Module):
             nn.Conv2d(256, 256, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             # modified to be fully convolutional
-            nn.AdaptiveMaxPool2d((6,6))
+            nn.AdaptiveMaxPool2d((6, 6)),
         )
         self.classifier = nn.Sequential(
             nn.Dropout(p=dropout_p),
@@ -89,13 +89,13 @@ def alexnet(pretrained=False, in_channels=3, **kwargs):
     """
     model = AlexNet(in_channels=in_channels, **kwargs)
     if pretrained:
-        print('Downloading pretrained weights...')
+        print("Downloading pretrained weights...")
         # from Wang et al. 2015: Towards good practices for very deep two-stream convnets
-        state_dict = model_zoo.load_url(model_urls['alexnet'])
-        if in_channels !=3:
+        state_dict = model_zoo.load_url(model_urls["alexnet"])
+        if in_channels != 3:
             rgb_kernel_key = list(state_dict.keys())[0]
             rgb_kernel = state_dict[rgb_kernel_key]
-            flow_kernel = rgb_kernel.mean(dim=1).unsqueeze(1).repeat(1, in_channels,1,1)
+            flow_kernel = rgb_kernel.mean(dim=1).unsqueeze(1).repeat(1, in_channels, 1, 1)
             state_dict[rgb_kernel_key] = flow_kernel
             state_dict.update(state_dict)
         model.load_state_dict(state_dict)

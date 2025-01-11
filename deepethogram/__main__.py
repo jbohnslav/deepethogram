@@ -6,5 +6,5 @@ from deepethogram.gui.main import entry
 # def main(cfg: DictConfig) -> None:
 #     run(cfg)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     entry()

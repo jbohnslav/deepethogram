@@ -16,8 +16,13 @@ log = logging.getLogger(__name__)
 # from nvidia
 # https://github.com/NVIDIA/flownet2-pytorch/blob/master/utils/tools.py
 def module_to_dict(module, exclude=[]):
-    return dict([(x, getattr(module, x)) for x in dir(module)
-                 if isfunction(getattr(module, x)) and x not in exclude and getattr(module, x) not in exclude])
+    return dict(
+        [
+            (x, getattr(module, x))
+            for x in dir(module)
+            if isfunction(getattr(module, x)) and x not in exclude and getattr(module, x) not in exclude
+        ]
+    )
 
 
 # model definitions can be accessed by indexing into this dictionary
@@ -30,16 +35,18 @@ for model in [alexnet, densenet, inception, vgg, resnet, squeezenet, resnet3d]:
 
 
 # https://pytorch.org/tutorials/beginner/finetuning_torchvision_models_tutorial.html
-def get_cnn(model_name: str,
-            in_channels: int = 3,
-            reload_imagenet: bool = True,
-            num_classes: int = 1000,
-            freeze: bool = False,
-            pos: np.ndarray = None,
-            neg: np.ndarray = None,
-            final_bn: bool = False,
-            **kwargs):
-    """ Initializes a pretrained CNN from Torchvision.
+def get_cnn(
+    model_name: str,
+    in_channels: int = 3,
+    reload_imagenet: bool = True,
+    num_classes: int = 1000,
+    freeze: bool = False,
+    pos: np.ndarray = None,
+    neg: np.ndarray = None,
+    final_bn: bool = False,
+    **kwargs,
+):
+    """Initializes a pretrained CNN from Torchvision.
 
     Currently supported models:
     AlexNet, DenseNet, Inception, VGGXX, ResNets, SqueezeNets, and Resnet3Ds (not torchvision)
@@ -64,10 +71,10 @@ def get_cnn(model_name: str,
     model = models[model_name](pretrained=reload_imagenet, in_channels=in_channels, **kwargs)
 
     if freeze:
-        log.info('Before freezing: {:,}'.format(utils.get_num_parameters(model)))
+        log.info("Before freezing: {:,}".format(utils.get_num_parameters(model)))
         for param in model.parameters():
             param.requires_grad = False
-        log.info('After freezing: {:,}'.format(utils.get_num_parameters(model)))
+        log.info("After freezing: {:,}".format(utils.get_num_parameters(model)))
 
     # we have to use the pop function because the final layer in these models has different names
     model, num_features, final_layer = pop(model, model_name, 1)
@@ -81,14 +88,14 @@ def get_cnn(model_name: str,
     if pos is not None and neg is not None:
         with torch.no_grad():
             with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', category=RuntimeWarning)
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
                 bias = np.nan_to_num(np.log(pos / neg), neginf=0.0, posinf=1.0)
             bias = torch.nn.Parameter(torch.from_numpy(bias).float())
             if final_bn:
                 bn_layer.bias = bias
             else:
                 linear_layer.bias = bias
-            log.info('Custom bias: {}'.format(bias))
+            log.info("Custom bias: {}".format(bias))
 
     model = nn.Sequential(*modules)
     return model

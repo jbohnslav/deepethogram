@@ -67,4 +67,3 @@ train:
     style: l2_sp
     alpha: 1e-5
     beta: 1e-3
-

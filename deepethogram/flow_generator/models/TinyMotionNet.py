@@ -30,6 +30,7 @@ from .components import *
 
 log = logging.getLogger(__name__)
 
+
 # modified from https://github.com/NVIDIA/flownet2-pytorch/blob/master/networks/FlowNetSD.py
 # https://github.com/NVIDIA/flownet2-pytorch/blob/master/networks/submodules.py
 class TinyMotionNet(nn.Module):
@@ -47,7 +48,7 @@ class TinyMotionNet(nn.Module):
 
         # self.out_channels = int((num_images-1)*2)
         self.batchNorm = batchNorm
-        log.debug('ignoring flow div value of {}: setting to 1 instead'.format(flow_div))
+        log.debug("ignoring flow div value of {}: setting to 1 instead".format(flow_div))
         self.flow_div = 1
 
         self.conv1 = conv(self.batchNorm, self.input_channels, 64, kernel_size=7)

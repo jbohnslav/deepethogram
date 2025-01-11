@@ -7,6 +7,7 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
+
 def interpolate_bad_values(keypoint: np.ndarray, threshold: float = 0.9) -> np.ndarray:
     """Interpolates keypoints with low confidence
 
@@ -28,7 +29,7 @@ def interpolate_bad_values(keypoint: np.ndarray, threshold: float = 0.9) -> np.n
 
     keypoint_interped = keypoint.copy()
 
-    log.debug('fraction of points below {:.1f}: {:.4f}'.format(threshold, np.mean(keypoint[..., 2] < threshold)))
+    log.debug("fraction of points below {:.1f}: {:.4f}".format(threshold, np.mean(keypoint[..., 2] < threshold)))
     # TODO: VECTORIZE
     for i in range(kp):
         for j in range(2):
@@ -49,7 +50,7 @@ def interpolate_bad_values(keypoint: np.ndarray, threshold: float = 0.9) -> np.n
 
 
 def normalize_keypoints(keypoints: np.ndarray, H: int, W: int) -> np.ndarray:
-    """Normalizes keypoints from range [(0, H), (0, W)] to range [(-1, 1), (-1, 1)]. 
+    """Normalizes keypoints from range [(0, H), (0, W)] to range [(-1, 1), (-1, 1)].
     Non-square images will use the maximum side length in the denominator.
 
     Parameters
@@ -73,7 +74,7 @@ def normalize_keypoints(keypoints: np.ndarray, H: int, W: int) -> np.ndarray:
 
 
 def denormalize_keypoints(keypoints, H, W):
-    """Un-normalizes keypoints from range [(-1, 1), (-1, 1)] to range [(0, H), (0, W)]. 
+    """Un-normalizes keypoints from range [(-1, 1), (-1, 1)] to range [(0, H), (0, W)].
     Non-square images will use the maximum side length.
 
     Parameters
@@ -107,7 +108,7 @@ def slow_alignment(keypoints, rotmats, origins):
 
 
 def compute_distance(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
-    """Computes euclidean distance along the final dimension of two input arrays. 
+    """Computes euclidean distance along the final dimension of two input arrays.
 
     Parameters
     ----------
@@ -121,10 +122,11 @@ def compute_distance(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
     """
     return np.sqrt(((arr1 - arr2) ** 2).sum(axis=-1))
 
+
 def poly_area(x: np.ndarray, y: np.ndarray):
-    """Returns area of the polygon specified by X and Y coordinates. 
+    """Returns area of the polygon specified by X and Y coordinates.
     REQUIRES POINTS TO BE IN CLOCKWISE ORDER!!
-    
+
     https://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates
 
     Parameters
@@ -149,7 +151,7 @@ def load_dlcfile(dlcfile: Union[str, os.PathLike]) -> Tuple[np.ndarray, list, pd
     ----------
     dlcfile : Union[str, os.PathLike]
         Path to deeplabcut file
-        
+
     Returns
     -------
     Tuple[np.ndarray, list, pd.DataFrame]
@@ -160,7 +162,7 @@ def load_dlcfile(dlcfile: Union[str, os.PathLike]) -> Tuple[np.ndarray, list, pd
     assert os.path.isfile(dlcfile)
     # TODO: make function to load HDF5s
     ending = os.path.splitext(dlcfile)[1]
-    assert ending == '.csv'
+    assert ending == ".csv"
 
     # read the csv
     df = pd.read_csv(dlcfile, index_col=0)
@@ -180,7 +182,7 @@ def load_dlcfile(dlcfile: Union[str, os.PathLike]) -> Tuple[np.ndarray, list, pd
     return keypoints, bodyparts, df
 
 
-def stack_features_in_time(features: np.ndarray, frames_before_and_after: int=15) -> np.ndarray:
+def stack_features_in_time(features: np.ndarray, frames_before_and_after: int = 15) -> np.ndarray:
     """For an array of keypoints, stack the frames before and after the current frame into one single vector.
 
     Parameters
@@ -198,23 +200,22 @@ def stack_features_in_time(features: np.ndarray, frames_before_and_after: int=15
     assert features.ndim == 2
     stacked_features = []
     N = features.shape[0]
-    padded = np.pad(features, ((frames_before_and_after, frames_before_and_after), (0, 0)), 
-                          mode='edge')
+    padded = np.pad(features, ((frames_before_and_after, frames_before_and_after), (0, 0)), mode="edge")
 
-    for i in range(frames_before_and_after, N+frames_before_and_after): 
-        start_ind = i- frames_before_and_after
-        end_ind = i + frames_before_and_after+1
+    for i in range(frames_before_and_after, N + frames_before_and_after):
+        start_ind = i - frames_before_and_after
+        end_ind = i + frames_before_and_after + 1
 
         stacked_features.append(padded[start_ind:end_ind, :].flatten())
 
     stacked = np.stack(stacked_features)
     assert stacked.shape[0] == features.shape[0]
-    assert stacked.shape[1] == features.shape[1]*(frames_before_and_after*2 + 1)
+    assert stacked.shape[1] == features.shape[1] * (frames_before_and_after * 2 + 1)
     return stacked
 
 
 def expand_features_sturman(keypoints: np.ndarray, bodyparts: list, H: int, W: int) -> Tuple[np.ndarray, list]:
-    """ Expand 2D keypoints into features for behavioral classification.
+    """Expand 2D keypoints into features for behavioral classification.
 
     Based on Sturman et al. 2020:
         Sturman, O. et al. Deep learning-based behavioral analysis reaches human accuracy and is capable of
@@ -257,7 +258,7 @@ def expand_features_sturman(keypoints: np.ndarray, bodyparts: list, H: int, W: i
 
     # add centroid as the 8th keypoint. mean of all paws
     keypoints = np.concatenate((keypoints, np.mean(keypoints[:, 1:5, :], axis=1, keepdims=True)), axis=1)
-    bodyparts += ['centroid']
+    bodyparts += ["centroid"]
 
     # normalize
     keypoints = normalize_keypoints(keypoints, H, W)
@@ -285,14 +286,17 @@ def expand_features_sturman(keypoints: np.ndarray, bodyparts: list, H: int, W: i
 
     # l_forepaw, nose, r_forepaw, r_hindpaw, tailbase, l_hindpaw area. must be clockwise and in order!
     areas = np.array(
-        [poly_area(aligned[i, [1, 0, 2, 4, 5, 3], 0], aligned[i, [1, 0, 2, 4, 5, 3], 1]) for i in range(len(aligned))])
+        [poly_area(aligned[i, [1, 0, 2, 4, 5, 3], 0], aligned[i, [1, 0, 2, 4, 5, 3], 1]) for i in range(len(aligned))]
+    )
 
     nose_tailbase_distance = compute_distance(aligned[:, 0, :], aligned[:, 5, :])
     tailbase_tailtip_distance = compute_distance(aligned[:, 5, :], aligned[:, 6, :])
-    forepaw_hindpaw_distance = (compute_distance(aligned[:, 1, :], aligned[:, 3, :]) +
-                                compute_distance(aligned[:, 2, :], aligned[:, 4, :])) / 2
-    forepaw_nose_distance = (compute_distance(aligned[:, 0, :], aligned[:, 1, :]) +
-                             compute_distance(aligned[:, 0, :], aligned[:, 2, :])) / 2
+    forepaw_hindpaw_distance = (
+        compute_distance(aligned[:, 1, :], aligned[:, 3, :]) + compute_distance(aligned[:, 2, :], aligned[:, 4, :])
+    ) / 2
+    forepaw_nose_distance = (
+        compute_distance(aligned[:, 0, :], aligned[:, 1, :]) + compute_distance(aligned[:, 0, :], aligned[:, 2, :])
+    ) / 2
     forepaw_forepaw_distance = compute_distance(aligned[:, 1, :], aligned[:, 2, :])
     hindpaw_hindpaw_distance = compute_distance(aligned[:, 3, :], aligned[:, 4, :])
 
@@ -300,41 +304,41 @@ def expand_features_sturman(keypoints: np.ndarray, bodyparts: list, H: int, W: i
     features = []
     columns = []
     for i in range(len(bodyparts)):
-        for j, coord in enumerate(['x', 'y']):
+        for j, coord in enumerate(["x", "y"]):
             features.append(keypoints[:, i, j])
-            columns.append('{}_{}'.format(bodyparts[i], coord))
+            columns.append("{}_{}".format(bodyparts[i], coord))
 
     for i in range(len(bodyparts)):
-        for j, coord in enumerate(['x', 'y']):
+        for j, coord in enumerate(["x", "y"]):
             features.append(aligned[:, i, j])
-            columns.append('{}_{}_aligned'.format(bodyparts[i], coord))
+            columns.append("{}_{}_aligned".format(bodyparts[i], coord))
 
     features.append(tail_angle)
-    columns.append('tail_angle')
+    columns.append("tail_angle")
 
     for i in range(4):
         features.append(paw_angles[:, i])
-        columns.append('{}_centroid_angle'.format(bodyparts[i + 1]))
+        columns.append("{}_centroid_angle".format(bodyparts[i + 1]))
 
     features.append(nose_tailbase_distance)
-    columns.append('nose_tailbase_dist')
+    columns.append("nose_tailbase_dist")
     features.append(tailbase_tailtip_distance)
-    columns.append('tailbase_tailtip_dist')
+    columns.append("tailbase_tailtip_dist")
     features.append(forepaw_hindpaw_distance)
-    columns.append('forepaw_hindpaw_dist')
+    columns.append("forepaw_hindpaw_dist")
     features.append(forepaw_nose_distance)
-    columns.append('forepaw_nose_dist')
+    columns.append("forepaw_nose_dist")
     features.append(forepaw_forepaw_distance)
-    columns.append('forepaw_forepaw_dist')
+    columns.append("forepaw_forepaw_dist")
     features.append(hindpaw_hindpaw_distance)
-    columns.append('hindpaw_hindpaw_dist')
+    columns.append("hindpaw_hindpaw_dist")
 
     features.append(areas)
-    columns.append('body_area')
+    columns.append("body_area")
 
     features = np.stack(features, axis=-1)
     # z-score
     denominator = features.std(axis=0, keepdims=True)
-    denominator[denominator < 1e-6 ] = 1e-6
+    denominator[denominator < 1e-6] = 1e-6
     z = (features - features.mean(axis=0, keepdims=True)) / denominator
     return z, columns

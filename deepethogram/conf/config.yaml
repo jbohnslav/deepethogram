@@ -46,6 +46,6 @@ log:
 #  project: project_config
 # hyra configuration: specifies how to create the run directory
 # hydra:
-#   run: 
+#   run:
 #     dir: ${project.path}/${project.model_path}/${now:%y%m%d_%H%M%S}_${run.model}_${run.type}_${notes}
 #   output_subdir: ''

@@ -1,7 +1,7 @@
 # Expected filepaths
 
 To train the DeepEthogram models, we need to be able to find a bunch of files (below). If you use the GUI, this directory
-structure will be created for you. 
+structure will be created for you.
 * models: a list of recent model runs of various types, along with their weights, and their performance
 * data
   * for each video, we need the video file itself
@@ -12,12 +12,12 @@ structure will be created for you.
     * for the feature extractor, we save the 512-dimensional image features and 512-dimensional flow features to this file
     * we also save probabilities and predictions (thresholded probabilities) to this file, as well as the thresholds used
   * video statistics: following normal convention in machine learning, we z-score our input data. For images, this is done independently
-  for the read, green, and blue channels. We z-score each video as they are added to a project, and save the channel 
+  for the read, green, and blue channels. We z-score each video as they are added to a project, and save the channel
   means and std deviations to a file
 * project configuration file: holds project-specific information, like behavior names and variables to override. For defaults, see [the default configuration file](../deepethogram/conf/project/project_config.yaml)
-  
-Therefore, the data loading scripts expect the following consistent folder structure. Note: if you write your own 
-dataloaders, you can use whatever file structure you want. 
+
+Therefore, the data loading scripts expect the following consistent folder structure. Note: if you write your own
+dataloaders, you can use whatever file structure you want.
 
 ```bash
 project_directory

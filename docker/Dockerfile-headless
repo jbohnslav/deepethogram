@@ -1,6 +1,6 @@
 FROM --platform=linux/amd64 nvidia/cuda:11.5.2-cudnn8-devel-ubuntu20.04
 
-# modified from here 
+# modified from here
 # https://github.com/anibali/docker-pytorch/blob/master/dockerfiles/1.10.0-cuda11.3-ubuntu20.04/Dockerfile
 # Install some basic utilities
 RUN apt-get update && apt-get install -y \
@@ -9,12 +9,12 @@ RUN apt-get update && apt-get install -y \
     sudo \
     git \
     bzip2 \
-    libx11-6 \ 
+    libx11-6 \
     && rm -rf /var/lib/apt/lists/*
 
 # don't ask for location etc user input when building
 # this is for opencv, apparently
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg 
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
 
 # Create a working directory and data directory
 RUN mkdir /app
@@ -31,8 +31,8 @@ RUN curl -sLo ~/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-py39
     && rm ~/miniconda.sh \
     && conda update conda
 
-# install 
-RUN conda install python=3.7 -y 
+# install
+RUN conda install python=3.7 -y
 RUN pip install setuptools --upgrade && pip install --upgrade pip
 RUN conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
 

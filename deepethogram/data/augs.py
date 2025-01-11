@@ -14,7 +14,7 @@ cv2.setNumThreads(0)
 log = logging.getLogger(__name__)
 
 
-def get_normalization_layer(mean: list, std: list, num_images: int = 1, mode: str = '2d'):
+def get_normalization_layer(mean: list, std: list, num_images: int = 1, mode: str = "2d"):
     """Get Z-scoring layer from config
     If RGB frames are stacked into tensor N, num_rgb*3, H, W, we need to repeat the mean and std num_rgb times
     """
@@ -26,8 +26,7 @@ def get_normalization_layer(mean: list, std: list, num_images: int = 1, mode: st
 
 
 class Transpose:
-    """Module to transpose image stacks.
-    """
+    """Module to transpose image stacks."""
 
     def __call__(self, images: np.ndarray) -> np.ndarray:
         shape = images.shape
@@ -39,12 +38,11 @@ class Transpose:
             return images.transpose(2, 0, 1)
 
     def __repr__(self):
-        return self.__class__.__name__ + '()'
+        return self.__class__.__name__ + "()"
 
 
 class NormalizeVideo(nn.Module):
-    """Z-scores input video sequences
-    """
+    """Z-scores input video sequences"""
 
     def __init__(self, mean, std):
         super().__init__()
@@ -73,8 +71,7 @@ class NormalizeVideo(nn.Module):
 
 
 class DenormalizeVideo(nn.Module):
-    """Un-z-scores input video sequences
-    """
+    """Un-z-scores input video sequences"""
 
     def __init__(self, mean, std):
         super().__init__()
@@ -102,8 +99,7 @@ class DenormalizeVideo(nn.Module):
 
 
 class ToFloat(nn.Module):
-    """Module for converting input uint8 tensors to floats, dividing by 255
-    """
+    """Module for converting input uint8 tensors to floats, dividing by 255"""
 
     def __init__(self):
         super().__init__()
@@ -112,12 +108,11 @@ class ToFloat(nn.Module):
         return tensor.float().div(255)
 
     def __repr__(self):
-        return self.__class__.__name__ + '()'
+        return self.__class__.__name__ + "()"
 
 
 class StackClipInChannels(nn.Module):
-    """Module to convert image from N,C,T,H,W -> N,C*T,H,W
-    """
+    """Module to convert image from N,C,T,H,W -> N,C*T,H,W"""
 
     def __init__(self):
         super().__init__()
@@ -130,8 +125,7 @@ class StackClipInChannels(nn.Module):
 
 
 class UnstackClip(nn.Module):
-    """Module to convert image from N,C*T,H,W -> N,C,T,H,W
-    """
+    """Module to convert image from N,C*T,H,W -> N,C,T,H,W"""
 
     def __init__(self):
         super().__init__()
@@ -144,7 +138,7 @@ class UnstackClip(nn.Module):
 
 
 def get_cpu_transforms(augs: DictConfig) -> dict:
-    """Makes CPU augmentations from the aug section of a configuration. 
+    """Makes CPU augmentations from the aug section of a configuration.
 
     Parameters
     ----------
@@ -154,7 +148,7 @@ def get_cpu_transforms(augs: DictConfig) -> dict:
     Returns
     -------
     xform : dict
-        keys: ['train', 'val', 'test']. Values: a composed OpenCV augmentation pipeline callable. 
+        keys: ['train', 'val', 'test']. Values: a composed OpenCV augmentation pipeline callable.
         Example: auged_images = xform['train'](images)
     """
     train_transforms = []
@@ -177,12 +171,12 @@ def get_cpu_transforms(augs: DictConfig) -> dict:
     train_transforms = transforms.Compose(train_transforms)
     val_transforms = transforms.Compose(val_transforms)
 
-    xform = {'train': train_transforms, 'val': val_transforms, 'test': val_transforms}
-    log.debug('CPU transforms: {}'.format(xform))
+    xform = {"train": train_transforms, "val": val_transforms, "test": val_transforms}
+    log.debug("CPU transforms: {}".format(xform))
     return xform
 
 
-def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
+def get_gpu_transforms(augs: DictConfig, mode: str = "2d") -> dict:
     """Makes GPU augmentations from the augs section of a configuration.
 
     Parameters
@@ -195,7 +189,7 @@ def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
     Returns
     -------
     xform : dict
-        keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations. 
+        keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations.
         Example: auged_images = xform['train'](images)
     """
     # input is a tensor of shape N x C x F x H x W
@@ -213,25 +207,28 @@ def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
 
     if augs.brightness > 0 or augs.contrast > 0 or augs.saturation > 0 or augs.hue > 0:
         kornia_transforms.append(
-            K.ColorJitter(brightness=augs.brightness,
-                          contrast=augs.contrast,
-                          saturation=augs.saturation,
-                          hue=augs.hue,
-                          p=augs.color_p,
-                          same_on_batch=False))
+            K.ColorJitter(
+                brightness=augs.brightness,
+                contrast=augs.contrast,
+                saturation=augs.saturation,
+                hue=augs.hue,
+                p=augs.color_p,
+                same_on_batch=False,
+            )
+        )
     if augs.grayscale > 0:
         kornia_transforms.append(K.RandomGrayscale(p=augs.grayscale))
 
     norm = NormalizeVideo(mean=augs.normalization.mean, std=augs.normalization.std)
     # kornia_transforms.append(norm)
 
-    kornia_transforms = VideoSequential(*kornia_transforms, data_format='BCTHW', same_on_frame=True)
+    kornia_transforms = VideoSequential(*kornia_transforms, data_format="BCTHW", same_on_frame=True)
 
     train_transforms = [ToFloat(), kornia_transforms, norm]
     val_transforms = [ToFloat(), norm]
 
     denormalize = []
-    if mode == '2d':
+    if mode == "2d":
         train_transforms.append(StackClipInChannels())
         val_transforms.append(StackClipInChannels())
         denormalize.append(UnstackClip())
@@ -242,11 +239,11 @@ def get_gpu_transforms(augs: DictConfig, mode: str = '2d') -> dict:
     denormalize = nn.Sequential(*denormalize)
 
     gpu_transforms = dict(train=train_transforms, val=val_transforms, test=val_transforms, denormalize=denormalize)
-    log.info('GPU transforms: {}'.format(gpu_transforms))
+    log.info("GPU transforms: {}".format(gpu_transforms))
     return gpu_transforms
 
 
-def get_gpu_transforms_inference(augs: DictConfig, mode: str = '2d') -> dict:
+def get_gpu_transforms_inference(augs: DictConfig, mode: str = "2d") -> dict:
     """Gets GPU transforms needed for inference
 
     Parameters
@@ -259,7 +256,7 @@ def get_gpu_transforms_inference(augs: DictConfig, mode: str = '2d') -> dict:
     Returns
     -------
     xform : dict
-        keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations. 
+        keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations.
         Example: auged_images = xform['val'](images)
     """
     # sequential iterator already handles casting to float, dividing by 255, and stacking in channel dimension
@@ -267,7 +264,7 @@ def get_gpu_transforms_inference(augs: DictConfig, mode: str = '2d') -> dict:
     # norm = get_normalization_layer(np.array(augs.normalization.mean), np.array(augs.normalization.std),
     #                                num_images, mode)
     xform = [NormalizeVideo(mean=augs.normalization.mean, std=augs.normalization.std)]
-    if mode == '2d':
+    if mode == "2d":
         xform.append(StackClipInChannels())
     xform = nn.Sequential(*xform)
     gpu_transforms = dict(val=xform, test=xform)
@@ -280,7 +277,7 @@ def get_empty_gpu_transforms() -> dict:
     Returns
     -------
     xform : dict
-        keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations. 
+        keys: ['train', 'val', 'test']. Values: a nn.Sequential with Kornia augmentations.
         Example: auged_images = xform['train'](images)
     """
     gpu_transforms = dict(train=nn.Identity(), val=nn.Identity(), test=nn.Identity(), denormalize=nn.Identity())

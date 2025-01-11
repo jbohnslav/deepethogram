@@ -8,15 +8,15 @@ this_path = os.path.abspath(__file__)
 test_path = os.path.dirname(this_path)
 deg_path = os.path.dirname(test_path)
 
-test_data_path = os.path.join(test_path, 'DATA')
+test_data_path = os.path.join(test_path, "DATA")
 # the deepethogram test archive should only be read from, never written to
-archive_path = os.path.join(test_data_path, 'testing_deepethogram_archive')
-assert os.path.isdir(archive_path), '{} does not exist!'.format(archive_path)
-project_path = os.path.join(test_data_path, 'testing_deepethogram')
-data_path = os.path.join(project_path, 'DATA')
+archive_path = os.path.join(test_data_path, "testing_deepethogram_archive")
+assert os.path.isdir(archive_path), "{} does not exist!".format(archive_path)
+project_path = os.path.join(test_data_path, "testing_deepethogram")
+data_path = os.path.join(project_path, "DATA")
 
-config_path = os.path.join(project_path, 'project_config.yaml')
-config_path_archive = os.path.join(archive_path, 'project_config.yaml')
+config_path = os.path.join(project_path, "project_config.yaml")
+config_path_archive = os.path.join(archive_path, "project_config.yaml")
 # config_path = os.path.join(project_path, 'project_config.yaml')
 cfg_archive = projects.get_config_from_path(archive_path)
 
@@ -39,10 +39,10 @@ def make_project_from_archive():
     # projects.fix_config_paths(cfg)
 
 
-def get_records(origin='project'):
-    if origin == 'project':
+def get_records(origin="project"):
+    if origin == "project":
         return projects.get_records_from_datadir(data_path)
-    elif origin == 'archive':
-        return projects.get_records_from_datadir(os.path.join(archive_path, 'DATA'))
+    elif origin == "archive":
+        return projects.get_records_from_datadir(os.path.join(archive_path, "DATA"))
     else:
         raise NotImplementedError

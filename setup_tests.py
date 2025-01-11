@@ -31,9 +31,7 @@ def download_file(url, destination):
             # Print progress
             if total_size > 0:
                 progress = int(50 * downloaded / total_size)
-                sys.stdout.write(
-                    f"\r[{'=' * progress}{' ' * (50 - progress)}] {downloaded}/{total_size} bytes"
-                )
+                sys.stdout.write(f"\r[{'=' * progress}{' ' * (50 - progress)}] {downloaded}/{total_size} bytes")
                 sys.stdout.flush()
     print("\nDownload completed!")
 
@@ -52,9 +50,7 @@ def setup_tests():
 
     try:
         print("Downloading test data archive...")
-        gdown.download(
-            id="1IFz4ABXppVxyuhYik8j38k9-Fl9kYKHo", output=str(zip_path), quiet=False
-        )
+        gdown.download(id="1IFz4ABXppVxyuhYik8j38k9-Fl9kYKHo", output=str(zip_path), quiet=False)
 
         print("Extracting archive...")
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
@@ -64,9 +60,7 @@ def setup_tests():
         archive_path = data_dir / "testing_deepethogram_archive"
         required_items = ["DATA", "models", "project_config.yaml"]
 
-        missing_items = [
-            item for item in required_items if not (archive_path / item).exists()
-        ]
+        missing_items = [item for item in required_items if not (archive_path / item).exists()]
 
         if missing_items:
             print(f"Warning: The following items are missing: {missing_items}")
@@ -74,9 +68,7 @@ def setup_tests():
 
         print("Setup completed successfully!")
         print("\nYou can now run the tests using: pytest tests/")
-        print(
-            "Note: The zz_commandline test module will take a few minutes to complete."
-        )
+        print("Note: The zz_commandline test module will take a few minutes to complete.")
 
         # Clean up the zip file
         zip_path.unlink()
