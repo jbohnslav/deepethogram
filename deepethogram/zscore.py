@@ -3,14 +3,13 @@ import os
 import sys
 from typing import Union
 
-# import hydra
 import numpy as np
 import torch
 from omegaconf import DictConfig
 from tqdm import tqdm
 
 import deepethogram.file_io
-from deepethogram import configuration, utils, projects
+from deepethogram import configuration, projects, utils
 
 log = logging.getLogger(__name__)
 
@@ -93,8 +92,9 @@ class StatsRecorder:
         return "mean: {} std: {} n: {}".format(self.mean, self.std, self.nobservations)
 
 
-def get_video_statistics(videofile, stride):
+def get_video_statistics(videofile: Union[str, os.PathLike], stride: int = 10) -> dict:
     image_stats = StatsRecorder()
+    n_frames = 0
     with deepethogram.file_io.VideoReader(videofile) as reader:
         log.debug("N frames: {}".format(len(reader)))
         for i in tqdm(range(0, len(reader), stride)):
@@ -105,28 +105,23 @@ def get_video_statistics(videofile, stride):
                 continue
             image = image.astype(float) / 255
             image = image.transpose(2, 1, 0)
-            # image = image[np.newaxis,...]
-            # N, C, H, W = image.shape
             image = image.reshape(3, -1).transpose(1, 0)
-            # image = image.reshape(N, C, -1).squeeze().transpose(1, 0)
-            # if i == 0:
-            #     print(image.shape)
             image_stats.update(image)
-
+            n_frames += 1
     log.info("final stats: {}".format(image_stats))
 
-    imdata = {"mean": image_stats.mean, "std": image_stats.std, "N": image_stats.nobservations}
+    imdata = {"mean": image_stats.mean, "std": image_stats.std, "N": n_frames}
     for k, v in imdata.items():
-        if type(v) == torch.Tensor:
+        if isinstance(v, torch.Tensor):
             v = v.detach().cpu().numpy()
-        if type(v) == np.ndarray:
+        if isinstance(v, np.ndarray):
             v = v.tolist()
         imdata[k] = v
 
     return imdata
 
 
-def zscore_video(videofile: Union[str, os.PathLike], project_config: dict, stride: int = 10):
+def zscore_video(videofile: Union[str, os.PathLike], project_config: dict, stride: int = 10) -> None:
     """calculates channel-wise mean and standard deviation for input video.
 
     Calculates mean and std deviation independently for each input video channel. Grayscale videos are converted to RGB.
@@ -144,10 +139,6 @@ def zscore_video(videofile: Union[str, os.PathLike], project_config: dict, strid
     assert os.path.exists(videofile)
     assert projects.is_deg_file(videofile)
 
-    # config['arch'] = 'flow-generator'
-    # config['normalization'] = None
-    # transforms = get_transforms_from_config(config)
-    # xform = transforms['train']
     log.info("zscoring file: {}".format(videofile))
     imdata = get_video_statistics(videofile, stride)
 
@@ -163,8 +154,6 @@ def zscore_video(videofile: Union[str, os.PathLike], project_config: dict, strid
 
 def update_project_with_normalization(norm_dict: dict, project_config: dict):
     """Adds statistics from this video to the overall mean / std deviation for the project"""
-    # project_dict = utils.load_yaml(os.path.join(project_dir, 'project_config.yaml'))
-
     if "normalization" not in project_config["augs"].keys():
         raise ValueError("Must have project_config/augs/normalization field: {}".format(project_config))
     old_rgb = project_config["augs"]["normalization"]
@@ -183,7 +172,6 @@ def update_project_with_normalization(norm_dict: dict, project_config: dict):
     utils.save_dict_to_yaml(project_config, os.path.join(project_config["project"]["path"], "project_config.yaml"))
 
 
-# @hydra.main(config_path='../conf/zscore.yaml')
 def main(cfg: DictConfig):
     assert os.path.isfile(cfg.videofile)
     project_config = utils.load_yaml(cfg.project.config_file)
