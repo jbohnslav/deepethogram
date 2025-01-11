@@ -45,7 +45,6 @@ def setup_tests():
     data_dir.mkdir(parents=True, exist_ok=True)
 
     # Download the test archive
-    zip_url = "https://drive.google.com/uc?export=download&id=1IFz4ABXppVxyuhYik8j38k9-Fl9kYKHo"
     zip_path = data_dir / "testing_deepethogram_archive.zip"
 
     try:
