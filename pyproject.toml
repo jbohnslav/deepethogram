@@ -2,12 +2,8 @@
 # Python version compatibility
 target-version = "py37"
 
-# Ignore specific rules
-ignore = []
-
-# Allow autofix for all enabled rules (when `--fix`) is provided.
-fixable = ["ALL"]
-unfixable = []
+# Same as Black.
+line-length = 120
 
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -34,8 +30,13 @@ exclude = [
     "venv",
 ]
 
-# Same as Black.
-line-length = 120
+[tool.ruff.lint]
+# Ignore specific rules
+ignore = []
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
