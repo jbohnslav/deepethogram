@@ -14,3 +14,4 @@ scipy<1.8
 tqdm
 vidio
 pytorch_lightning==1.6.5
+ruff>=0.1.0
