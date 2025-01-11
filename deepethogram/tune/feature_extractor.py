@@ -12,7 +12,7 @@ except ImportError:
     print('To use the deepethogram.tune module, you must `pip install \'ray[tune]`')
     raise
 
-from deepethogram.configuration import make_config, load_config_by_name
+from deepethogram.configuration import make_config
 from deepethogram.feature_extractor.train import feature_extractor_train
 from deepethogram import projects
 from deepethogram.tune.utils import dict_to_dotlist, generate_tune_cfg

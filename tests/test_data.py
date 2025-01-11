@@ -1,14 +1,7 @@
-import os
-import random
-import shutil
 
 import numpy as np
-import pandas as pd
-import pytest
 
-from deepethogram import projects, utils
 from deepethogram.data import utils as data_utils
-from setup_data import make_project_from_archive, project_path, test_data_path, clean_test_data, get_records
 
 
 def test_loss_weight():

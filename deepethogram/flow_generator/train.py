@@ -14,8 +14,7 @@ from omegaconf import DictConfig, OmegaConf
 import deepethogram.projects
 from deepethogram import utils, viz, projects
 from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
-from deepethogram.configuration import make_config, make_flow_generator_train_cfg
-from deepethogram.data.augs import get_gpu_transforms
+from deepethogram.configuration import make_flow_generator_train_cfg
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.flow_generator import models
 from deepethogram.flow_generator.losses import MotionNetLoss

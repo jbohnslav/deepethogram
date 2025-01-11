@@ -8,7 +8,7 @@ from multiprocessing import Pool
 import h5py
 import numpy as np
 import torch
-from sklearn.metrics import f1_score, roc_auc_score, confusion_matrix, average_precision_score, auc
+from sklearn.metrics import f1_score, roc_auc_score, confusion_matrix, auc
 
 from deepethogram import utils
 from deepethogram.postprocessing import remove_low_thresholds

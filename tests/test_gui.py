@@ -12,7 +12,7 @@ DEG_VERSION = os.environ.get("DEG_VERSION", "full")
 )
 def test_setup():
     # put imports here so that headless version does not import gui tools
-    from deepethogram.gui.main import MainWindow, run, setup_gui_cfg
+    from deepethogram.gui.main import setup_gui_cfg
 
     cfg = setup_gui_cfg()
 

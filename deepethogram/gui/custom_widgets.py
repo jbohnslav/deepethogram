@@ -415,7 +415,7 @@ class LabelViewer(QtWidgets.QGraphicsView):
 
         try:
             self.cmap = Mapper(colormap)
-        except ValueError as e:
+        except ValueError:
             raise ('Colormap not in matplotlib' 's defaults! {}'.format(colormap))
         if self.debug:
             self.make_debug()

@@ -4,8 +4,7 @@ from deepethogram import projects, utils, viz
 from deepethogram.configuration import make_flow_generator_train_cfg
 from deepethogram.flow_generator.train import (get_datasets_from_cfg, build_model_from_cfg, get_metrics,
                                                OpticalFlowLightning)
-from setup_data import (make_project_from_archive, project_path, test_data_path, clean_test_data, get_records,
-                        config_path, data_path)
+from setup_data import (make_project_from_archive, project_path)
 
 
 def test_metrics():

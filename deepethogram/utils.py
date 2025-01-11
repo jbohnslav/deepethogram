@@ -1,4 +1,3 @@
-from collections.abc import Mapping, Container
 import logging
 import os
 import pkgutil
@@ -266,7 +265,7 @@ def load_state_dict_from_file(weights_file, distributed: bool = False):
     #     log.info('loading onto cpu...')
     #     state = torch.load(weights_file, map_location='cpu')
 
-    is_pure_weights = not 'epoch' in list(state.keys())
+    is_pure_weights = 'epoch' not in list(state.keys())
     # load params
     if is_pure_weights:
         state_dict = state

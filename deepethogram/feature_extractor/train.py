@@ -18,7 +18,6 @@ from omegaconf import OmegaConf, DictConfig
 from deepethogram import utils, viz
 from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
 from deepethogram.configuration import make_feature_extractor_train_cfg
-from deepethogram.data.augs import get_gpu_transforms
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.feature_extractor.losses import ClassificationLoss, BinaryFocalLoss, CrossEntropyLoss
 from deepethogram.feature_extractor.models.CNN import get_cnn

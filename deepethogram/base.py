@@ -6,7 +6,6 @@ import os
 from typing import Tuple
 
 import matplotlib.pyplot as plt
-import numpy as np
 from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
 try:
@@ -22,7 +21,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from deepethogram.data.augs import get_gpu_transforms, get_empty_gpu_transforms
-from deepethogram.callbacks import FPSCallback, DebugCallback, MetricsCallback, \
+from deepethogram.callbacks import FPSCallback, MetricsCallback, \
     ExampleImagesCallback, CheckpointCallback, StopperCallback
 from deepethogram.metrics import Metrics, EmptyMetrics
 from deepethogram.schedulers import initialize_scheduler

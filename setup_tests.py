@@ -3,8 +3,6 @@
 For it to work, you need to `pip install gdown`
 """
 
-import os
-import shutil
 import sys
 import zipfile
 from pathlib import Path

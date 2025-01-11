@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 from torch.utils import data
 
 from deepethogram import projects
-from deepethogram.data.augs import get_transforms, get_cpu_transforms
+from deepethogram.data.augs import get_cpu_transforms
 from deepethogram.data.datasets import SequenceDataset, TwoStreamDataset, VideoDataset, KineticsDataset
 from deepethogram.data.utils import get_split_from_records, remove_invalid_records_from_split_dictionary, \
     make_loss_weight

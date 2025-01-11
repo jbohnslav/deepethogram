@@ -1,22 +1,18 @@
 import logging
 import os
 import sys
-from typing import Type, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 from omegaconf import DictConfig, OmegaConf
 
-import deepethogram.projects
 from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
 from deepethogram import utils, projects, viz
 from deepethogram.configuration import make_sequence_train_cfg
 from deepethogram.data.datasets import get_datasets_from_cfg
 from deepethogram.feature_extractor.train import get_metrics, get_stopper, get_criterion
-from deepethogram.schedulers import initialize_scheduler
 from deepethogram.sequence.models.mlp import MLP
 from deepethogram.sequence.models.sequence import Linear, Conv_Nonlinear, RNN
 from deepethogram.sequence.models.tgm import TGM, TGMJ

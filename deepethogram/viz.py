@@ -12,14 +12,12 @@ import numpy as np
 # import tifffile as TIFF
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
-from matplotlib.projections import get_projection_class
 from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
-from sklearn.metrics import auc
 import torch
 
 from deepethogram.flow_generator.utils import flow_to_rgb_polar
 # from deepethogram.metrics import load_threshold_data
-from deepethogram.utils import tensor_to_np, print_top_largest_variables
+from deepethogram.utils import tensor_to_np
 
 log = logging.getLogger(__name__)
 # override warning level for matplotlib, which outputs a million debugging statements
@@ -943,7 +941,7 @@ def make_learning_curves_figure_multilabel_classification(logger_file, fig=None)
             data = OrderedDict(train=f['train/fps'][:],
                                val=f['val/fps'][:],
                                speedtest=f['speedtest/fps'][:])
-        except Exception as e:
+        except Exception:
             # likely don't have speedtest, not too important
             data = OrderedDict(train=f['train/fps'][:],
                                val=f['val/fps'][:])
@@ -1244,7 +1242,7 @@ class Mapper:
         else:
             try:
                 self.cmap = plt.get_cmap(colormap)
-            except ValueError as e:
+            except ValueError:
                 raise ('Colormap not in matplotlib''s defaults! {}'.format(colormap))
 
     def init_deepethogram(self):

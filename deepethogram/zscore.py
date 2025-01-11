@@ -100,7 +100,7 @@ def get_video_statistics(videofile, stride):
         for i in tqdm(range(0, len(reader), stride)):
             try:
                 image = reader[i]
-            except Exception as e:
+            except Exception:
                 log.warning('Error reading frame {} from video {}'.format(i, videofile))
                 continue
             image = image.astype(float) / 255

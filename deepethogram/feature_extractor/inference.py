@@ -1,4 +1,3 @@
-from collections import defaultdict
 import logging
 import os
 import sys
@@ -16,7 +15,7 @@ from tqdm import tqdm
 
 from deepethogram import utils, projects
 from deepethogram.configuration import make_feature_extractor_inference_cfg
-from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms_inference, get_gpu_transforms
+from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms
 from deepethogram.data.datasets import VideoIterable
 from deepethogram.feature_extractor.train import build_model_from_cfg as build_feature_extractor
 from deepethogram.file_io import read_labels
@@ -423,7 +422,7 @@ def extract(rgbs: list,
         while not has_worked:
             try:
                 f = h5py.File(h5file, 'r+')
-            except OSError as e:
+            except OSError:
                 log.warning('resource unavailable, waiting 30 seconds...')
                 time.sleep(30)
             else:

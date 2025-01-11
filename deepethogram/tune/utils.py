@@ -1,4 +1,4 @@
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import OmegaConf
 try: 
     import ray
     from ray import tune

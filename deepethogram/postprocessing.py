@@ -1,7 +1,7 @@
 from collections import defaultdict
 import logging
 import os
-from typing import Dict, Type, Tuple
+from typing import Type, Tuple
 
 import h5py
 import numpy as np

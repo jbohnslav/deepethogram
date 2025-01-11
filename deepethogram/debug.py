@@ -75,7 +75,7 @@ def try_load_all_frames(datadir: Union[str, os.PathLike]):
             for i in tqdm(range(len(reader)), leave=False):
                 try:
                     frame = reader[i]
-                except Exception as e:
+                except Exception:
                     had_error = True
                     print('error reading frame {} from video {}'.format(i, record['rgb']))
                 except KeyboardInterrupt:

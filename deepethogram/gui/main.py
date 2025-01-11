@@ -6,7 +6,6 @@ import traceback
 from functools import partial
 from typing import Union
 
-import cv2
 # import hydra
 import numpy as np
 import pandas as pd

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from deepethogram import projects, utils
+from deepethogram import projects
 from setup_data import make_project_from_archive, project_path, test_data_path, clean_test_data, get_records
 
 # make_project_from_archive()

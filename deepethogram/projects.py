@@ -2,7 +2,6 @@ import logging
 import os
 import re
 import shutil
-import sys
 import warnings
 from datetime import datetime
 from typing import Union
@@ -10,7 +9,7 @@ from typing import Union
 import h5py
 import numpy as np
 import pandas as pd
-from omegaconf import DictConfig, OmegaConf, ListConfig
+from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
 import deepethogram

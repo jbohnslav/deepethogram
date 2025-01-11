@@ -37,4 +37,4 @@ Again, change `/media` to your hard drive with your training data
 # building it yourself
 To build the container with both GUI and model training support: 
 * `cd` to your `deepethogram` directory
-* `docker build -t deepethogram:full -f docker/Dockerfile-full . `
+* `docker build -t deepethogram:full -f docker/Dockerfile-full .`

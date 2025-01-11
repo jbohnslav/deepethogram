@@ -2,7 +2,7 @@ import numpy as np
 
 from deepethogram import projects
 from deepethogram.zscore import get_video_statistics
-from setup_data import make_project_from_archive, project_path, data_path
+from setup_data import make_project_from_archive, data_path
 
 make_project_from_archive()
 

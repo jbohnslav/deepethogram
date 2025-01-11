@@ -2,7 +2,7 @@ import os
 import shutil
 
 # from projects import get_records_from_datadir, fix_config_paths
-from deepethogram import projects, utils
+from deepethogram import projects
 
 this_path = os.path.abspath(__file__)
 test_path = os.path.dirname(this_path)

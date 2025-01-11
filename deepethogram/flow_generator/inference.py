@@ -6,7 +6,6 @@ import sys
 from typing import Union
 
 import cv2
-from matplotlib.pyplot import psd
 import numpy as np
 from omegaconf import OmegaConf, ListConfig
 import torch

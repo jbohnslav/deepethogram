@@ -1,5 +1,4 @@
 import logging
-from pprint import pformat
 
 import cv2
 import numpy as np

@@ -1,30 +1,22 @@
-import bisect
 from collections import deque
 import logging
 import os
-import pprint
 import random
-import warnings
-from functools import partial
 from typing import Union, Tuple
 
 import h5py
 import numpy as np
 from omegaconf import DictConfig
-import pandas as pd
 import torch
-from opencv_transforms import transforms
 from torch.utils import data
 from vidio import VideoReader
 
 # from deepethogram.dataloaders import log
 from deepethogram import projects
 from deepethogram.data.augs import get_cpu_transforms
-from deepethogram.data.utils import purge_unlabeled_elements_from_records, get_video_metadata, extract_metadata, \
-    find_labelfile, read_all_labels, get_split_from_records, remove_invalid_records_from_split_dictionary, \
+from deepethogram.data.utils import purge_unlabeled_elements_from_records, get_video_metadata, read_all_labels, get_split_from_records, remove_invalid_records_from_split_dictionary, \
     make_loss_weight, fix_label
-from deepethogram.data.keypoint_utils import load_dlcfile, interpolate_bad_values, stack_features_in_time, \
-    expand_features_sturman
+from deepethogram.data.keypoint_utils import load_dlcfile, interpolate_bad_values, expand_features_sturman
 from deepethogram.file_io import read_labels
 
 log = logging.getLogger(__name__)
@@ -134,7 +126,7 @@ class VideoIterable(data.IterableDataset):
         else:
             try:
                 im = self.readers[worker_id][self.cnt]
-            except Exception as e:
+            except Exception:
                 print(f'problem reading frame {self.cnt}')
                 raise
             im = self.transform(im)
@@ -184,7 +176,7 @@ class VideoIterable(data.IterableDataset):
                 continue
             try:
                 v.close()
-            except Exception as e:
+            except Exception:
                 print(f'error destroying reader {k}')
             else:
                 print(f'destroyed {k}')
