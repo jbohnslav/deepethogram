@@ -1,20 +1,20 @@
-from collections import OrderedDict
 import itertools
 import logging
 import os
 import warnings
+from collections import OrderedDict
 from typing import Union
 
 import cv2
 import h5py
 import matplotlib
 import numpy as np
+import torch
 
 # import tifffile as TIFF
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
-from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
-import torch
+from mpl_toolkits.axes_grid1 import inset_locator, make_axes_locatable
 
 from deepethogram.flow_generator.utils import flow_to_rgb_polar
 
@@ -265,8 +265,6 @@ def visualize_multiresolution(
     N_resolutions = len(downsampled_t0)
 
     axes = fig.subplots(4, N_resolutions)
-
-    images = downsampled_t0[0].detach().cpu().numpy().astype(np.float32)
 
     index = batch_ind * sequence_length + sequence_ind
     t0 = [
@@ -549,12 +547,6 @@ def visualize_batch_sequence(sequence, outputs, labels, N_in_batch=None, fig=Non
     axes = fig.subplots(4, 1)
 
     ax = axes[0]
-    # seq = sequence[N_in_batch]
-    aspect_ratio = outputs
-
-    # tmp = outputs[N_in_batch]
-    # seq = cv2.resize(sequence[N_in_batch], (tmp.shape[1]*10,tmp.shape[0]*10), interpolation=cv2.INTER_NEAREST)
-    # seq = cv2.imresize(sequence[N_in_batch], )
     imshow_with_colorbar(sequence, ax, fig, interpolation="nearest", symmetric=False, func="pcolor", cmap="viridis")
     ax.invert_yaxis()
     ax.set_ylabel("inputs")
@@ -609,7 +601,7 @@ def fig_to_img(fig_handle: matplotlib.figure.Figure) -> np.ndarray:
 
 def plot_histogram(array, ax, bins="auto", width_factor=0.9, rotation=30):
     """Helper function for plotting a histogram"""
-    if type(array) != np.ndarray:
+    if not isinstance(array, np.ndarray):
         array = np.array(array)
 
     hist, bin_edges = np.histogram(array, bins=bins, density=False)
@@ -625,9 +617,7 @@ def plot_histogram(array, ax, bins="auto", width_factor=0.9, rotation=30):
     ylims = ax.get_ylim()
 
     leg_str = "median: %0.4f" % (med)
-    lineh = ax.plot(
-        np.array([med, med]), np.array([ylims[0], ylims[1]]), color="k", linestyle="dashed", lw=3, label=leg_str
-    )
+    ax.plot(np.array([med, med]), np.array([ylims[0], ylims[1]]), color="k", linestyle="dashed", lw=3, label=leg_str)
     ax.set_ylabel("P")
     ax.legend()
 
@@ -745,7 +735,7 @@ def plot_confusion_matrix(
 
     # print(cm)
     if colorbar:
-        cbar = imshow_with_colorbar(cm, ax, fig, interpolation="nearest", cmap=cmap)
+        imshow_with_colorbar(cm, ax, fig, interpolation="nearest", cmap=cmap)
 
     else:
         ax.imshow(cm, cmap=cmap)
@@ -1274,7 +1264,7 @@ class Mapper:
             try:
                 self.cmap = plt.get_cmap(colormap)
             except ValueError:
-                raise ("Colormap not in matplotlib" "s defaults! {}".format(colormap))
+                raise ("Colormap not in matplotlibs defaults! {}".format(colormap))
 
     def init_deepethogram(self):
         gray_LUT = make_LUT([0, 0, value], [0, 0, gray_value])
@@ -1287,7 +1277,7 @@ class Mapper:
 
     def apply_cmaps(self, array: Union[np.ndarray, int, float]) -> np.ndarray:
         # assume columns are timepoints, rpws are behaviors
-        if type(array) == int or type(array) == float:
+        if isinstance(array, (int, float)):
             # use the 0th LUT by default
             return apply_cmap(array, self.LUTs[0])
         elif array.shape[0] == 1 and len(array.shape) == 1:
@@ -1317,9 +1307,9 @@ class Mapper:
 
 
 def make_LUT(start_hsv: Union[tuple, list, np.ndarray], end_hsv: Union[tuple, list, np.ndarray]) -> np.ndarray:
-    if type(start_hsv) != np.ndarray:
+    if not isinstance(start_hsv, np.ndarray):
         start_hsv = np.array(start_hsv).astype(np.uint8)
-    if type(end_hsv) != np.ndarray:
+    if not isinstance(end_hsv, np.ndarray):
         end_hsv = np.array(end_hsv).astype(np.uint8)
 
     # interpolate in HSV space; if they have two different hues, will result in very weird colormap
@@ -1332,11 +1322,11 @@ def make_LUT(start_hsv: Union[tuple, list, np.ndarray], end_hsv: Union[tuple, li
 
 def apply_cmap(array: Union[np.ndarray, int, float], LUT: np.ndarray) -> np.ndarray:
     single_input = False
-    if type(array) == int:
+    if isinstance(array, int):
         assert array >= 0 and array <= 255
         array = np.array([array]).astype(np.uint8)
         single_input = True
-    elif type(array) == float:
+    elif isinstance(array, float):
         array = np.array([array]).astype(float)
         single_input = True
     if array.dtype != np.uint8:
@@ -1402,8 +1392,8 @@ def make_ethogram_movie(
     fps: float = 30,
 ):
     """Makes a movie out of an ethogram. Can be very slow due to matplotlib's animations"""
-    if mapper is None:
-        mapper = Mapper()
+    if not isinstance(classes, np.ndarray):
+        classes = np.array(classes)
 
     fig = plt.figure(figsize=(10, 12))
     # camera = Camera(fig)
@@ -1417,7 +1407,7 @@ def make_ethogram_movie(
 
     starts = np.arange(0, ethogram.shape[0], width)
 
-    if type(classes) != np.ndarray:
+    if not isinstance(classes, np.ndarray):
         classes = np.array(classes)
 
     framenum = 0
@@ -1446,7 +1436,12 @@ def make_ethogram_movie(
         # print(x)
         if (i % width) == 0:
             etho_h = plot_ethogram(
-                ethogram[starts[i // width] : starts[i // width] + width, :], mapper, start + i, ax1, classes
+                ethogram[starts[i // width] : starts[i // width] + width, :],
+                mapper,
+                start + i,
+                ax1,
+                classes,
+                ylabel="Labels",
             )
             # no idea why plot ethogram doesn't change this
             xticks = ax1.get_xticks()
@@ -1454,7 +1449,7 @@ def make_ethogram_movie(
             ax1.set_xticklabels([str(int(i)) for i in new_ticks])
 
         else:
-            etho_h = [i for i in ax1.get_children() if type(i) == matplotlib.image.AxesImage][0]
+            etho_h = [i for i in ax1.get_children() if isinstance(i, matplotlib.image.AxesImage)][0]
         plot_h.set_xdata(x)
 
         title_h.set_text("{:,}: {}".format(start + i, classes[np.where(ethogram[i])[0]].tolist()))
@@ -1486,8 +1481,9 @@ def make_ethogram_movie_with_predictions(
 ):
     """Makes a movie with movie, then ethogram, then model predictions"""
 
-    if mapper is None:
-        mapper = Mapper()
+    if not isinstance(classes, np.ndarray):
+        classes = np.array(classes)
+
     fig = plt.figure(figsize=(6, 8))
     # camera = Camera(fig)
 
@@ -1500,12 +1496,10 @@ def make_ethogram_movie_with_predictions(
     # ax1 = fig.add_subplot(gs[2])
     starts = np.arange(0, ethogram.shape[0], width)
 
-    if type(classes) != np.ndarray:
+    if not isinstance(classes, np.ndarray):
         classes = np.array(classes)
 
     framenum = 0
-
-    # values_to_return = []
 
     im_h = axes[0].imshow(frames[0])
 
@@ -1530,20 +1524,14 @@ def make_ethogram_movie_with_predictions(
 
     plt.tight_layout()
 
-    # etho_h = plot_ethogram(ethogram[starts[0]:starts[0] + width, :],
-    #                        mapper, start + framenum, ax1, classes)
-
     def init():
         return [im_h, im_h1, im_h2, plot_h1, plot_h2, title_h]
 
     def animate(i):
-        # values_to_return = []
-        # print(i)
         im_h.set_data(frames[i])
         x0 = i - starts[i // width] - 0.5
         x1 = x0 + 1
         x = (x0, x1, x1, x0, x0)
-        # print(x)
         if (i % width) == 0:
             im_h1 = plot_ethogram(
                 ethogram[starts[i // width] : starts[i // width] + width, :],
@@ -1572,8 +1560,8 @@ def make_ethogram_movie_with_predictions(
             axes[2].set_xticklabels([str(int(i)) for i in new_ticks])
 
         else:
-            im_h1 = [i for i in axes[1].get_children() if type(i) == matplotlib.image.AxesImage][0]
-            im_h2 = [i for i in axes[2].get_children() if type(i) == matplotlib.image.AxesImage][0]
+            im_h1 = [i for i in axes[1].get_children() if isinstance(i, matplotlib.image.AxesImage)][0]
+            im_h2 = [i for i in axes[2].get_children() if isinstance(i, matplotlib.image.AxesImage)][0]
         plot_h1.set_xdata(x)
         plot_h2.set_xdata(x)
 
