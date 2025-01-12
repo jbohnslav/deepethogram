@@ -1,0 +1,59 @@
+name: CPU Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.7'
+
+    - name: Install FFMPEG (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
+    - name: Install FFMPEG (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install ffmpeg
+
+    - name: Install FFMPEG (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        choco install ffmpeg
+
+    - name: Install PySide2
+      run: |
+        python -m pip install --upgrade pip
+        pip install "pyside2==5.13.2"
+
+    - name: Install PyTorch CPU
+      run: |
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+    - name: Install package and test dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+        python setup.py develop
+
+    - name: Run CPU tests
+      run: |
+        pytest -v -m "not gpu" tests/

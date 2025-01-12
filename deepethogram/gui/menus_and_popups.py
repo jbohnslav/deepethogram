@@ -67,7 +67,7 @@ class CreateProject(QtWidgets.QDialog):
         self.labeler_box = QtWidgets.QLineEdit(self.label_default_string)
         # self.labeler_box.
         self.behavior_default_string = (
-            'List of behaviors, e.g. "walk,scratch,itch". Do not include none,other,' "background,etc "
+            'List of behaviors, e.g. "walk,scratch,itch". Do not include none,other,background,etc '
         )
         self.behaviors_box = QtWidgets.QLineEdit(self.behavior_default_string)
         # self.finish_button = QPushButton('Ok')

@@ -20,9 +20,7 @@ class _LRScheduler:
             for i, group in enumerate(optimizer.param_groups):
                 if "initial_lr" not in group:
                     raise KeyError(
-                        "param 'initial_lr' is not specified " "in param_groups[{}] when resuming an optimizer".format(
-                            i
-                        )
+                        "param 'initial_lr' is not specified in param_groups[{}] when resuming an optimizer".format(i)
                     )
         self.base_lrs = list(map(lambda group: group["initial_lr"], optimizer.param_groups))
         self.step(last_epoch + 1)

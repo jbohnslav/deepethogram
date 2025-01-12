@@ -56,7 +56,7 @@ def unpack_penultimate_layer(model: Type[nn.Module], fusion: str = "average"):
     def get_inputs(name):
         # https://discuss.pytorch.org/t/how-can-l-load-my-best-model-as-a-feature-extractor-evaluator/17254/6
         def hook(model, inputs, output):
-            if type(inputs) == tuple:
+            if isinstance(inputs, tuple):
                 if len(inputs) == 1:
                     inputs = inputs[0]
                 else:
@@ -219,7 +219,7 @@ def predict_single_video(
     model.eval()
     # model.set_mode('inference')
 
-    if type(device) != torch.device:
+    if not isinstance(device, torch.device):
         device = torch.device(device)
 
     dataset = VideoIterable(
@@ -524,9 +524,9 @@ def feature_extractor_inference(cfg: DictConfig):
         record = projects.get_record_from_subdir(directory)
         assert record["rgb"] is not None
         records.append(record)
-    assert (
-        cfg.feature_extractor.n_flows + 1 == cfg.flow_generator.n_rgb
-    ), "Flow generator inputs must be one greater than feature extractor num flows "
+    assert cfg.feature_extractor.n_flows + 1 == cfg.flow_generator.n_rgb, (
+        "Flow generator inputs must be one greater than feature extractor num flows "
+    )
 
     input_images = cfg.feature_extractor.n_flows + 1
     mode = "3d" if "3d" in cfg.feature_extractor.arch.lower() else "2d"

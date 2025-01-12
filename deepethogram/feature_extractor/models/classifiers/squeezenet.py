@@ -67,7 +67,7 @@ class SqueezeNet(nn.Module):
     def __init__(self, version=1.0, in_channels=3, num_classes=1000):
         super(SqueezeNet, self).__init__()
         if version not in [1.0, 1.1]:
-            raise ValueError("Unsupported SqueezeNet version {version}:" "1.0 or 1.1 expected".format(version=version))
+            raise ValueError("Unsupported SqueezeNet version {version}:1.0 or 1.1 expected".format(version=version))
         self.num_classes = num_classes
         if version == 1.0:
             self.features = nn.Sequential(

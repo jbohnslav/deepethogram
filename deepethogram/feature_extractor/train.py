@@ -73,9 +73,9 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
     # we build flow generator independently because you might want to load it from a different location
     flow_generator = build_flow_generator(cfg)
     flow_weights = projects.get_weightfile_from_cfg(cfg, "flow_generator")
-    assert (
-        flow_weights is not None
-    ), "Must have a valid weightfile for flow generator. Use deepethogram.flow_generator.train or cfg.reload.latest"
+    assert flow_weights is not None, (
+        "Must have a valid weightfile for flow generator. Use deepethogram.flow_generator.train or cfg.reload.latest"
+    )
     log.info("loading flow generator from file {}".format(flow_weights))
 
     flow_generator = utils.load_weights(flow_generator, flow_weights)
@@ -235,9 +235,9 @@ def build_model_from_cfg(
 
     flow_generator = build_flow_generator(cfg)
     flow_weights = projects.get_weightfile_from_cfg(cfg, "flow_generator")
-    assert (
-        flow_weights is not None
-    ), "Must have a valid weightfile for flow generator. Use deepethogram.flow_generator.train or cfg.reload.latest"
+    assert flow_weights is not None, (
+        "Must have a valid weightfile for flow generator. Use deepethogram.flow_generator.train or cfg.reload.latest"
+    )
     flow_generator = utils.load_weights(flow_generator, flow_weights, device=device)
 
     spatial_classifier, flow_classifier, fusion = build_fusion_layer(

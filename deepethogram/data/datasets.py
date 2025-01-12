@@ -547,17 +547,17 @@ class SingleSequenceDataset(data.Dataset):
             label_indices = indices
             label_pad = pad
 
-        assert (
-            len(indices) + pad_left + pad_right
-        ) == self.sequence_length, "indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}".format(
-            len(indices), pad_left, pad_right, self.sequence_length
+        assert (len(indices) + pad_left + pad_right) == self.sequence_length, (
+            "indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}".format(
+                len(indices), pad_left, pad_right, self.sequence_length
+            )
         )
         # if we are stacking in time, label indices should not be the sequence length
         if not self.stack_in_time:
-            assert (
-                (len(label_indices) + label_pad[0] + label_pad[1]) == self.sequence_length
-            ), "label indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}".format(
-                len(label_indices), label_pad[0], label_pad[1], self.sequence_length
+            assert (len(label_indices) + label_pad[0] + label_pad[1]) == self.sequence_length, (
+                "label indices: {} + pad_left: {} + pad_right: {} should equal seq len: {}".format(
+                    len(label_indices), label_pad[0], label_pad[1], self.sequence_length
+                )
             )
         return indices, label_indices, pad, label_pad
 

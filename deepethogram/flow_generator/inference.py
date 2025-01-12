@@ -170,9 +170,9 @@ def flow_generator_inference(cfg):
     for record in records:
         rgb.append(record["rgb"])
 
-    assert (
-        cfg.feature_extractor.n_flows + 1 == cfg.flow_generator.n_rgb
-    ), "Flow generator inputs must be one greater than feature extractor num flows "
+    assert cfg.feature_extractor.n_flows + 1 == cfg.flow_generator.n_rgb, (
+        "Flow generator inputs must be one greater than feature extractor num flows "
+    )
     # set up gpu augmentation
     input_images = cfg.feature_extractor.n_flows + 1
     mode = "3d" if "3d" in cfg.feature_extractor.arch.lower() else "2d"
