@@ -1,17 +1,17 @@
 # DeepEthogram Beta
 
-DeepEthogram is now in Beta, version 0.1! There are major changes to the codebase and to model training and inference. 
-Model performance, measured by F1, accuracy, etc. should be higher in version 0.1. Model training times and inference 
-times should be dramatically reduced. 
+DeepEthogram is now in Beta, version 0.1! There are major changes to the codebase and to model training and inference.
+Model performance, measured by F1, accuracy, etc. should be higher in version 0.1. Model training times and inference
+times should be dramatically reduced.
 
-**Important note: your old project files, models, and (most importantly) human labels will all still work!** However, 
-I do recommend training new feature extractor and sequence models, as performance should improve somewhat. This will 
+**Important note: your old project files, models, and (most importantly) human labels will all still work!** However,
+I do recommend training new feature extractor and sequence models, as performance should improve somewhat. This will
 be the last major refactor of DeepEthogram (model improvements and new features will still come out), however I will
-not be majorly changing dependencies after this. Future upgrades will be easier (e.g. `pip install --upgrade deepethogram`). 
+not be majorly changing dependencies after this. Future upgrades will be easier (e.g. `pip install --upgrade deepethogram`).
 
 ## Summary of changes
-* Basic training pipeline re-implemented with PyTorch Lightning. This gives us some great features, such as tensorboard 
-logging, automatic batch sizing, and Ray Tune integration. 
+* Basic training pipeline re-implemented with PyTorch Lightning. This gives us some great features, such as tensorboard
+logging, automatic batch sizing, and Ray Tune integration.
 * Image augmentations moved to GPU with Kornia. [see Performance guide for details](performance.md)
 * New, parallelized inference
 * Hyperparameter tuning
@@ -24,7 +24,7 @@ logging, automatic batch sizing, and Ray Tune integration.
 
 ## Migration guide
 
-There are some new dependency changes; making sure that install works correctly is the hardest part about migration. 
+There are some new dependency changes; making sure that install works correctly is the hardest part about migration.
 
 * activate your conda environment, e.g. `conda activate deg`
 * uninstall hydra: `pip uninstall hydra-core`
@@ -40,8 +40,8 @@ There are some new dependency changes; making sure that install works correctly 
   with your upgrade. please follow the above steps. If you're sure that everything else installed correctly, you can run
   `pip install --upgrade omegaconf`
 * `error: torch 1.5.1 is installed but torch>=1.6.0 is required by {'kornia'}`
-  * this indicates that your PyTorch version is too low. Please uninstall and reinstall PyTorch. 
+  * this indicates that your PyTorch version is too low. Please uninstall and reinstall PyTorch.
 * `ValueError: Hydra installation found. Please run pip uninstall hydra-core`
   * do as the error message says: run `pip uninstall hydra-core`
-  * if you've already done this, you might have to manually delete hydra files. Mine were at 
+  * if you've already done this, you might have to manually delete hydra files. Mine were at
   `'C:\\ProgramData\\Anaconda3\\lib\\site-packages\\hydra_core-0.11.3-py3.7.egg\\hydra'`. Please delete the `hydra_core` folder.

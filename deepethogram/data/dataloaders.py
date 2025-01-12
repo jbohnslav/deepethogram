@@ -9,13 +9,17 @@ from omegaconf import DictConfig
 from torch.utils import data
 
 from deepethogram import projects
-from deepethogram.data.augs import get_transforms, get_cpu_transforms
-from deepethogram.data.datasets import SequenceDataset, TwoStreamDataset, VideoDataset, KineticsDataset
-from deepethogram.data.utils import get_split_from_records, remove_invalid_records_from_split_dictionary, \
-    make_loss_weight
+from deepethogram.data.augs import get_cpu_transforms
+from deepethogram.data.datasets import KineticsDataset, SequenceDataset, TwoStreamDataset, VideoDataset
+from deepethogram.data.utils import (
+    get_split_from_records,
+    make_loss_weight,
+    remove_invalid_records_from_split_dictionary,
+)
 
 try:
-    from nvidia.dali.pipeline import Pipeline
+    from nvidia.dali.pipeline import Pipeline  # noqa: F401
+
     from .dali import get_dataloaders_kinetics_dali
 except ImportError:
     get_dataloaders_kinetics_dali = None
@@ -24,14 +28,29 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
-def get_dataloaders_sequence(datadir: Union[str, os.PathLike], latent_name: str, sequence_length: int = 60,
-                             is_two_stream: bool = True, nonoverlapping: bool = True, splitfile: str = None,
-                             reload_split: bool = True, store_in_ram: bool = True, dimension: int = None,
-                             train_val_test: Union[list, np.ndarray] = [0.8, 0.2, 0.0], weight_exp: float = 1.0,
-                             batch_size=1, shuffle=True, num_workers=0, pin_memory=False, drop_last=False,
-                             supervised=True, reduce=False, valid_splits_only: bool = True,
-                             return_logits=False) -> dict:
-    """ Gets dataloaders for sequence models assuming DeepEthogram file structure.
+def get_dataloaders_sequence(
+    datadir: Union[str, os.PathLike],
+    latent_name: str,
+    sequence_length: int = 60,
+    is_two_stream: bool = True,
+    nonoverlapping: bool = True,
+    splitfile: str = None,
+    reload_split: bool = True,
+    store_in_ram: bool = True,
+    dimension: int = None,
+    train_val_test: Union[list, np.ndarray] = [0.8, 0.2, 0.0],
+    weight_exp: float = 1.0,
+    batch_size=1,
+    shuffle=True,
+    num_workers=0,
+    pin_memory=False,
+    drop_last=False,
+    supervised=True,
+    reduce=False,
+    valid_splits_only: bool = True,
+    return_logits=False,
+) -> dict:
+    """Gets dataloaders for sequence models assuming DeepEthogram file structure.
 
     Parameters
     ----------
@@ -99,9 +118,9 @@ def get_dataloaders_sequence(datadir: Union[str, os.PathLike], latent_name: str,
         loss_weight: loss weight for softmax activation / NLL loss
 
     """
-    return_types = ['output']
+    return_types = ["output"]
     if supervised:
-        return_types += ['label']
+        return_types += ["label"]
 
     # records: dictionary of dictionaries. Keys: unique data identifiers
     # values: a dictionary corresponding to different files. the first record might be:
@@ -111,102 +130,156 @@ def get_dataloaders_sequence(datadir: Union[str, os.PathLike], latent_name: str,
     records = projects.filter_records_for_filetypes(records, return_types)
     # returns a dictionary, where each split in ['train', 'val', 'test'] as a list of keys
     # each key corresponds to a unique directory, and has
-    split_dictionary = get_split_from_records(records, datadir, splitfile, supervised, reload_split, valid_splits_only,
-                                              train_val_test)
+    split_dictionary = get_split_from_records(
+        records, datadir, splitfile, supervised, reload_split, valid_splits_only, train_val_test
+    )
     # it's possible that your split has records that are invalid for the current task.
     # e.g.: you've added a video, but not labeled it yet. In that case, it will already be in your split, but it is
     # invalid for current purposes, because it has no label. Therefore, we want to remove it from the current split
     split_dictionary = remove_invalid_records_from_split_dictionary(split_dictionary, records)
-    log.info('~~~~~ train val test split ~~~~~')
+    log.info("~~~~~ train val test split ~~~~~")
     pprint.pprint(split_dictionary)
 
     datasets = {}
-    splits = ['train', 'val', 'test']
+    splits = ["train", "val", "test"]
     datasets = {}
     for split in splits:
-        outputfiles = [records[i]['output'] for i in split_dictionary[split]]
+        outputfiles = [records[i]["output"] for i in split_dictionary[split]]
 
-        if split == 'test' and len(outputfiles) == 0:
+        if split == "test" and len(outputfiles) == 0:
             datasets[split] = None
             continue
         # h5file, labelfile = outputs[i]
         # print('making dataset:{}'.format(split))
 
         if supervised:
-            labelfiles = [records[i]['label'] for i in split_dictionary[split]]
+            labelfiles = [records[i]["label"] for i in split_dictionary[split]]
         else:
             labelfiles = None
 
-        datasets[split] = SequenceDataset(outputfiles, labelfiles, latent_name, sequence_length,
-                                          is_two_stream=is_two_stream, nonoverlapping=nonoverlapping,
-                                          dimension=dimension,
-                                          store_in_ram=store_in_ram, return_logits=return_logits)
+        datasets[split] = SequenceDataset(
+            outputfiles,
+            labelfiles,
+            latent_name,
+            sequence_length,
+            is_two_stream=is_two_stream,
+            nonoverlapping=nonoverlapping,
+            dimension=dimension,
+            store_in_ram=store_in_ram,
+            return_logits=return_logits,
+        )
 
-    shuffles = {'train': shuffle, 'val': True, 'test': False}
+    shuffles = {"train": shuffle, "val": True, "test": False}
 
-    dataloaders = {split: data.DataLoader(datasets[split], batch_size=batch_size,
-                                          shuffle=shuffles[split], num_workers=num_workers,
-                                          pin_memory=pin_memory, drop_last=drop_last)
-                   for split in ['train', 'val', 'test'] if datasets[split] is not None}
+    dataloaders = {
+        split: data.DataLoader(
+            datasets[split],
+            batch_size=batch_size,
+            shuffle=shuffles[split],
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+        )
+        for split in ["train", "val", "test"]
+        if datasets[split] is not None
+    }
 
     # figure out what our inputs to our model will be (D dimension)
-    dataloaders['num_features'] = datasets['train'].num_features
+    dataloaders["num_features"] = datasets["train"].num_features
 
     if supervised:
-        dataloaders['class_counts'] = datasets['train'].class_counts
-        dataloaders['num_classes'] = len(dataloaders['class_counts'])
-        pos_weight, softmax_weight = make_loss_weight(dataloaders['class_counts'],
-                                                      datasets['train'].num_pos,
-                                                      datasets['train'].num_neg,
-                                                      weight_exp=weight_exp)
-        dataloaders['pos'] = datasets['train'].num_pos
-        dataloaders['neg'] = datasets['train'].num_neg
-        dataloaders['pos_weight'] = pos_weight
-        dataloaders['loss_weight'] = softmax_weight
-    dataloaders['split'] = split_dictionary
+        dataloaders["class_counts"] = datasets["train"].class_counts
+        dataloaders["num_classes"] = len(dataloaders["class_counts"])
+        pos_weight, softmax_weight = make_loss_weight(
+            dataloaders["class_counts"], datasets["train"].num_pos, datasets["train"].num_neg, weight_exp=weight_exp
+        )
+        dataloaders["pos"] = datasets["train"].num_pos
+        dataloaders["neg"] = datasets["train"].num_neg
+        dataloaders["pos_weight"] = pos_weight
+        dataloaders["loss_weight"] = softmax_weight
+    dataloaders["split"] = split_dictionary
     return dataloaders
 
 
-def get_dataloaders_kinetics(directory, mode='both', xform=None, rgb_frames=1, flow_frames=10,
-                             batch_size=1, shuffle=True,
-                             num_workers=0, pin_memory=False, drop_last=False,
-                             supervised=True,
-                             reduce=True, conv_mode='2d'):
+def get_dataloaders_kinetics(
+    directory,
+    mode="both",
+    xform=None,
+    rgb_frames=1,
+    flow_frames=10,
+    batch_size=1,
+    shuffle=True,
+    num_workers=0,
+    pin_memory=False,
+    drop_last=False,
+    supervised=True,
+    reduce=True,
+    conv_mode="2d",
+):
     datasets = {}
-    for split in ['train', 'val', 'test']:
+    for split in ["train", "val", "test"]:
         # this is in the two stream case where you can't apply color transforms to an optic flow
-        if type(xform[split]) == dict:
-            spatial_transform = xform[split]['spatial']
-            color_transform = xform[split]['color']
+        if isinstance(xform[split], dict):
+            spatial_transform = xform[split]["spatial"]
+            color_transform = xform[split]["color"]
         else:
             spatial_transform = xform[split]
             color_transform = None
-        datasets[split] = KineticsDataset(directory, split, mode, supervised=supervised,
-                                          rgb_frames=rgb_frames, flow_frames=flow_frames,
-                                          spatial_transform=spatial_transform,
-                                          color_transform=color_transform,
-                                          reduce=reduce,
-                                          flow_style='rgb',
-                                          flow_max=10,
-                                          conv_mode=conv_mode)
+        datasets[split] = KineticsDataset(
+            directory,
+            split,
+            mode,
+            supervised=supervised,
+            rgb_frames=rgb_frames,
+            flow_frames=flow_frames,
+            spatial_transform=spatial_transform,
+            color_transform=color_transform,
+            reduce=reduce,
+            flow_style="rgb",
+            flow_max=10,
+            conv_mode=conv_mode,
+        )
 
-    shuffles = {'train': shuffle, 'val': True, 'test': False}
+    shuffles = {"train": shuffle, "val": True, "test": False}
 
-    dataloaders = {split: data.DataLoader(datasets[split], batch_size=batch_size,
-                                          shuffle=shuffles[split], num_workers=num_workers,
-                                          pin_memory=pin_memory, drop_last=drop_last)
-                   for split in ['train', 'val', 'test']}
-    dataloaders['split'] = None
+    dataloaders = {
+        split: data.DataLoader(
+            datasets[split],
+            batch_size=batch_size,
+            shuffle=shuffles[split],
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+        )
+        for split in ["train", "val", "test"]
+    }
+    dataloaders["split"] = None
     return dataloaders
 
 
-def get_video_dataloaders(datadir: Union[str, os.PathLike], xform: dict, is_two_stream: bool = False,
-                          reload_split: bool = True, splitfile: Union[str, os.PathLike] = None,
-                          train_val_test: Union[list, np.ndarray] = [0.8, 0.1, 0.1], weight_exp: float = 1.0,
-                          rgb_frames: int = 1, flow_frames: int = 10, batch_size=1, shuffle=True, num_workers=0,
-                          pin_memory=False, drop_last=False, supervised=True, reduce=False, flow_max: int = 5,
-                          flow_style: str = 'linear', valid_splits_only: bool = True, conv_mode: str = '2d'):
-    """ Gets dataloaders for video-based datasets.
+def get_video_dataloaders(
+    datadir: Union[str, os.PathLike],
+    xform: dict,
+    is_two_stream: bool = False,
+    reload_split: bool = True,
+    splitfile: Union[str, os.PathLike] = None,
+    train_val_test: Union[list, np.ndarray] = [0.8, 0.1, 0.1],
+    weight_exp: float = 1.0,
+    rgb_frames: int = 1,
+    flow_frames: int = 10,
+    batch_size=1,
+    shuffle=True,
+    num_workers=0,
+    pin_memory=False,
+    drop_last=False,
+    supervised=True,
+    reduce=False,
+    flow_max: int = 5,
+    flow_style: str = "linear",
+    valid_splits_only: bool = True,
+    conv_mode: str = "2d",
+):
+    """Gets dataloaders for video-based datasets.
 
     Parameters
     ----------
@@ -264,11 +337,11 @@ def get_video_dataloaders(datadir: Union[str, os.PathLike], xform: dict, is_two_
         split contains the split dictionary, for saving
         keys for loss weighting are also added. see make_loss_weight for explanation
     """
-    return_types = ['rgb']
+    return_types = ["rgb"]
     if is_two_stream:
-        return_types += ['flow']
+        return_types += ["flow"]
     if supervised:
-        return_types += ['label']
+        return_types += ["label"]
     # records: dictionary of dictionaries. Keys: unique data identifiers
     # values: a dictionary corresponding to different files. the first record might be:
     # {'mouse000': {'rgb': path/to/rgb.avi, 'label':path/to/labels.csv} }
@@ -277,71 +350,82 @@ def get_video_dataloaders(datadir: Union[str, os.PathLike], xform: dict, is_two_
     records = projects.filter_records_for_filetypes(records, return_types)
     # returns a dictionary, where each split in ['train', 'val', 'test'] as a list of keys
     # each key corresponds to a unique directory, and has
-    split_dictionary = get_split_from_records(records, datadir, splitfile, supervised, reload_split, valid_splits_only,
-                                              train_val_test)
+    split_dictionary = get_split_from_records(
+        records, datadir, splitfile, supervised, reload_split, valid_splits_only, train_val_test
+    )
     # it's possible that your split has records that are invalid for the current task.
     # e.g.: you've added a video, but not labeled it yet. In that case, it will already be in your split, but it is
     # invalid for current purposes, because it has no label. Therefore, we want to remove it from the current split
     split_dictionary = remove_invalid_records_from_split_dictionary(split_dictionary, records)
 
     datasets = {}
-    for i, split in enumerate(['train', 'val', 'test']):
-        rgb = [records[i]['rgb'] for i in split_dictionary[split]]
-        flow = [records[i]['flow'] for i in split_dictionary[split]]
+    for i, split in enumerate(["train", "val", "test"]):
+        rgb = [records[i]["rgb"] for i in split_dictionary[split]]
+        flow = [records[i]["flow"] for i in split_dictionary[split]]
 
-        if split == 'test' and len(rgb) == 0:
+        if split == "test" and len(rgb) == 0:
             datasets[split] = None
             continue
 
         if supervised:
-            labelfiles = [records[i]['label'] for i in split_dictionary[split]]
+            labelfiles = [records[i]["label"] for i in split_dictionary[split]]
         else:
             labelfiles = None
 
         if is_two_stream:
-            datasets[split] = TwoStreamDataset(rgb_list=rgb,
-                                               flow_list=flow,
-                                               rgb_frames=rgb_frames,
-                                               flow_frames=flow_frames,
-                                               spatial_transform=xform[split]['spatial'],
-                                               color_transform=xform[split]['color'],
-                                               label_list=labelfiles,
-                                               reduce=reduce,
-                                               flow_max=flow_max,
-                                               flow_style=flow_style
-                                               )
+            datasets[split] = TwoStreamDataset(
+                rgb_list=rgb,
+                flow_list=flow,
+                rgb_frames=rgb_frames,
+                flow_frames=flow_frames,
+                spatial_transform=xform[split]["spatial"],
+                color_transform=xform[split]["color"],
+                label_list=labelfiles,
+                reduce=reduce,
+                flow_max=flow_max,
+                flow_style=flow_style,
+            )
         else:
-            datasets[split] = VideoDataset(rgb,
-                                           frames_per_clip=rgb_frames,
-                                           label_list=labelfiles,
-                                           reduce=reduce,
-                                           transform=xform[split],
-                                           conv_mode=conv_mode)
+            datasets[split] = VideoDataset(
+                rgb,
+                frames_per_clip=rgb_frames,
+                label_list=labelfiles,
+                reduce=reduce,
+                transform=xform[split],
+                conv_mode=conv_mode,
+            )
 
-    shuffles = {'train': shuffle, 'val': True, 'test': False}
+    shuffles = {"train": shuffle, "val": True, "test": False}
 
-    dataloaders = {split: data.DataLoader(datasets[split], batch_size=batch_size,
-                                          shuffle=shuffles[split], num_workers=num_workers,
-                                          pin_memory=pin_memory, drop_last=drop_last)
-                   for split in ['train', 'val', 'test'] if datasets[split] is not None}
+    dataloaders = {
+        split: data.DataLoader(
+            datasets[split],
+            batch_size=batch_size,
+            shuffle=shuffles[split],
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+        )
+        for split in ["train", "val", "test"]
+        if datasets[split] is not None
+    }
 
     if supervised:
-        dataloaders['class_counts'] = datasets['train'].class_counts
-        dataloaders['num_classes'] = len(dataloaders['class_counts'])
-        pos_weight, softmax_weight = make_loss_weight(dataloaders['class_counts'],
-                                                      datasets['train'].num_pos,
-                                                      datasets['train'].num_neg,
-                                                      weight_exp=weight_exp)
-        dataloaders['pos'] = datasets['train'].num_pos
-        dataloaders['neg'] = datasets['train'].num_neg
-        dataloaders['pos_weight'] = pos_weight
-        dataloaders['loss_weight'] = softmax_weight
-    dataloaders['split'] = split_dictionary
-    return (dataloaders)
+        dataloaders["class_counts"] = datasets["train"].class_counts
+        dataloaders["num_classes"] = len(dataloaders["class_counts"])
+        pos_weight, softmax_weight = make_loss_weight(
+            dataloaders["class_counts"], datasets["train"].num_pos, datasets["train"].num_neg, weight_exp=weight_exp
+        )
+        dataloaders["pos"] = datasets["train"].num_pos
+        dataloaders["neg"] = datasets["train"].num_neg
+        dataloaders["pos_weight"] = pos_weight
+        dataloaders["loss_weight"] = softmax_weight
+    dataloaders["split"] = split_dictionary
+    return dataloaders
 
 
 def get_dataloaders_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 1) -> dict:
-    """ Returns dataloader objects using a Hydra-generated configuration dictionary.
+    """Returns dataloader objects using a Hydra-generated configuration dictionary.
 
     This is the main entry point for getting dataloaders from the command line. it will return the correct dataloader
     with given hyperparameters for either flow, feature extractor, or sequence models.
@@ -367,67 +451,92 @@ def get_dataloaders_from_cfg(cfg: DictConfig, model_type: str, input_images: int
         information see the specific dataloader of the model you're training, e.g. get_video_dataloaders
     """
     #
-    supervised = model_type != 'flow_generator'
-    batch_size = cfg.compute.batch_size if cfg.compute.batch_size != 'auto' else cfg.batch_size
-    log.info('batch size: {}'.format(batch_size))
-    if model_type == 'feature_extractor' or model_type == 'flow_generator':
+    supervised = model_type != "flow_generator"
+    batch_size = cfg.compute.batch_size if cfg.compute.batch_size != "auto" else cfg.batch_size
+    log.info("batch size: {}".format(batch_size))
+    if model_type == "feature_extractor" or model_type == "flow_generator":
         arch = cfg[model_type].arch
-        mode = '3d' if '3d' in arch.lower() else '2d'
-        log.info('getting dataloaders: {} convolution type detected'.format(mode))
+        mode = "3d" if "3d" in arch.lower() else "2d"
+        log.info("getting dataloaders: {} convolution type detected".format(mode))
         xform = get_cpu_transforms(cfg.augs)
 
-
-        if cfg.project.name == 'kinetics':
+        if cfg.project.name == "kinetics":
             if cfg.compute.dali:
-                dataloaders = get_dataloaders_kinetics_dali(cfg.project.data_path,
-                                                            rgb_frames=input_images,
-                                                            batch_size=batch_size,
-                                                            num_workers=cfg.compute.num_workers,
-                                                            supervised=supervised,
-                                                            conv_mode=mode,
-                                                            gpu_id=cfg.compute.gpu_id,
-                                                            crop_size=cfg.augs.crop_size,
-                                                            mean=list(cfg.augs.normalization.mean),
-                                                            std=list(cfg.augs.normalization.std),
-                                                            distributed=cfg.compute.distributed)
+                dataloaders = get_dataloaders_kinetics_dali(
+                    cfg.project.data_path,
+                    rgb_frames=input_images,
+                    batch_size=batch_size,
+                    num_workers=cfg.compute.num_workers,
+                    supervised=supervised,
+                    conv_mode=mode,
+                    gpu_id=cfg.compute.gpu_id,
+                    crop_size=cfg.augs.crop_size,
+                    mean=list(cfg.augs.normalization.mean),
+                    std=list(cfg.augs.normalization.std),
+                    distributed=cfg.compute.distributed,
+                )
                 # hack, because for DEG projects we'll get the number of positive and negative examples
                 # for kinetics, we don't want to weight the loss at all
-                dataloaders['pos'] = None
-                dataloaders['neg'] = None
+                dataloaders["pos"] = None
+                dataloaders["neg"] = None
             else:
-                dataloaders = get_dataloaders_kinetics(cfg.project.data_path,
-                                                       mode='rgb',
-                                                       xform=xform,
-                                                       rgb_frames=input_images,
-                                                       batch_size=batch_size,
-                                                       shuffle=True,
-                                                       num_workers=cfg.compute.num_workers,
-                                                       pin_memory=torch.cuda.is_available(),
-                                                       reduce=True,
-                                                       supervised=supervised,
-                                                       conv_mode=mode)
+                dataloaders = get_dataloaders_kinetics(
+                    cfg.project.data_path,
+                    mode="rgb",
+                    xform=xform,
+                    rgb_frames=input_images,
+                    batch_size=batch_size,
+                    shuffle=True,
+                    num_workers=cfg.compute.num_workers,
+                    pin_memory=torch.cuda.is_available(),
+                    reduce=True,
+                    supervised=supervised,
+                    conv_mode=mode,
+                )
         else:
             reduce = False
-            if cfg.run.model == 'feature_extractor':
-                if cfg.feature_extractor.final_activation == 'softmax':
+            if cfg.run.model == "feature_extractor":
+                if cfg.feature_extractor.final_activation == "softmax":
                     reduce = True
-            dataloaders = get_video_dataloaders(cfg.project.data_path, xform=xform, is_two_stream=False,
-                                                splitfile=cfg.split.file, train_val_test=cfg.split.train_val_test,
-                                                weight_exp=cfg.train.loss_weight_exp, rgb_frames=input_images,
-                                                batch_size=batch_size, num_workers=cfg.compute.num_workers,
-                                                pin_memory=torch.cuda.is_available(), drop_last=False,
-                                                supervised=supervised, reduce=reduce, conv_mode=mode)
-    elif model_type == 'sequence':
-        dataloaders = get_dataloaders_sequence(cfg.project.data_path, cfg.sequence.latent_name,
-                                               cfg.sequence.sequence_length, is_two_stream=True,
-                                               nonoverlapping=cfg.sequence.nonoverlapping, splitfile=cfg.split.file,
-                                               reload_split=True, store_in_ram=False, dimension=None,
-                                               train_val_test=cfg.split.train_val_test,
-                                               weight_exp=cfg.train.loss_weight_exp, batch_size=batch_size,
-                                               shuffle=True, num_workers=cfg.compute.num_workers,
-                                               pin_memory=torch.cuda.is_available(), drop_last=False, supervised=True,
-                                               reduce=cfg.feature_extractor.final_activation == 'softmax',
-                                               valid_splits_only=True, return_logits=False)
+            dataloaders = get_video_dataloaders(
+                cfg.project.data_path,
+                xform=xform,
+                is_two_stream=False,
+                splitfile=cfg.split.file,
+                train_val_test=cfg.split.train_val_test,
+                weight_exp=cfg.train.loss_weight_exp,
+                rgb_frames=input_images,
+                batch_size=batch_size,
+                num_workers=cfg.compute.num_workers,
+                pin_memory=torch.cuda.is_available(),
+                drop_last=False,
+                supervised=supervised,
+                reduce=reduce,
+                conv_mode=mode,
+            )
+    elif model_type == "sequence":
+        dataloaders = get_dataloaders_sequence(
+            cfg.project.data_path,
+            cfg.sequence.latent_name,
+            cfg.sequence.sequence_length,
+            is_two_stream=True,
+            nonoverlapping=cfg.sequence.nonoverlapping,
+            splitfile=cfg.split.file,
+            reload_split=True,
+            store_in_ram=False,
+            dimension=None,
+            train_val_test=cfg.split.train_val_test,
+            weight_exp=cfg.train.loss_weight_exp,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=cfg.compute.num_workers,
+            pin_memory=torch.cuda.is_available(),
+            drop_last=False,
+            supervised=True,
+            reduce=cfg.feature_extractor.final_activation == "softmax",
+            valid_splits_only=True,
+            return_logits=False,
+        )
     else:
-        raise ValueError('Unknown model type: {}'.format(model_type))
+        raise ValueError("Unknown model type: {}".format(model_type))
     return dataloaders

@@ -8,7 +8,8 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PySide2 import QtCore, QtGui, QtWidgets
+from PySide2 import QtCore, QtWidgets
+
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -258,10 +259,14 @@ class Ui_MainWindow(object):
         self.sequence_train.setText(QtWidgets.QApplication.translate("MainWindow", "Train", None, -1))
         self.sequence_infer.setText(QtWidgets.QApplication.translate("MainWindow", "Infer", None, -1))
         self.labelBox.setTitle(QtWidgets.QApplication.translate("MainWindow", "Labels", None, -1))
-        self.importPredictions.setText(QtWidgets.QApplication.translate("MainWindow", "Import predictions as labels", None, -1))
+        self.importPredictions.setText(
+            QtWidgets.QApplication.translate("MainWindow", "Import predictions as labels", None, -1)
+        )
         self.finalize_labels.setText(QtWidgets.QApplication.translate("MainWindow", "Finalize Labels", None, -1))
         self.groupBox_4.setTitle(QtWidgets.QApplication.translate("MainWindow", "Predictions", None, -1))
-        self.exportPredictions.setText(QtWidgets.QApplication.translate("MainWindow", "Export predictions to CSV", None, -1))
+        self.exportPredictions.setText(
+            QtWidgets.QApplication.translate("MainWindow", "Export predictions to CSV", None, -1)
+        )
         self.label_4.setText(QtWidgets.QApplication.translate("MainWindow", "Labels", None, -1))
         self.label_5.setText(QtWidgets.QApplication.translate("MainWindow", "Predictions", None, -1))
         self.menuDeepEthogram.setTitle(QtWidgets.QApplication.translate("MainWindow", "File", None, -1))
@@ -270,7 +275,9 @@ class Ui_MainWindow(object):
         self.menuImport.setTitle(QtWidgets.QApplication.translate("MainWindow", "Import", None, -1))
         self.menuBatch.setTitle(QtWidgets.QApplication.translate("MainWindow", "Batch", None, -1))
         self.actionNew_Project.setText(QtWidgets.QApplication.translate("MainWindow", "New Project", None, -1))
-        self.actionSave_Project.setText(QtWidgets.QApplication.translate("MainWindow", "Save Project (ctrl+s)", None, -1))
+        self.actionSave_Project.setText(
+            QtWidgets.QApplication.translate("MainWindow", "Save Project (ctrl+s)", None, -1)
+        )
         self.actionAdd.setText(QtWidgets.QApplication.translate("MainWindow", "Add", None, -1))
         self.actionRemove.setText(QtWidgets.QApplication.translate("MainWindow", "Remove", None, -1))
         self.actionStyle.setText(QtWidgets.QApplication.translate("MainWindow", "Style", None, -1))
@@ -281,8 +288,11 @@ class Ui_MainWindow(object):
         self.actionOpen_Project.setText(QtWidgets.QApplication.translate("MainWindow", "Open Project", None, -1))
         self.importLabels.setText(QtWidgets.QApplication.translate("MainWindow", "Labels", None, -1))
         self.actionAdd_videos.setText(QtWidgets.QApplication.translate("MainWindow", "Add videos", None, -1))
-        self.classifierInference.setText(QtWidgets.QApplication.translate("MainWindow", "Feature extractor inference + sequence inference", None, -1))
+        self.classifierInference.setText(
+            QtWidgets.QApplication.translate("MainWindow", "Feature extractor inference + sequence inference", None, -1)
+        )
         self.actionOvernight.setText(QtWidgets.QApplication.translate("MainWindow", "Overnight", None, -1))
         self.actionAdd_multiple.setText(QtWidgets.QApplication.translate("MainWindow", "Add multiple", None, -1))
 
-from deepethogram.gui.custom_widgets import LabelImg, VideoPlayer
+
+from deepethogram.gui.custom_widgets import LabelImg, VideoPlayer  # noqa: E402

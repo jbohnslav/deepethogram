@@ -14,15 +14,15 @@ def pop(model, model_name, n_layers):
     # you also want to pop off the previous ReLU so that you get the unscaled linear units from fc_7
     # just doing something like model = nn.Sequential(*list(model.children())[:-1]) would not get rid of
     # this ReLU, so that's an unintelligent version of this
-    if model_name.startswith('resnet'):
+    if model_name.startswith("resnet"):
         if n_layers == 1:
             # use empty sequential module as an identity function
             num_features = model.fc.in_features
             final_layer = model.fc
             model.fc = nn.Identity()
         else:
-            raise NotImplementedError('Can only pop off the final layer of a resnet')
-    elif model_name == 'alexnet':
+            raise NotImplementedError("Can only pop off the final layer of a resnet")
+    elif model_name == "alexnet":
         final_layer = model.classifier
         if n_layers == 1:
             model.classifier = nn.Sequential(
@@ -35,7 +35,7 @@ def pop(model, model_name, n_layers):
                 nn.Linear(4096, 4096),
             )
             num_features = 4096
-            log.info('Final layer of encoder: AlexNet FC_7')
+            log.info("Final layer of encoder: AlexNet FC_7")
         elif n_layers == 2:
             model.classifier = nn.Sequential(
                 nn.Dropout(),
@@ -43,16 +43,16 @@ def pop(model, model_name, n_layers):
                 nn.Linear(256 * 6 * 6, 4096),
             )
             num_features = 4096
-            log.info('Final layer of encoder: AlexNet FC_6')
+            log.info("Final layer of encoder: AlexNet FC_6")
         elif n_layers == 3:
             # do nothing
             model.classifier = nn.Sequential()
             num_features = 256 * 6 * 6
-            log.info('Final layer of encoder: AlexNet Maxpool 3')
+            log.info("Final layer of encoder: AlexNet Maxpool 3")
         else:
-            raise ValueError('Invalid parameter %d to pop function for %s: ' % (n_layers, model_name))
+            raise ValueError("Invalid parameter %d to pop function for %s: " % (n_layers, model_name))
 
-    elif model_name.startswith('vgg'):
+    elif model_name.startswith("vgg"):
         final_layer = model.classifier
         if n_layers == 1:
             model.classifier = nn.Sequential(
@@ -62,33 +62,33 @@ def pop(model, model_name, n_layers):
                 nn.Linear(4096, 4096),
             )
             num_features = 4096
-            log.info('Final layer of encoder: VGG fc2')
+            log.info("Final layer of encoder: VGG fc2")
         elif n_layers == 2:
             model.classifier = nn.Sequential(
                 nn.Linear(512 * 7 * 7, 4096),
             )
-            log.info('Final layer of encoder: VGG fc1')
+            log.info("Final layer of encoder: VGG fc1")
             num_features = 4096
         elif n_layers == 3:
             model.classifier = nn.Sequential()
-            log.info('Final layer of encoder: VGG pool5')
+            log.info("Final layer of encoder: VGG pool5")
             num_features = 512 * 7 * 7
         else:
-            raise ValueError('Invalid parameter %d to pop function for %s: ' % (n_layers, model_name))
+            raise ValueError("Invalid parameter %d to pop function for %s: " % (n_layers, model_name))
 
-    elif model_name.startswith('squeezenet'):
+    elif model_name.startswith("squeezenet"):
         raise NotImplementedError
-    elif model_name.startswith('densenet'):
+    elif model_name.startswith("densenet"):
         raise NotImplementedError
-    elif model_name.startswith('inception'):
+    elif model_name.startswith("inception"):
         raise NotImplementedError
     else:
-        raise ValueError('%s is not a valid model name' % (model_name))
+        raise ValueError("%s is not a valid model name" % (model_name))
     return model, num_features, final_layer
 
 
 def remove_cnn_classifier_layer(cnn):
-    """ Removes the final layer of a torchvision classification model, and figures out dimensionality of final layer """
+    """Removes the final layer of a torchvision classification model, and figures out dimensionality of final layer"""
     # cnn should be a nn.Sequential(custom_model, nn.Linear)
     module_list = list(cnn.children())
     assert (len(module_list) == 2 or len(module_list) == 3) and isinstance(module_list[1], nn.Linear)
@@ -97,46 +97,54 @@ def remove_cnn_classifier_layer(cnn):
     cnn = nn.Sequential(*module_list)
     return cnn, in_features
 
-class Fusion(nn.Module):
-    """ Module for fusing spatial and flow features and passing through Linear layer """
 
-    def __init__(self, style, num_spatial_features, num_flow_features, num_classes, flow_fusion_weight=1.5,
-                 activation=nn.Identity()):
+class Fusion(nn.Module):
+    """Module for fusing spatial and flow features and passing through Linear layer"""
+
+    def __init__(
+        self,
+        style,
+        num_spatial_features,
+        num_flow_features,
+        num_classes,
+        flow_fusion_weight=1.5,
+        activation=nn.Identity(),
+    ):
         super().__init__()
         self.style = style
         self.num_classes = num_classes
         self.activation = activation
         self.flow_fusion_weight = flow_fusion_weight
 
-        if self.style == 'average':
+        if self.style == "average":
             # self.spatial_fc = nn.Linear(num_spatial_features,num_classes)
             # self.flow_fc = nn.Linear(num_flow_features, num_classes)
 
             self.num_features_out = num_classes
 
-        elif self.style == 'concatenate':
+        elif self.style == "concatenate":
             self.num_features_out = num_classes
             self.fc = nn.Linear(num_spatial_features + num_flow_features, num_classes)
 
-        elif self.style == 'weighted_average':
+        elif self.style == "weighted_average":
             self.flow_weight = nn.Parameter(torch.Tensor([0.5]).float(), requires_grad=True)
         else:
             raise NotImplementedError
 
     def forward(self, spatial_features, flow_features):
-        if self.style == 'average':
+        if self.style == "average":
             # spatial_logits = self.spatial_fc(spatial_features)
             # flow_logits = self.flow_fc(flow_features)
 
             return (spatial_features + flow_features * self.flow_fusion_weight) / (1 + self.flow_fusion_weight)
             # return((spatial_logits+flow_logits*self.flow_fusion_weight)/(1+self.flow_fusion_weight))
-        elif self.style == 'concatenate':
+        elif self.style == "concatenate":
             # if we're concatenating, we want the model to learn nonlinear mappings from the spatial logits and flow
             # logits that means we should apply an activation function note: this won't work if you froze both
             # encoding models
             features = self.activation(torch.cat((spatial_features, flow_features), dim=1))
             return self.fc(features)
-        elif self.style == 'weighted_average':
+        elif self.style == "weighted_average":
             return self.flow_weight * flow_features + (1 - self.flow_weight) * spatial_features
 
 

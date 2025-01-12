@@ -1,14 +1,20 @@
-import torch
 from torch import nn
 
 
-def conv1d_same(in_channels, out_channels, kernel_size,
-                stride=1, dilation=1, groups=1, bias=True):
+def conv1d_same(in_channels, out_channels, kernel_size, stride=1, dilation=1, groups=1, bias=True):
     # if stride is two, output should be exactly half the size of input
     padding = kernel_size // 2 * dilation
 
-    return (nn.Conv1d(in_channels, out_channels, kernel_size, stride=stride,
-                      padding=padding, dilation=dilation, groups=groups, bias=bias))
+    return nn.Conv1d(
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=stride,
+        padding=padding,
+        dilation=dilation,
+        groups=groups,
+        bias=bias,
+    )
 
 
 class Linear(nn.Module):
@@ -17,7 +23,7 @@ class Linear(nn.Module):
         self.conv1 = conv1d_same(num_features, num_classes, kernel_size=kernel_size, stride=1, bias=True)
 
     def forward(self, x):
-        return (self.conv1(x))
+        return self.conv1(x)
 
 
 class Conv_Nonlinear(nn.Module):
@@ -43,24 +49,40 @@ class Conv_Nonlinear(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
-        return (self.net(x))
+        return self.net(x)
 
 
 class RNN(nn.Module):
-    def __init__(self, num_features, num_classes, style='lstm', hidden_size=64,
-                 num_layers=1, dropout=0.0, output_dropout=0.0, bidirectional=False):
+    def __init__(
+        self,
+        num_features,
+        num_classes,
+        style="lstm",
+        hidden_size=64,
+        num_layers=1,
+        dropout=0.0,
+        output_dropout=0.0,
+        bidirectional=False,
+    ):
         super().__init__()
 
-        assert style in ['rnn', 'lstm', 'gru']
-        if style == 'rnn':
+        assert style in ["rnn", "lstm", "gru"]
+        if style == "rnn":
             func = nn.RNN
-        elif style == 'lstm':
+        elif style == "lstm":
             func = nn.LSTM
-        elif style == 'gru':
+        elif style == "gru":
             func = nn.GRU
 
-        self.rnn = func(num_features, hidden_size, num_layers=num_layers,
-                        bias=True, batch_first=True, dropout=dropout, bidirectional=bidirectional)
+        self.rnn = func(
+            num_features,
+            hidden_size,
+            num_layers=num_layers,
+            bias=True,
+            batch_first=True,
+            dropout=dropout,
+            bidirectional=bidirectional,
+        )
         self.dropout = nn.Dropout(output_dropout)
         size = hidden_size * 2 if bidirectional else hidden_size
         self.hidden_to_output = nn.Linear(size, num_classes)
@@ -75,4 +97,4 @@ class RNN(nn.Module):
         # outputs is N, L, C
         outputs = self.hidden_to_output(hiddens)
         # return outputs in shape N, C, L to be the same as conv1d
-        return (outputs.permute(0, 2, 1).contiguous())
+        return outputs.permute(0, 2, 1).contiguous()

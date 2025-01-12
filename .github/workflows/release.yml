@@ -1,0 +1,100 @@
+name: Publish Python 🐍 distribution 📦 to PyPI
+
+on:
+  push:
+    # Only run this workflow when a tag with the pattern 'v*' is pushed
+    tags:
+      - 'v*'
+
+jobs:
+  # Step 1: Build the Python package
+  build:
+    name: Build distribution 📦
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build pytest
+          pip install -e .
+
+      - name: Run tests
+        run: pytest tests/
+
+      - name: Build package
+        run: python -m build
+
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  # Step 2: Publish the distribution to PyPI
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download distribution packages
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.12.3
+        with:
+          # If using a secret-based token:
+          username: '__token__'
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  # Step 3: Sign the distribution and create a GitHub release
+  github-release:
+    name: Sign the distribution 📦 with Sigstore and upload to GitHub Release
+    needs: publish-to-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create GitHub Releases
+      id-token: write  # Required for sigstore
+
+    steps:
+      - name: Download distribution packages
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Sign the dists with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: >-
+            ./dist/*.tar.gz
+            ./dist/*.whl
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # $GITHUB_REF_NAME is the tag name, e.g. 'v1.0.0'
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Release $GITHUB_REF_NAME" \
+            --notes "See CHANGELOG for details."
+
+      - name: Upload artifact signatures to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" dist/** \
+            --repo "$GITHUB_REPOSITORY"

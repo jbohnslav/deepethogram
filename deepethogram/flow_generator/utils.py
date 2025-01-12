@@ -1,5 +1,5 @@
 import warnings
-from typing import Union, Tuple
+from typing import Tuple, Union
 
 import cv2
 import numpy as np
@@ -11,7 +11,7 @@ from deepethogram.utils import Normalizer
 
 
 def flow_to_rgb(flow: np.ndarray, maxval: Union[int, float] = 20) -> np.ndarray:
-    """ Convert optic flow to RGB by linearly mapping X to red and Y to green
+    """Convert optic flow to RGB by linearly mapping X to red and Y to green
 
     255 in the resulting image will correspond to `maxval`. 0 corresponds to -`maxval`.
     Parameters
@@ -27,7 +27,7 @@ def flow_to_rgb(flow: np.ndarray, maxval: Union[int, float] = 20) -> np.ndarray:
         RGB image
     """
     H, W, C = flow.shape
-    assert (C == 2)
+    assert C == 2
     flow = (flow + maxval) * (255 / 2 / maxval)
     flow = flow.clip(min=0, max=255)
     flow_map = np.ones((H, W, 3), dtype=np.uint8) * 127
@@ -40,7 +40,7 @@ def flow_to_rgb(flow: np.ndarray, maxval: Union[int, float] = 20) -> np.ndarray:
 
 
 def rgb_to_flow(image: np.ndarray, maxval: Union[int, float] = 20):
-    """ Converts an RGB image to an optic flow by linearly mapping R -> X and G -> Y. Opposite of `flow_to_rgb`
+    """Converts an RGB image to an optic flow by linearly mapping R -> X and G -> Y. Opposite of `flow_to_rgb`
 
     Parameters
     ----------
@@ -59,14 +59,14 @@ def rgb_to_flow(image: np.ndarray, maxval: Union[int, float] = 20):
         return arr
 
     H, W, C = image.shape
-    assert (C == 3)
+    assert C == 3
     image = image.astype(np.float32)
     image = denormalize(image)
     return image[..., 0:2]
 
 
 def flow_to_rgb_polar(flow: np.ndarray, maxval: Union[int, float] = 20) -> np.ndarray:
-    """ Converts flow to RGB by mapping angle -> hue and magnitude -> saturation.
+    """Converts flow to RGB by mapping angle -> hue and magnitude -> saturation.
 
     Converts the flow map to polar coordinates: dX, dY -> angle, magnitude.
     Uses a HSV representation: Hue = angle, saturation = magnitude, value = 1
@@ -96,14 +96,13 @@ def flow_to_rgb_polar(flow: np.ndarray, maxval: Union[int, float] = 20) -> np.nd
     # magnitue -> saturation
     color = (mag.astype(np.float32) / maxval).clip(0, 1)
     color = (color * 255).clip(0, 255).astype(np.uint8)
-    # hsv[...,1] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
     hsv[..., 1] = color
     rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
     return rgb
 
 
 def rgb_to_flow_polar(image: np.ndarray, maxval: Union[int, float] = 20):
-    """ Converts rgb to flow by mapping hue -> angle and saturation -> magnitude.
+    """Converts rgb to flow by mapping hue -> angle and saturation -> magnitude.
 
     Inverse of `flow_to_rgb_polar`
     Parameters
@@ -126,32 +125,14 @@ def rgb_to_flow_polar(image: np.ndarray, maxval: Union[int, float] = 20):
 
     ang = hsv[..., 0]
     ang = ang * 2 * np.pi / 180
-    # x,y = cv2.polarToCart(mag, ang)
     x = mag * np.cos(ang)
     y = mag * np.sin(ang)
     flow = np.stack((x, y), axis=2)
     return flow
 
 
-# def flow_to_rgb_lrcn(flow, max_flow=10):
-#     # input: flow, can be positive or negative
-#     # ranges from -20 to 20, but only 10**-5 pixels are > 10
-#     mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-#     mag[np.isinf(mag)] = 0
-#
-#     img = np.zeros((flow.shape[0], flow.shape[1], 3), dtype=np.float32)
-#     half_range = (255 - 128) / max_flow
-#     img[:, :, 0] = flow[..., 0] * half_range + 128
-#     img[:, :, 1] = flow[..., 1] * half_range + 128
-#     # maximum magnitude is if x and y are both maxed
-#     max_magnitude = np.sqrt(max_flow ** 2 + max_flow ** 2)
-#     img[:, :, 2] = mag * 255 / max_magnitude
-#     img = img.clip(min=0, max=255).astype(np.uint8)
-#     return (img)
-
-
 class Resample2d(torch.nn.Module):
-    """ Module to sample tensors using Spatial Transformer Networks. Caches multiple grids in GPU VRAM for speed.
+    """Module to sample tensors using Spatial Transformer Networks. Caches multiple grids in GPU VRAM for speed.
 
     Examples
     -------
@@ -166,10 +147,15 @@ class Resample2d(torch.nn.Module):
     disparity = model(left_images, right_images)
     """
 
-    def __init__(self, size: Union[tuple, list] = None, fp16: bool = False, device: Union[str, torch.device] = None,
-                 horiz_only: bool = False,
-                 num_grids: int = 5):
-        """ Constructor for resampler.
+    def __init__(
+        self,
+        size: Union[tuple, list] = None,
+        fp16: bool = False,
+        device: Union[str, torch.device] = None,
+        horiz_only: bool = False,
+        num_grids: int = 5,
+    ):
+        """Constructor for resampler.
 
         Parameters
         ----------
@@ -196,13 +182,12 @@ class Resample2d(torch.nn.Module):
         """
         super().__init__()
         if size is not None:
-            assert (type(size) == tuple or type(size) == list)
+            assert isinstance(size, tuple) or isinstance(size, list)
         self.size = size
 
         # identity matrix
         self.base_mat = torch.Tensor([[1, 0, 0], [0, 1, 0]])
         if fp16:
-            # self.base_mat = self.base_mat.half()
             pass
         self.fp16 = fp16
         self.device = device
@@ -213,7 +198,7 @@ class Resample2d(torch.nn.Module):
         self.uses = []
 
     def forward(self, images: torch.Tensor, flow: torch.Tensor) -> torch.Tensor:
-        """ resample `images` according to `flow`
+        """resample `images` according to `flow`
 
         Parameters
         ----------
@@ -231,11 +216,10 @@ class Resample2d(torch.nn.Module):
             H, W = self.size
         else:
             H, W = flow.size(2), flow.size(3)
-        # print(H,W)
         # images: NxCxHxW
         # flow: Bx2xHxW
         grid_size = [flow.size(0), 2, flow.size(2), flow.size(3)]
-        if not hasattr(self, 'grids') or grid_size not in self.sizes:
+        if not hasattr(self, "grids") or grid_size not in self.sizes:
             if len(self.sizes) >= self.num_grids:
                 min_uses = min(self.uses)
                 min_loc = self.uses.index(min_uses)
@@ -246,13 +230,13 @@ class Resample2d(torch.nn.Module):
             # function outputs N,H,W,2. Permuted to N,2,H,W to match flow
             # 0-th channel is x sample locations, -1 in left column, 1 in right column
             # 1-th channel is y sample locations, -1 in first row, 1 in bottom row
-            this_grid = F.affine_grid(self.affine_mat, images.shape, align_corners=False).permute(0, 3, 1, 2).to(
-                self.device)
+            this_grid = (
+                F.affine_grid(self.affine_mat, images.shape, align_corners=False).permute(0, 3, 1, 2).to(self.device)
+            )
             this_size = [i for i in this_grid.size()]
             self.sizes.append(this_size)
             self.grids.append(this_grid)
             self.uses.append(0)
-            # print(this_grid.shape)
         else:
             grid_loc = self.sizes.index(grid_size)
             this_grid = self.grids[grid_loc]
@@ -263,23 +247,27 @@ class Resample2d(torch.nn.Module):
         # this normalizes it so that a value of 2 would move a pixel all the way across the width or height
         # horiz_only: for stereo matching, Y values are always the same
         if self.horiz_only:
-            # flow = flow[:, 0:1, :, :] / ((W - 1.0) / 2.0)
-            flow = torch.cat([flow[:, 0:1, :, :] / ((W - 1.0) / 2.0),
-                              torch.zeros((flow.size(0), flow.size(1), H, W))], 1)
+            flow = torch.cat(
+                [flow[:, 0:1, :, :] / ((W - 1.0) / 2.0), torch.zeros((flow.size(0), flow.size(1), H, W))], 1
+            )
         else:
             # for optic flow matching: can be displaced in X or Y
-            flow = torch.cat([flow[:, 0:1, :, :] / ((W - 1.0) / 2.0),
-                              flow[:, 1:2, :, :] / ((H - 1.0) / 2.0)], 1)
+            flow = torch.cat([flow[:, 0:1, :, :] / ((W - 1.0) / 2.0), flow[:, 1:2, :, :] / ((H - 1.0) / 2.0)], 1)
         # sample according to grid + flow
-        return F.grid_sample(input=images, grid=(this_grid + flow).permute(0, 2, 3, 1),
-                             mode='bilinear', padding_mode='border', align_corners=False)
+        return F.grid_sample(
+            input=images,
+            grid=(this_grid + flow).permute(0, 2, 3, 1),
+            mode="bilinear",
+            padding_mode="border",
+            align_corners=False,
+        )
 
 
 class Reconstructor:
     def __init__(self, cfg: DictConfig):
         device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
         self.resampler = Resample2d(device=device, fp16=cfg.compute.fp16)
-        if 'normalization' in list(cfg.augs.keys()):
+        if "normalization" in list(cfg.augs.keys()):
             mean = list(cfg.augs.normalization.mean)
             std = list(cfg.augs.normalization.std)
         else:
@@ -295,7 +283,7 @@ class Reconstructor:
         if image_batch.ndim == 4:
             N, C, H, W = image_batch.shape
             num_images = int(C / 3) - 1
-            t0 = image_batch[:, :num_images * 3, ...].contiguous().view(N * num_images, 3, H, W)
+            t0 = image_batch[:, : num_images * 3, ...].contiguous().view(N * num_images, 3, H, W)
             t1 = image_batch[:, 3:, ...].contiguous().view(N * num_images, 3, H, W)
         elif image_batch.ndim == 5:
             N, C, T, H, W = image_batch.shape
@@ -305,14 +293,13 @@ class Reconstructor:
             t1 = image_batch[:, :, 1:, ...]
             t1 = t1.transpose(1, 2).reshape(N * num_images, C, H, W)
         else:
-            raise ValueError('unexpected batch shape: {}'.format(image_batch))
+            raise ValueError("unexpected batch shape: {}".format(image_batch))
 
         reconstructed = []
         t1s = []
         t0s = []
         flows_reshaped = []
         for flow in flows:
-            # upsampled_flow = F.interpolate(flow, (h,w), mode='bilinear', align_corners=False)
             if flow.ndim == 4:
                 n, c, h, w = flow.size()
                 flow = flow.view(N * num_images, 2, h, w)
@@ -320,8 +307,8 @@ class Reconstructor:
                 n, c, t, h, w = flow.shape
                 flow = flow.transpose(1, 2).reshape(n * t, c, h, w)
 
-            downsampled_t1 = F.interpolate(t1, (h, w), mode='bilinear', align_corners=False)
-            downsampled_t0 = F.interpolate(t0, (h, w), mode='bilinear', align_corners=False)
+            downsampled_t1 = F.interpolate(t1, (h, w), mode="bilinear", align_corners=False)
+            downsampled_t0 = F.interpolate(t0, (h, w), mode="bilinear", align_corners=False)
             t0s.append(downsampled_t0)
             t1s.append(downsampled_t1)
             reconstructed.append(self.resampler(downsampled_t1, flow))
@@ -336,10 +323,10 @@ class Reconstructor:
 
 def stacked_to_sequence(tensor: torch.Tensor, num_channels: int = 3) -> torch.Tensor:
     if tensor.ndim > 4:
-        warnings.warn('called stacked_to_sequence on a sequence of shape {}'.format(tensor.shape))
+        warnings.warn("called stacked_to_sequence on a sequence of shape {}".format(tensor.shape))
         return tensor
     N, C, H, W = tensor.shape
-    assert ((C % num_channels) == 0)
+    assert (C % num_channels) == 0
     num_channels = 3
     starts = range(0, C, num_channels)
     ends = range(num_channels, C + 1, num_channels)
@@ -347,7 +334,7 @@ def stacked_to_sequence(tensor: torch.Tensor, num_channels: int = 3) -> torch.Te
 
 
 def rgb_to_hsv_torch(image: torch.Tensor) -> torch.Tensor:
-    """ PyTorch implementation of RGB to HSV color conversion """
+    """PyTorch implementation of RGB to HSV color conversion"""
     # https://torchgeometry.readthedocs.io/en/latest/_modules/kornia/color/hsv.html#rgb_to_hsv
     # https://en.wikipedia.org/wiki/HSL_and_HSV#General_approach
     # https://stackoverflow.com/questions/3018313/algorithm-to-convert-rgb-to-hsv-and-hsv-to-rgb-in-range-0-255-for-both
@@ -379,7 +366,6 @@ def rgb_to_hsv_torch(image: torch.Tensor) -> torch.Tensor:
 
     S = torch.zeros_like(r)
     S[V > 0] = (C / V)[V > 0]
-    # hsv = torch.stack([H,S,V], dim=-3)
 
     return torch.stack([H, S, V], dim=1)
 

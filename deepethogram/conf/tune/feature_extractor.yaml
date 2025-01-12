@@ -7,13 +7,13 @@ tune:
     #   space: uniform # space: how to sample
     #   short: dropout # a shortened version to view in Ray's command line interface
     #   current_best: 0.25 # current best estimate. a moving target. used for initializing search space with hyperopt
-    # train.regularization.alpha: 
+    # train.regularization.alpha:
     #   min: 1e-7
     #   max: 1e-1
     #   space: log
     #   short: reg_alpha
     #   current_best: 1e-5
-    # train.regularization.beta: 
+    # train.regularization.beta:
     #   min: 1e-4
     #   max: 1e-1
     #   space: log

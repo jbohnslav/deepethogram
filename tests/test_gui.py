@@ -3,14 +3,20 @@ import os
 
 import pytest
 
+DEG_VERSION = os.environ.get("DEG_VERSION", "full")
 
-@pytest.mark.skipif(os.environ['DEG_VERSION'] == 'headless', reason="Dont run GUI tests for headless deepethogram")
+
+@pytest.mark.skipif(
+    DEG_VERSION == "headless",
+    reason="Dont run GUI tests for headless deepethogram",
+)
 def test_setup():
     # put imports here so that headless version does not import gui tools
-    from deepethogram.gui.main import run, setup_gui_cfg, MainWindow
+    from deepethogram.gui.main import setup_gui_cfg
+
     cfg = setup_gui_cfg()
 
-    assert cfg.run.type == 'gui'
+    assert cfg.run.type == "gui"
 
 
 # def test_new_project():

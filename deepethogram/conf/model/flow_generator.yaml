@@ -19,7 +19,7 @@ flow_generator:
   # path to a checkpoint.pt weight file for reloading.
   weights: pretrained
 train:
-  # overwrite default steps per epoch: because we don't care about rare classes for optic flow, don't need so much 
+  # overwrite default steps per epoch: because we don't care about rare classes for optic flow, don't need so much
   # validation
   steps_per_epoch:
     train: 1000

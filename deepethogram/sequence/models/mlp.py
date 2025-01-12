@@ -4,13 +4,20 @@ from torch import nn
 
 
 class MLP(nn.Module):
-    """Multi-layer perceptron model. Baseline for sequence modeling
-    """
-    def __init__(self, D: int, classes: int, dropout_p: float = 0.4,
-                 hidden_layers=(
-                     256,
-                     128,
-                 ), pos=None, neg=None):
+    """Multi-layer perceptron model. Baseline for sequence modeling"""
+
+    def __init__(
+        self,
+        D: int,
+        classes: int,
+        dropout_p: float = 0.4,
+        hidden_layers=(
+            256,
+            128,
+        ),
+        pos=None,
+        neg=None,
+    ):
         """Constructor
 
         Parameters

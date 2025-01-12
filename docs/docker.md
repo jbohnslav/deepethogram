@@ -4,7 +4,7 @@ Install Docker: https://docs.docker.com/get-docker/
 Install nvidia-docker: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker
 
 ## running the gui on Linux with training support
-In a terminal, run `xhost +local:docker`. You'll need to do this every time you restart. 
+In a terminal, run `xhost +local:docker`. You'll need to do this every time you restart.
 
 To run, type this command: `docker run --gpus all -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw --shm-size 16G -v /media:/media -it jbohnslav/deepethogram:full python -m deepethogram`
 
@@ -35,6 +35,6 @@ Again, change `/media` to your hard drive with your training data
 * tests: `docker run --gpus all -it deepethogram:full pytest tests/`
 
 # building it yourself
-To build the container with both GUI and model training support: 
+To build the container with both GUI and model training support:
 * `cd` to your `deepethogram` directory
-* `nvidia-docker build -t deepethogram:full -f docker/Dockerfile-full . `
+* `docker build -t deepethogram:full -f docker/Dockerfile-full .`

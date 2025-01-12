@@ -36,18 +36,26 @@ import torch.utils.model_zoo as model_zoo
 from deepethogram.utils import load_state_from_dict
 
 model_urls = {
-    'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
-    'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
-    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
-    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
-    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
+    "resnet18": "https://download.pytorch.org/models/resnet18-5c106cde.pth",
+    "resnet34": "https://download.pytorch.org/models/resnet34-333f7ec4.pth",
+    "resnet50": "https://download.pytorch.org/models/resnet50-19c8e357.pth",
+    "resnet101": "https://download.pytorch.org/models/resnet101-5d3b4d8f.pth",
+    "resnet152": "https://download.pytorch.org/models/resnet152-b121ed2d.pth",
 }
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=dilation, groups=groups, bias=False, dilation=dilation)
+    return nn.Conv2d(
+        in_planes,
+        out_planes,
+        kernel_size=3,
+        stride=stride,
+        padding=dilation,
+        groups=groups,
+        bias=False,
+        dilation=dilation,
+    )
 
 
 def conv1x1(in_planes, out_planes, stride=1):
@@ -58,13 +66,14 @@ def conv1x1(in_planes, out_planes, stride=1):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
-                 base_width=64, dilation=1, norm_layer=None):
+    def __init__(
+        self, inplanes, planes, stride=1, downsample=None, groups=1, base_width=64, dilation=1, norm_layer=None
+    ):
         super(BasicBlock, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         if groups != 1 or base_width != 64:
-            raise ValueError('BasicBlock only supports groups=1 and base_width=64')
+            raise ValueError("BasicBlock only supports groups=1 and base_width=64")
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
@@ -104,12 +113,13 @@ class Bottleneck(nn.Module):
 
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
-                 base_width=64, dilation=1, norm_layer=None):
+    def __init__(
+        self, inplanes, planes, stride=1, downsample=None, groups=1, base_width=64, dilation=1, norm_layer=None
+    ):
         super(Bottleneck, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
-        width = int(planes * (base_width / 64.)) * groups
+        width = int(planes * (base_width / 64.0)) * groups
         # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv1x1(inplanes, width)
         self.bn1 = norm_layer(width)
@@ -145,12 +155,10 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-
     def __init__(self, block, layers, in_channels=3, num_classes=1000, dropout_p=0, compress_to: int = 512):
         self.inplanes = 64
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self._norm_layer = nn.BatchNorm2d
         self.dilation = 1
@@ -166,7 +174,6 @@ class ResNet(nn.Module):
         # self.avgpool = torch.jit.script(FastGlobalAvgPool2d(flatten=True))
         # self.adaptive_max = nn.AdaptiveMaxPool2d(1)
 
-
         self.dropout_p = dropout_p
         if dropout_p > 0:
             self.dropout = torch.nn.Dropout(p=dropout_p)
@@ -179,12 +186,14 @@ class ResNet(nn.Module):
             # instead, reduce the features to 512
             if compress_to < 512 * block.expansion:
                 self.compression_fc = nn.Sequential(
-                    nn.Linear(512 * block.expansion, compress_to),
-                    nn.ReLU(inplace=True)
+                    nn.Linear(512 * block.expansion, compress_to), nn.ReLU(inplace=True)
                 )
                 fc_infeatures = compress_to
-                print('Altered from standard resnet50: instead of {} inputs to the fc layer, it has {}'.format(
-                    512 * block.expansion, compress_to))
+                print(
+                    "Altered from standard resnet50: instead of {} inputs to the fc layer, it has {}".format(
+                        512 * block.expansion, compress_to
+                    )
+                )
             else:
                 self.compression_fc = nn.Identity()
                 fc_infeatures = 512 * block.expansion
@@ -196,7 +205,7 @@ class ResNet(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -216,18 +225,28 @@ class ResNet(nn.Module):
                 #           kernel_size=1, stride=1, bias=False),
                 # uncomment below line for vanilla resnet
                 conv1x1(self.inplanes, planes * block.expansion, stride),
-                # should be in all model types V 
+                # should be in all model types V
                 norm_layer(planes * block.expansion),
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
-                            self.base_width, previous_dilation, norm_layer))
+        layers.append(
+            block(
+                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer
+            )
+        )
         self.inplanes = planes * block.expansion
         for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes, groups=self.groups,
-                                base_width=self.base_width, dilation=self.dilation,
-                                norm_layer=norm_layer))
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    groups=self.groups,
+                    base_width=self.base_width,
+                    dilation=self.dilation,
+                    norm_layer=norm_layer,
+                )
+            )
 
         return nn.Sequential(*layers)
 
@@ -261,7 +280,7 @@ def resnet18(pretrained=False, in_channels=3, **kwargs):
     model = ResNet(BasicBlock, [2, 2, 2, 2], in_channels=in_channels, **kwargs)
     if pretrained:
         # from Wang et al. 2015: Towards good practices for very deep two-stream convnets
-        state_dict = model_zoo.load_url(model_urls['resnet18'])
+        state_dict = model_zoo.load_url(model_urls["resnet18"])
         if in_channels != 3:
             rgb_kernel_key = list(state_dict.keys())[0]
             rgb_kernel = state_dict[rgb_kernel_key]
@@ -281,7 +300,7 @@ def resnet34(pretrained=False, in_channels=3, **kwargs):
     model = ResNet(BasicBlock, [3, 4, 6, 3], in_channels=in_channels, **kwargs)
     if pretrained:
         # from Wang et al. 2015: Towards good practices for very deep two-stream convnets
-        state_dict = model_zoo.load_url(model_urls['resnet34'])
+        state_dict = model_zoo.load_url(model_urls["resnet34"])
         if in_channels != 3:
             rgb_kernel_key = list(state_dict.keys())[0]
             rgb_kernel = state_dict[rgb_kernel_key]
@@ -300,7 +319,7 @@ def resnet50(pretrained=False, in_channels=3, **kwargs):
     model = ResNet(Bottleneck, [3, 4, 6, 3], in_channels=in_channels, **kwargs)
     if pretrained:
         # from Wang et al. 2015: Towards good practices for very deep two-stream convnets
-        state_dict = model_zoo.load_url(model_urls['resnet50'])
+        state_dict = model_zoo.load_url(model_urls["resnet50"])
         if in_channels != 3:
             rgb_kernel_key = list(state_dict.keys())[0]
             rgb_kernel = state_dict[rgb_kernel_key]
@@ -320,7 +339,7 @@ def resnet101(pretrained=False, in_channels=3, **kwargs):
     model = ResNet(Bottleneck, [3, 4, 23, 3], in_channels=in_channels, **kwargs)
     if pretrained:
         # from Wang et al. 2015: Towards good practices for very deep two-stream convnets
-        state_dict = model_zoo.load_url(model_urls['resnet101'])
+        state_dict = model_zoo.load_url(model_urls["resnet101"])
         if in_channels != 3:
             rgb_kernel_key = list(state_dict.keys())[0]
             rgb_kernel = state_dict[rgb_kernel_key]
@@ -339,7 +358,7 @@ def resnet152(pretrained=False, in_channels=3, **kwargs):
     model = ResNet(Bottleneck, [3, 8, 36, 3], in_channels=in_channels, **kwargs)
     if pretrained:
         # from Wang et al. 2015: Towards good practices for very deep two-stream convnets
-        state_dict = model_zoo.load_url(model_urls['resnet152'])
+        state_dict = model_zoo.load_url(model_urls["resnet152"])
         if in_channels != 3:
             rgb_kernel_key = list(state_dict.keys())[0]
             rgb_kernel = state_dict[rgb_kernel_key]

@@ -5,7 +5,7 @@ from deepethogram.feature_extractor.models.CNN import get_cnn
 
 
 def test_get_cnn():
-    model_name = 'resnet18'
+    model_name = "resnet18"
     num_classes = 2
 
     pos = np.array([0, 300])
