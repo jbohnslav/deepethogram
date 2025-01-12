@@ -35,13 +35,13 @@ RUN curl -sLo ~/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-py39
 
 # install
 RUN conda install python=3.7 -y
-RUN pip install setuptools --upgrade && pip install --upgrade pip
+RUN pip install --upgrade pip
 
 # TODO: REFACTOR CODE SO IT'S POSSIBLE TO RUN GUI WITHOUT TORCH
 RUN conda install pytorch cpuonly -c pytorch
 
-# # needed for pandas for some reason
+# Install deepethogram with dev dependencies
 ADD . /app/deepethogram
 WORKDIR /app/deepethogram
 ENV DEG_VERSION='gui'
-RUN pip install -e .
+RUN pip install -e ".[dev]"

@@ -14,7 +14,7 @@
 * `conda env create -f environment.yml`
     * Be prepared to wait a long time!! On mechanical hard drives, this may take 5-10 minutes (or more). Interrupting here will cause installation to fail.
 * `conda activate deg`
-* `python setup.py develop`
+* `pip install -e .`
 
 ### Installing Anaconda
 For instructions on installing anaconda,
@@ -62,3 +62,9 @@ environment with `conda create --name deg python=3.8` before installation.
   * This is an issue where Shiboken and PySide2 are not playing nicely together. Please `pip uninstall pyside2` and `conda remove pyside2`. Don't manually install these packages; instead, let DeepEthogram install it for you via pip. Therefore, `pip uninstall deepethogram` and `pip install deepethogram`.
 *  `qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in ".../python3.8/site-packages/cv2/qt/plugins"  even though it was found. This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.`
    * This is an issue with a recent version of `opencv-python` not working well with Qt. Please do `pip install --force-reinstall opencv-python-headless==4.1.2.30`
+
+# Beta: Using UV
+
+* install astral's UV on your system: `pip install uv`
+* `uv venv --python 3.7`: make a virtual environment
+* `uv pip install -e .`

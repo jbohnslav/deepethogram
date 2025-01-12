@@ -33,11 +33,11 @@ RUN curl -sLo ~/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-py39
 
 # install
 RUN conda install python=3.7 -y
-RUN pip install setuptools --upgrade && pip install --upgrade pip
-RUN conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
+RUN pip install --upgrade pip
+# RUN conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
 
-# # needed for pandas for some reason
+# Install deepethogram with dev dependencies
 ADD . /app/deepethogram
 WORKDIR /app/deepethogram
 ENV DEG_VERSION='headless'
-RUN pip install -e .
+RUN pip install -e ".[dev]"

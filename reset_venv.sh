@@ -14,17 +14,9 @@ uv venv --python 3.7
 echo "Activating virtual environment..."
 source .venv/bin/activate
 
-# Install requirements first
-echo "Installing requirements..."
-uv pip install -r requirements.txt
-
-# Install pytest
-echo "Installing pytest..."
-uv pip install pytest pytest-cov
-
-# Install package in editable mode
-echo "Installing package in editable mode..."
-uv pip install -e .
+# Install package in editable mode with dev dependencies
+echo "Installing package and dependencies..."
+uv pip install -e ".[dev]"
 
 # Setup test data
 echo "Setting up test data..."

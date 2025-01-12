@@ -1,3 +1,53 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deepethogram"
+version = "0.2.0"
+description = "Temporal action detection for biology"
+readme = "README.md"
+authors = [
+    {name = "Jim Bohnslav", email = "jbohnslav@gmail.com"},
+]
+requires-python = ">=3.7,<3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "chardet<4.0",
+    "h5py",
+    "kornia>=0.5",
+    "matplotlib",
+    "numpy",
+    "omegaconf>=2",
+    "opencv-python-headless",
+    "opencv-transforms",
+    "pandas<1.4",
+    "PySide2==5.13.2",
+    "scikit-learn<1.1",
+    "scipy<1.8",
+    "tqdm",
+    "vidio",
+    "pytorch_lightning==1.6.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "pre-commit>=2.20.0,<3.0.0",
+    "pytest",
+    "pytest-cov",
+    "gdown",
+]
+
+[project.scripts]
+deepethogram = "deepethogram.gui.main:entry"
+
+[tool.setuptools]
+packages = ["deepethogram"]
+
 [tool.ruff]
 # Python version compatibility
 target-version = "py37"
@@ -33,7 +83,6 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
