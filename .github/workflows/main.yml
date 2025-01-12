@@ -13,7 +13,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-latest, macos-latest]
+        os: [ubuntu-20.04, windows-latest, macos-12]
+        include:
+          - os: macos-latest
+            macos-version: "12"
 
     steps:
     - uses: actions/checkout@v3
@@ -24,20 +27,20 @@ jobs:
         python-version: '3.7'
 
     - name: Install FFMPEG (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-20.04'
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
-
-    - name: Install FFMPEG (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install ffmpeg
 
     - name: Install FFMPEG (Windows)
       if: matrix.os == 'windows-latest'
       run: |
         choco install ffmpeg
+
+    - name: Install FFMPEG (macOS)
+      if: matrix.os == 'macos-12'
+      run: |
+        brew install ffmpeg
 
     - name: Install PySide2
       run: |
