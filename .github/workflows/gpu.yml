@@ -8,7 +8,7 @@ on:
 
 jobs:
   gpu-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v3
@@ -30,7 +30,7 @@ jobs:
 
     - name: Install PyTorch with CUDA
       run: |
-        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu102
+        pip install torch==1.11.0+cu115 torchvision==0.12.0+cu115 -f https://download.pytorch.org/whl/torch_stable.html
 
     - name: Install package and test dependencies
       run: |
