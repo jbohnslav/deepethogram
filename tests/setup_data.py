@@ -1,5 +1,7 @@
 import os
 import shutil
+import time
+import platform
 
 # from projects import get_records_from_datadir, fix_config_paths
 from deepethogram import projects
@@ -26,7 +28,27 @@ def change_to_deepethogram_directory():
 
 
 def clean_test_data():
-    if os.path.isdir(project_path):
+    if not os.path.isdir(project_path):
+        return
+
+    # On Windows, we need to handle file permission errors
+    if platform.system() == 'Windows':
+        max_retries = 3
+        for i in range(max_retries):
+            try:
+                shutil.rmtree(project_path)
+                break
+            except PermissionError:
+                if i < max_retries - 1:
+                    time.sleep(1)  # Wait a bit for file handles to be released
+                    continue
+                else:
+                    # If we still can't delete after retries, try to ignore errors
+                    try:
+                        shutil.rmtree(project_path, ignore_errors=True)
+                    except:
+                        pass  # If we still can't delete, just continue
+    else:
         shutil.rmtree(project_path)
 
 
