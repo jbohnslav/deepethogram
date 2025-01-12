@@ -16,3 +16,4 @@ vidio
 pytorch_lightning==1.6.5
 ruff>=0.1.0
 pre-commit>=2.20.0,<3.0.0
+setuptools<68.0.0
