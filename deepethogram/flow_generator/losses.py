@@ -1,3 +1,10 @@
+"""Loss functions for optical flow estimation and motion prediction.
+
+This module provides various loss functions used in optical flow estimation and motion prediction,
+including SSIM loss, gradient-based losses, and smoothness terms. The main class MotionNetLoss
+combines these components for training motion prediction networks.
+"""
+
 import logging
 from math import exp
 
@@ -8,22 +15,42 @@ import torch.nn.functional as F
 log = logging.getLogger(__name__)
 
 
-# SSIM from this repo: https://github.com/Po-Hsun-Su/pytorch-ssim/blob/master/pytorch_ssim/__init__.py
 def gaussian(window_size, sigma):
+    """Create a 1D Gaussian window.
+
+    Implementation based on: https://github.com/Po-Hsun-Su/pytorch-ssim
+    """
     gauss = torch.Tensor([exp(-((x - window_size // 2) ** 2) / float(2 * sigma**2)) for x in range(window_size)])
     return gauss / gauss.sum()
 
 
-# SSIM from this repo: https://github.com/Po-Hsun-Su/pytorch-ssim/blob/master/pytorch_ssim/__init__.py
 def create_window(window_size, channel):
+    """Create a 2D Gaussian window for SSIM calculation.
+
+    Implementation based on: https://github.com/Po-Hsun-Su/pytorch-ssim
+    """
     _1D_window = gaussian(window_size, 1.5).unsqueeze(1)
     _2D_window = _1D_window.mm(_1D_window.t()).float().unsqueeze(0).unsqueeze(0)
     window = torch.Tensor((_2D_window.expand(channel, 1, window_size, window_size).contiguous()))
     return window
 
 
-# SSIM from this repo: https://github.com/Po-Hsun-Su/pytorch-ssim/blob/master/pytorch_ssim/__init__.py
 def _ssim(img1, img2, window, window_size, channel, size_average=True):
+    """Calculate SSIM between two images.
+
+    Implementation based on: https://github.com/Po-Hsun-Su/pytorch-ssim
+
+    Args:
+        img1: First image tensor
+        img2: Second image tensor
+        window: Gaussian window for SSIM calculation
+        window_size: Size of the Gaussian window
+        channel: Number of channels in the images
+        size_average: If True, average SSIM across spatial dimensions
+
+    Returns:
+        Tensor containing SSIM value(s)
+    """
     mu1 = F.conv2d(img1, window, padding=window_size // 2, groups=channel)
     mu2 = F.conv2d(img2, window, padding=window_size // 2, groups=channel)
 
@@ -47,6 +74,14 @@ def _ssim(img1, img2, window, window_size, channel, size_average=True):
 
 
 class SSIMLoss(torch.nn.Module):
+    """SSIM loss module for comparing structural similarity between images.
+
+    Args:
+        window_size: Size of the Gaussian window for SSIM calculation
+        size_average: If True, average loss across spatial dimensions
+        denominator: Scaling factor for the final loss value
+    """
+
     def __init__(self, window_size=11, size_average=True, denominator=2):
         super(SSIMLoss, self).__init__()
         self.window_size = window_size
@@ -55,7 +90,6 @@ class SSIMLoss(torch.nn.Module):
         self.window = create_window(window_size, self.channel)
         self.denominator = denominator
 
-    # @profile
     def forward(self, img1, img2):
         (_, channel, _, _) = img1.size()
 
@@ -77,27 +111,42 @@ class SSIMLoss(torch.nn.Module):
 
 # PyTorch is NCHW
 def gradient_x(img, mode="constant"):
-    # use indexing to get horizontal gradients, which chops off one column
+    """Calculate horizontal gradients of an image.
+
+    Args:
+        img: Input image tensor in NCHW format
+        mode: Padding mode for boundary handling
+
+    Returns:
+        Tensor containing horizontal gradients
+    """
     gx = img[:, :, :, :-1] - img[:, :, :, 1:]
-    # pad the results with one zeros column on the right
     return F.pad(gx, (0, 1, 0, 0), mode=mode)
 
 
 def gradient_y(img, mode="constant"):
-    # use indexing to get vertical gradients, which chops off one row
+    """Calculate vertical gradients of an image.
+
+    Args:
+        img: Input image tensor in NCHW format
+        mode: Padding mode for boundary handling
+
+    Returns:
+        Tensor containing vertical gradients
+    """
     gy = img[:, :, :-1, :] - img[:, :, 1:, :]
-    # pad the result with one zeros column on bottom
     return F.pad(gy, (0, 0, 0, 1), mode=mode)
 
 
 def get_gradients(img):
+    """Calculate both horizontal and vertical gradients of an image."""
     gx = gradient_x(img)
     gy = gradient_y(img)
     return gx + gy
 
 
-# simpler version of ssim loss, uses average pooling instead of guassian kernels
 def SSIM_simple(x, y):
+    """Calculate a simplified version of SSIM using average pooling instead of Gaussian kernels."""
     C1 = 0.01**2
     C2 = 0.03**2
 
@@ -116,8 +165,8 @@ def SSIM_simple(x, y):
     return torch.clamp((1 - SSIM_full), min=0, max=1)
 
 
-# @profile
 def total_generalized_variation(image, flow):
+    """Calculate total generalized variation between image and flow fields."""
     flowx = flow[:, 0:1, ...]
     flowy = flow[:, 1:, ...]
 
@@ -140,6 +189,7 @@ def total_generalized_variation(image, flow):
 
 
 def smoothness_firstorder(image, flow):
+    """Calculate first-order smoothness term weighted by image gradients."""
     flow_gradients_x = gradient_x(flow)
     flow_gradients_y = gradient_y(flow)
 
@@ -159,14 +209,32 @@ def smoothness_firstorder(image, flow):
 
 
 def charbonnier(tensor, alpha=0.4, eps=1e-4):
+    """Apply Charbonnier penalty function."""
     return (tensor * tensor + eps * eps) ** alpha
 
 
 def charbonnier_smoothness(flows, alpha=0.3, eps=1e-7):
+    """Calculate smoothness term using Charbonnier penalty on flow gradients."""
     return charbonnier(gradient_x(flows), alpha=alpha, eps=eps) + charbonnier(gradient_y(flows), alpha=alpha, eps=eps)
 
 
 class MotionNetLoss(torch.nn.Module):
+    """Combined loss function for motion prediction networks.
+
+    Combines reconstruction loss (L1 + SSIM), smoothness terms, and optional flow sparsity.
+    Supports multi-scale predictions with different weights at each scale.
+
+    Args:
+        regularization_criterion: Loss function for model weight regularization
+        is_multiscale: Whether to compute loss at multiple scales
+        smooth_weights: List of weights for smoothness terms at each scale
+        highres: Whether to add an additional high-resolution scale
+        calculate_ssim_full: Whether to compute SSIM at full resolution
+        flow_sparsity: Whether to add sparsity penalty on flow predictions
+        sparsity_weight: Weight for the flow sparsity term
+        smooth_weight_multiplier: Global multiplier for smoothness weights
+    """
+
     def __init__(
         self,
         regularization_criterion,
@@ -195,6 +263,18 @@ class MotionNetLoss(torch.nn.Module):
         self.regularization_criterion = regularization_criterion
 
     def forward(self, originals, images, reconstructed, outputs, model: torch.nn.Module):
+        """Compute the combined loss.
+
+        Args:
+            originals: Original input images
+            images: Target images at multiple scales
+            reconstructed: Reconstructed images at multiple scales
+            outputs: Flow predictions at multiple scales
+            model: The network model for regularization
+
+        Returns:
+            tuple: (total_loss, dict of individual loss components)
+        """
         if type(images) is not tuple:
             images = images
         if type(reconstructed) is not tuple:
@@ -236,8 +316,6 @@ class MotionNetLoss(torch.nn.Module):
         if self.flow_sparsity:
             # use the same smoothness loss
             flow_l1s = [torch.mean(torch.abs(i), dim=[1, 2, 3]) * self.sparsity_weight for i in outputs]
-            # flow_l1s = [torch.mean(torch.abs(i), dim=[1, 2, 3]) * weight*self.sparsity_weight for
-            #             i, weight in zip(outputs, weights)]
 
         # Note: adding a full-size SSIM for metrics only!
         if self.calculate_ssim_full:
@@ -245,24 +323,15 @@ class MotionNetLoss(torch.nn.Module):
                 N, C, H, W = originals.shape
                 num_images = int(C / 3) - 1
                 recon_h, recon_w = reconstructed[0].size(-2), reconstructed[0].size(-1)
-                # print(originals.shape)
-                # print(reconstructed[0].shape)
-                # print(images[0].shape)
+
                 if H != recon_h or W != recon_w:
-                    # t0 = originals[:, 0:3, ...]
                     t0 = originals[:, : num_images * 3, ...].contiguous().view(N * num_images, 3, H, W)
-                    # print('t0: {}'.format(t0.shape))
                     recon = reconstructed[0]
-                    # print('recon: {}'.format(recon.shape))
                     recon_fullsize = F.interpolate(recon, size=(H, W), mode="bilinear", align_corners=False)
-                    # t0 = originals[:, :num_images * 3, ...].contiguous().view(N * num_images, 3, H, W)
-                    # print('t0: ', t0.shape)
-                    # recon_fullsize = F.interpolate(reconstructed[0], size=(H, W), mode='bilinear', align_corners=False)
                 else:
                     t0 = images[0]
                     recon_fullsize = reconstructed[0]
                 SSIM_full = self.ssim(t0, recon_fullsize)
-                # print('SSIM_FULL: ', SSIM_full.shape)
                 SSIM_full_mean = SSIM_full.mean(dim=[1, 2, 3])
         else:
             SSIM_full_mean = torch.from_numpy(np.array([np.nan]))
@@ -291,9 +360,8 @@ class MotionNetLoss(torch.nn.Module):
         )
 
         if loss != loss:
-            import pdb
-
-            pdb.set_trace()
+            msg = "Loss is NaN, re-run training with pytorch debug mode enabled"
+            raise ValueError(msg)
 
         if self.flow_sparsity:
             # sum across scales

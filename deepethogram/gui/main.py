@@ -6,20 +6,19 @@ import traceback
 from functools import partial
 from typing import Union
 
-# import hydra
 import numpy as np
 import pandas as pd
-from PySide2 import QtCore, QtWidgets, QtGui
-from PySide2.QtCore import Slot
-from PySide2.QtWidgets import QMainWindow, QFileDialog, QInputDialog
 from omegaconf import DictConfig, OmegaConf
+from PySide2 import QtCore, QtGui, QtWidgets
+from PySide2.QtCore import Slot
+from PySide2.QtWidgets import QFileDialog, QInputDialog, QMainWindow
 
-from deepethogram import projects, utils, configuration
+from deepethogram import configuration, projects, utils
 from deepethogram.file_io import VideoReader
-from deepethogram.postprocessing import get_postprocessor_from_cfg
-from deepethogram.gui.custom_widgets import UnclickButtonOnPipeCompletion, SubprocessChainer
+from deepethogram.gui.custom_widgets import SubprocessChainer, UnclickButtonOnPipeCompletion
 from deepethogram.gui.mainwindow import Ui_MainWindow
-from deepethogram.gui.menus_and_popups import CreateProject, simple_popup_question, ShouldRunInference, overwrite_or_not
+from deepethogram.gui.menus_and_popups import CreateProject, ShouldRunInference, overwrite_or_not, simple_popup_question
+from deepethogram.postprocessing import get_postprocessor_from_cfg
 
 log = logging.getLogger(__name__)
 
@@ -42,10 +41,8 @@ class MainWindow(QMainWindow):
         self.ui.setupUi(self)
         self.setWindowTitle("DeepEthogram")
 
-        # print(dir(self.ui.actionOpen))
         self.ui.videoBox.setLayout(self.ui.formLayout)
         self.ui.actionOpen.triggered.connect(self.open_avi_browser)
-        # self.ui.plainTextEdit.textChanged.connect(self.text_change)
         self.ui.actionAdd.triggered.connect(self.add_class)
         self.ui.actionRemove.triggered.connect(self.remove_class)
         self.ui.actionNew_Project.triggered.connect(self._new_project)
@@ -127,20 +124,16 @@ class MainWindow(QMainWindow):
         if os.path.isfile(os.path.join(initialized_directory, "project_config.yaml")):
             self.initialize_project(initialized_directory)
 
-        # log.info('children: {}'.format(self.children()))
         self.show()
 
     def user_did_something(self):
         if self.timer.isActive():
             pass
         else:
-            # else, the user was already idle
-            # will have a timestamp by the logfile
             log.info("User restarted labeling")
         self.timer.start()
 
     def keyPressEvent(self, event: QtGui.QKeyEvent):
-        # print('key pressed')
         self.user_did_something()
         super().keyPressEvent(event)
 
@@ -153,11 +146,9 @@ class MainWindow(QMainWindow):
         self.timer.stop()
 
     def respond_to_keypress(self, keynum: int):
-        # print('key pressed')
         if self.ui.labels.label is not None:
             self.ui.labels.label.toggle_behavior(keynum)
         else:
-            # print('none')
             return
 
     def has_trained(self, model_type: str) -> bool:
@@ -175,7 +166,6 @@ class MainWindow(QMainWindow):
         number_finalized_labels = projects.get_number_finalized_labels(self.cfg)
         log.info("Number finalized labels: {}".format(number_finalized_labels))
         if self.has_trained("flow_generator"):
-            # self.ui.flow_inference.setEnabled(True)
             self.ui.flow_train.setEnabled(True)
         if self.has_trained("feature_extractor") or number_finalized_labels > 1:
             self.ui.featureextractor_infer.setEnabled(True)
@@ -209,14 +199,10 @@ class MainWindow(QMainWindow):
     def initialize_video(self, videofile: Union[str, os.PathLike]):
         if hasattr(self, "vid"):
             self.vid.close()
-            # if hasattr(self.vid, 'cap'):
-            #     self.vid.cap.release()
         self.videofile = videofile
         try:
             self.ui.videoPlayer.videoView.initialize_video(videofile)
-            # for convenience extract the videoplayer object out of the videoView
             self.vid = self.ui.videoPlayer.videoView.vid
-            # for convenience
             self.n_timepoints = len(self.ui.videoPlayer.videoView.vid)
 
             log.debug("is deg: {}".format(projects.is_deg_file(videofile)))
@@ -272,7 +258,8 @@ class MainWindow(QMainWindow):
                 duration = nframes / fps
                 fps = "{:.2f}".format(fps)
                 duration = "{:.2f}".format(duration)
-            except:
+            except Exception as e:
+                log.exception("Error getting video info: {}".format(e))
                 fps = "N/A"
                 duration = "N/A"
         num_labeled = self.ui.labels.label.changed.sum()
@@ -301,9 +288,6 @@ class MainWindow(QMainWindow):
             array=label_array,
             colormap=self.cfg.cmap,
         )
-        # we never want to connect signals to slots more than once
-        log.debug("initialized label: {}".format(self.initialized_label))
-        # if not self.initialized_label:
         self.ui.videoPlayer.videoView.frameNum.connect(self.ui.labels.label.change_view_x)
         self.ui.labels.label.saved.connect(self.update_saved)
         self.initialized_label = True
@@ -312,7 +296,6 @@ class MainWindow(QMainWindow):
     def initialize_prediction(
         self, prediction_array: np.ndarray = None, debug: bool = False, opacity: np.ndarray = None
     ):
-        # do all the setup for labels and predictions
         self.ui.predictions.initialize(
             behaviors=OmegaConf.to_container(self.cfg.project.class_names),
             n_timepoints=self.n_timepoints,
@@ -322,9 +305,7 @@ class MainWindow(QMainWindow):
             opacity=opacity,
             colormap=self.cfg.cmap,
         )
-        # if not self.initialized_prediction:
         self.ui.videoPlayer.videoView.frameNum.connect(self.ui.predictions.label.change_view_x)
-        # we don't want to be able to manually edit the predictions
         self.ui.predictions.buttons.fix()
         self.initialized_prediction = True
         self.update()
@@ -340,7 +321,6 @@ class MainWindow(QMainWindow):
 
     def flow_train(self):
         if self.ui.flow_train.isChecked():
-            # self.ui.flow_inference.setEnabled(False)
             self.ui.featureextractor_train.setEnabled(False)
             self.ui.featureextractor_infer.setEnabled(False)
             self.ui.sequence_infer.setEnabled(False)
@@ -358,7 +338,6 @@ class MainWindow(QMainWindow):
                 log.info("Training interrupted.")
             else:
                 log.info("Training finished. If you see error messages above, training did not complete successfully.")
-            # self.train_thread.terminate()
             del self.training_pipe
             self.listener.quit()
             self.listener.wait()
@@ -371,7 +350,6 @@ class MainWindow(QMainWindow):
     def featureextractor_train(self):
         if self.ui.featureextractor_train.isChecked():
             self.ui.flow_train.setEnabled(False)
-            # self.ui.flow_inference.setEnabled(False)
             self.ui.featureextractor_infer.setEnabled(False)
             self.ui.sequence_infer.setEnabled(False)
             self.ui.sequence_train.setEnabled(False)
@@ -382,14 +360,12 @@ class MainWindow(QMainWindow):
                 "deepethogram.feature_extractor.train",
                 "project.path={}".format(self.cfg.project.path),
             ]
-            print(self.get_selected_models())
             weights = self.get_selected_models()["feature_extractor"]
-            # print(weights)
             if weights is None:
                 raise ValueError(pretrained_models_error)
             if os.path.isfile(weights):
                 args += ["feature_extractor.weights={}".format(weights)]
-            flow_weights = self.get_selected_models()["flow_generator"]  # ('flow_generator')
+            flow_weights = self.get_selected_models()["flow_generator"]
             assert flow_weights is not None
             args += ["flow_generator.weights={}".format(flow_weights)]
             log.info("feature extractor train called with args: {}".format(args))
@@ -408,12 +384,8 @@ class MainWindow(QMainWindow):
             self.listener.wait()
             del self.listener
             log.info("~" * 100)
-            # self.ui.flow_train.setEnabled(True)
             self.project_loaded_buttons()
             self.get_trained_models()
-            # self.listener.stop()
-
-            # self.ui.featureextractor_infer.setEnabled(True)
 
     def generate_featureextractor_inference_args(self):
         records = projects.get_records_from_datadir(self.data_path)
@@ -426,11 +398,10 @@ class MainWindow(QMainWindow):
         if not ret:
             return
         should_infer = form.get_outputs()
-        all_false = np.all(np.array(should_infer) == False)
+        all_false = np.all(np.array(should_infer) == False)  # noqa: E712
         if all_false:
             return
         self.ui.flow_train.setEnabled(False)
-        # self.ui.flow_inference.setEnabled(False)
         self.ui.featureextractor_train.setEnabled(False)
         weights = self.get_selected_models()["feature_extractor"]
         if weights is not None and os.path.isfile(weights):
@@ -489,16 +460,12 @@ class MainWindow(QMainWindow):
                 self.outputfile = None
             self.import_outputfile(self.outputfile)
 
-            # self.ui.featureextractor_infer.setEnabled(True)
-
     def sequence_train(self):
         if self.ui.sequence_train.isChecked():
             self.ui.flow_train.setEnabled(False)
-            # self.ui.flow_inference.setEnabled(False)
             self.ui.featureextractor_train.setEnabled(False)
             self.ui.featureextractor_infer.setEnabled(False)
             self.ui.sequence_infer.setEnabled(False)
-            # self.ui.sequence_train.setEnabled(False)
             args = ["python", "-m", "deepethogram.sequence.train", "project.path={}".format(self.cfg.project.path)]
             weights = self.get_selected_models()["sequence"]
             if weights is not None and os.path.isfile(weights):
@@ -507,7 +474,6 @@ class MainWindow(QMainWindow):
             self.listener = UnclickButtonOnPipeCompletion(self.ui.sequence_train, self.training_pipe)
             self.listener.start()
         else:
-            # self.train_thread.terminate()
             if self.training_pipe.poll() is None:
                 self.training_pipe.terminate()
                 self.training_pipe.wait()
@@ -519,10 +485,8 @@ class MainWindow(QMainWindow):
             self.listener.wait()
             del self.listener
             log.info("~" * 100)
-            # self.ui.flow_train.setEnabled(True)
             self.project_loaded_buttons()
             self.get_trained_models()
-            # self.ui.featureextractor_infer.setEnabled(True)
 
     def generate_sequence_inference_args(self):
         records = projects.get_records_from_datadir(self.data_path)
@@ -532,7 +496,6 @@ class MainWindow(QMainWindow):
         if sequence_weights is not None and os.path.isfile(sequence_weights):
             run_files = utils.get_run_files_from_weights(sequence_weights)
             sequence_config = OmegaConf.load(run_files["config_file"])
-            # sequence_config = utils.load_yaml(os.path.join(os.path.dirname(sequence_weights), 'config.yaml'))
             latent_name = sequence_config["sequence"]["latent_name"]
             if latent_name is None:
                 latent_name = sequence_config["feature_extractor"]["arch"]
@@ -543,7 +506,6 @@ class MainWindow(QMainWindow):
             raise ValueError("must specify a valid weight file to run sequence inference!")
 
         log.debug("latent name: {}".format(latent_name))
-        # sequence_name, _ = utils.get_latest_model_and_name(self.project_config['project']['path'], 'sequence')
 
         # GOAL: MAKE ONLY FILES WITH LATENT_NAME PRESENT APPEAR ON LIST
         # SHOULD BE UNCHECKED IF THERE IS ALREADY THE "OUTPUT NAME" IN FILE
@@ -560,7 +522,7 @@ class MainWindow(QMainWindow):
         if not ret:
             return
         should_infer = form.get_outputs()
-        all_false = np.all(np.array(should_infer) == False)
+        all_false = np.all(np.array(should_infer) == False)  # noqa: E712
         if all_false:
             return
         weights = self.get_selected_models()["sequence"]
@@ -607,7 +569,6 @@ class MainWindow(QMainWindow):
             self.listener.wait()
             del self.listener
             self.project_loaded_buttons()
-            # del self.listener
             record = projects.get_record_from_subdir(os.path.dirname(self.videofile))
             if record["output"] is not None:
                 self.outputfile = record["output"]
@@ -624,18 +585,13 @@ class MainWindow(QMainWindow):
                 log.error("Erroneous arguments to fe or seq: {}, {}".format(fe_args, sequence_args))
 
             calls = [fe_args, sequence_args]
-
-            # calls = [['ping', 'localhost', '-n', '10'], ['dir']]
             self.listener = SubprocessChainer(calls)
             self.listener.start()
-            # self.inference_thread = utils.chained_subprocess_calls(calls)
         else:
             self.listener.stop()
             self.listener.wait()
             del self.listener
             self.project_loaded_buttons()
-            # self.inference_thread
-            # print(should_be_checked)
 
     def run_overnight(self):
         if self.ui.actionOvernight.isChecked():
@@ -651,17 +607,13 @@ class MainWindow(QMainWindow):
                 log.error("Erroneous seq arguments in run overnight: {}".format(sequence_args))
             calls = [flow_args, fe_args, sequence_args]
 
-            # calls = [['ping', 'localhost', '-n', '10'], ['dir']]
             self.listener = SubprocessChainer(calls)
             self.listener.start()
-            # self.inference_thread = utils.chained_subprocess_calls(calls)
         else:
             self.listener.stop()
             self.listener.wait()
             del self.listener
             self.project_loaded_buttons()
-            # self.inference_thread
-            # print(should_be_checked)
 
     def _new_project(self):
         form = CreateProject()
@@ -688,7 +640,6 @@ class MainWindow(QMainWindow):
         behaviors.insert(0, "background")
 
         project_dict = projects.initialize_project(form.project_directory, project_name, behaviors, labeler)
-
         self.initialize_project(project_dict["project"]["path"])
 
     def add_class(self):
@@ -702,7 +653,6 @@ class MainWindow(QMainWindow):
         if text in self.cfg.project.class_names:
             log.warning("This behavior is already in the list...")
             return
-            # self.add_class()
         text = text.replace(" ", "_")
         log.info("new behavior name: {}".format(text))
 
@@ -720,10 +670,6 @@ class MainWindow(QMainWindow):
         behaviors = OmegaConf.to_container(self.cfg.project.class_names)
         behaviors.append(text)
         self.cfg.project.class_names = behaviors
-        # self.project_config['project']['class_names'].append(text)
-        # self.project_config = projects.load_config(
-        #     os.path.join(self.project_config['project']['path'], 'project_config.yaml'))
-        # behaviors = self.project_config['project']['class_names']
 
         self.import_labelfile(self.labelfile)
         self.thresholds = None
@@ -759,10 +705,6 @@ class MainWindow(QMainWindow):
         behaviors.remove(text)
         self.cfg.project.class_names = behaviors
 
-        # self.project_config = projects.load_config(os.path.join(self.project_config['project']['path'],
-        #                                                         'project_config.yaml'))
-        # self.project_config['class_names'].remove(text)
-        # self.project_config['class_names'].append(text)
         self.outputfile = None
         self.import_labelfile(self.labelfile)
         self.import_outputfile(self.outputfile)
@@ -781,12 +723,6 @@ class MainWindow(QMainWindow):
 
         if not self.saved:
             self.save()
-            # if simple_popup_question(
-            #         self, 'You have unsaved changes. You must save before labels can be finalized. '
-            #         'Do you want to save?'):
-            #     self.save()
-            # else:
-            #     return
         log.info("finalizing labels for file {}".format(self.videofile))
         fname, _ = os.path.splitext(self.videofile)
         label_fname = fname + "_labels.csv"
@@ -813,7 +749,6 @@ class MainWindow(QMainWindow):
 
     def save(self):
         if self.saved:
-            # do nothing
             return
         log.info("saving...")
         df = self._make_dataframe()
@@ -821,7 +756,6 @@ class MainWindow(QMainWindow):
         label_fname = fname + "_labels.csv"
         df.to_csv(label_fname)
         projects.add_file_to_subdir(label_fname, os.path.dirname(self.videofile))
-        # self.save_to_hdf5()
         self.saved = True
 
     def import_labelfile(self, labelfile: Union[str, os.PathLike]):
@@ -844,7 +778,7 @@ class MainWindow(QMainWindow):
             self, "Click on labels to import", data_dir, filestring, options=options
         )
         if projects.is_deg_file(labelfile):
-            raise ValueError("Don" "t use this to open labels: use to import non-DeepEthogram labels")
+            raise ValueError("Dont use this to open labels: use to import non-DeepEthogram labels")
         filestring = "VideoReader files (*.h5 *.avi *.mp4)"
         videofile, _ = QFileDialog.getOpenFileName(
             self, "Click on corresponding video file", data_dir, filestring, options=options
@@ -891,10 +825,6 @@ class MainWindow(QMainWindow):
             log.warning("Probabilities > 1 found, clamping...")
             probabilities = probabilities.clip(min=0, max=1.0)
 
-        # import pdb
-        # pdb.set_trace()x
-        # print('probabilities min: {}, max: {}'.format(probabilities.min(), probabilities.max()))
-
         self.initialize_prediction(prediction_array=probabilities, opacity=opacity)
         self.ui.importPredictions.setEnabled(True)
         self.ui.exportPredictions.setEnabled(True)
@@ -930,9 +860,7 @@ class MainWindow(QMainWindow):
             return
         if self.latent_name != new_text:
             log.debug("not equal found: {}, {}".format(self.latent_name, new_text))
-            #
             self.import_outputfile(self.outputfile, latent_name=new_text)
-        # log.warning('prediction import not implemented')
 
     def import_predictions_as_labels(self):
         if not hasattr(self, "estimated_labels"):
@@ -951,7 +879,6 @@ class MainWindow(QMainWindow):
         else:
             rows_to_change = np.arange(0, current_label.shape[0])
 
-        # print(current_label[rows_to_change, :])
         current_label[rows_to_change, :] = current_predictions[rows_to_change, :]
         changed[:] = 1
         self.ui.labels.label.array = current_label
@@ -960,7 +887,6 @@ class MainWindow(QMainWindow):
         self.saved = False
         self.save()
         self.user_did_something()
-        # print(changed)
 
     def open_avi_browser(self):
         if self.data_path is not None:
@@ -1001,10 +927,6 @@ class MainWindow(QMainWindow):
 
         for filename in filenames:
             self.initialize_video(filename)
-        # if len(filename) == 0 or not os.path.isfile(filename):
-        #     raise ValueError('Could not open file: {}'.format(filename))
-        #
-        # self.initialize_video(filename)
 
     def initialize_project(self, directory: Union[str, os.PathLike]):
         if len(directory) == 0:
@@ -1015,19 +937,6 @@ class MainWindow(QMainWindow):
             log.error("something wrong with loading yaml file: {}".format(filename))
             return
 
-        # project_dict = projects.load_config(filename)
-        # if not projects.is_config_dict(project_dict):
-        #     raise ValueError('Not a properly formatted configuration dictionary! Look at defaults/config.yaml: dict: {}'
-        #                      'filename: {}'.format(project_dict, filename))
-        # self.project_config = project_dict
-        # # self.project_config = projects.convert_config_paths_to_absolute(self.project_config)
-
-        # # for convenience
-        # self.data_path = os.path.join(self.project_config['project']['path'],
-        #                               self.project_config['project']['data_path'])
-        # self.model_path = os.path.join(self.project_config['project']['path'],
-        #                                self.project_config['project']['model_path'])
-
         # overwrite cfg passed at command line now that we know the project path. still includes command line arguments
         self.cfg = configuration.make_config(directory, ["config", "gui", "postprocessor"], run_type="gui", model=None)
         log.info("cwd: {}".format(os.getcwd()))
@@ -1036,13 +945,9 @@ class MainWindow(QMainWindow):
         self.cfg = projects.setup_run(self.cfg, raise_error_if_pretrained_missing=False)
         log.info("loaded project configuration: {}".format(OmegaConf.to_yaml(self.cfg)))
         log.info("cwd: {}".format(os.getcwd()))
-        # for convenience
         self.data_path = self.cfg.project.data_path
         self.model_path = self.cfg.project.model_path
 
-        # self.project_config['project']['class_names'] = self.project_config['class_names']
-        # load up the last alphabetic record, which if user includes dates in filename, will be the most recent
-        # data_path = os.path.join(self.project_config['project']['path'], self.project_config['project']['data_path'])
         records = projects.get_records_from_datadir(self.data_path)
         self.project_loaded_buttons()
         if len(records) == 0:
@@ -1055,23 +960,16 @@ class MainWindow(QMainWindow):
             self.initialize_video(last_record["rgb"])
         if last_record["label"] is not None:
             self.import_labelfile(last_record["label"])
-        # if last_record['output'] is not None:
-        #     self.import_outputfile(last_record['output'])
 
         self.get_trained_models()
 
     def load_project(self):
-        # options = QFileDialog.Options()
-
         directory = QFileDialog.getExistingDirectory(
-            self, "Open your deepethogram directory (containing project " "config)"
+            self, "Open your deepethogram directory (containing project config)"
         )
         self.initialize_project(directory)
 
-        # pprint.pprint(self.trained_model_dict)
-
     def get_default_archs(self):
-        # TODO: replace this default logic with hydra 1.0
         if "preset" in self.cfg:
             preset = self.cfg.preset
         else:
@@ -1135,8 +1033,6 @@ class MainWindow(QMainWindow):
                 self.ui.sequenceSelector.addItem(key)
             self.ui.sequenceSelector.setCurrentIndex(len(models) - 1)
 
-        # print(self.get_selected_models())
-
     def get_selected_models(self, model_type: str = None):
         flow_model = None
         fe_model = None
@@ -1187,8 +1083,6 @@ class MainWindow(QMainWindow):
         # negative example
         null_row = np.ones((n_behaviors,)) * -1
         label[np.logical_not(changed), :] = null_row
-        # print(array.shape, len(self.label.behaviors))
-        # print(self.label.behaviors)
         df = pd.DataFrame(data=label, columns=self.cfg.project.class_names)
         return df
 
@@ -1228,7 +1122,6 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def update_saved(self, has_been_saved: bool):
-        # print('label change signal heard')
         self.saved = has_been_saved
 
 
@@ -1243,7 +1136,6 @@ def set_style(app):
     darktheme.setColor(QtGui.QPalette.Button, QtGui.QColor(45, 45, 45))
     darktheme.setColor(QtGui.QPalette.ButtonText, QtGui.QColor(222, 222, 222))
     darktheme.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(222, 222, 222))
-    # darktheme.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(0, 222, 0))
     darktheme.setColor(QtGui.QPalette.ToolTipBase, QtGui.QColor(222, 222, 222))
     darktheme.setColor(QtGui.QPalette.Highlight, QtGui.QColor(45, 45, 45))
     darktheme.setColor(QtGui.QPalette.Disabled, QtGui.QPalette.Light, QtGui.QColor(60, 60, 60))
@@ -1252,13 +1144,6 @@ def set_style(app):
     darktheme.setColor(QtGui.QPalette.Disabled, QtGui.QPalette.Text, QtGui.QColor(122, 118, 113))
     darktheme.setColor(QtGui.QPalette.Disabled, QtGui.QPalette.WindowText, QtGui.QColor(122, 118, 113))
     darktheme.setColor(QtGui.QPalette.Disabled, QtGui.QPalette.Base, QtGui.QColor(32, 32, 32))
-
-    # darktheme.setColor(QtGui.QPalette.Highlight, QtGui.QColor(0, 255, 0))
-    # darktheme.setColor(QtGui.QPalette.
-    # darktheme.setColor(QtGui.QPalette.Background, QtGui.QColor(255,0,0))
-    # print(dir(QtGui.QPalette))
-    # Define the pallet color
-    # Then set the pallet color
 
     app.setPalette(darktheme)
     return app
@@ -1283,8 +1168,6 @@ def setup_gui_cfg():
     except Exception:
         pass
 
-    # OmegaConf.set_struct(cfg, False)
-
     log.info("CWD: {}".format(os.getcwd()))
     log.info("Configuration used: {}".format(OmegaConf.to_yaml(cfg)))
     return cfg
@@ -1303,9 +1186,6 @@ def run() -> None:
     sys.exit(app.exec_())
 
 
-# this function is required to allow automatic detection of the module name when running
-# from a binary script.
-# it should be called from the executable script and not the hydra.main() function directly.
 def entry() -> None:
     run()
 

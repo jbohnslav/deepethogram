@@ -1,4 +1,4 @@
-""" Re-implementation of the TinyMotionNet architecture
+"""Re-implementation of the TinyMotionNet architecture
 
 References
 -------
@@ -23,10 +23,12 @@ limitations under the License.
 Changes:  changed filter sizes, number of input images, number of layers, added cropping or interpolation for
 non-power-of-two shaped images, and multiplication... only kept their naming convention and overall structure
 """
-import logging
-# import warnings
 
-from .components import *
+import logging
+
+import torch.nn as nn
+
+from .components import CropConcat, Interpolate, conv, deconv, i_conv, predict_flow
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +48,6 @@ class TinyMotionNet(nn.Module):
         else:
             self.output_channels = int(output_channels)
 
-        # self.out_channels = int((num_images-1)*2)
         self.batchNorm = batchNorm
         log.debug("ignoring flow div value of {}: setting to 1 instead".format(flow_div))
         self.flow_div = 1
@@ -94,15 +95,4 @@ class TinyMotionNet(nn.Module):
         out_interconv2 = self.xconv2(concat2)
         flow2 = self.predict_flow2(out_interconv2) * self.flow_div
 
-        # flow1 = F.interpolate(flow2, (H, W), mode='bilinear', align_corners=False) * 2
-        # flow2*=self.flow_div
-        # flow3*=self.flow_div
-        # flow4*=self.flow_div
-        # import pdb
-        # pdb.set_trace()
-
-        # if self.training:
-        #     return flow1, flow2, flow3, flow4
-        # else:
-        #     return flow1,
         return flow2, flow3, flow4

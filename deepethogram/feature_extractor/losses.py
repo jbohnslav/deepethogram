@@ -21,8 +21,6 @@ class NLLLossCNN(nn.Module):
         self.alpha = alpha
         self.should_smooth = self.alpha != 0.0
 
-        # self.nll = nn.NLLLoss(weight=weight, reduction='none')
-
         self.log_softmax = nn.LogSoftmax(dim=1)
         self.ignore_index = ignore_index
         if weight is None:
@@ -39,7 +37,6 @@ class NLLLossCNN(nn.Module):
         assert outputs.shape == label.shape, "Outputs shape must match labels! {}, {}".format(
             outputs.shape, label.shape
         )
-        # N, K, T = outputs.shape
         label = label.float()
 
         # figure out which index to ignore before smoothing
@@ -102,7 +99,6 @@ class BinaryFocalLoss(nn.Module):
         self.bcewithlogitsloss = nn.BCEWithLogitsLoss(weight=None, reduction="none", pos_weight=pos_weight)
         self.ignore_index = ignore_index
         self.gamma = gamma
-        # self.alpha = alpha
         self.eps = 1e-7
         # if label_smoothing is 0.1, then the "correct" answer is 0.1
         # multiplying by 2 ensures this with the logic below
@@ -155,26 +151,6 @@ class BinaryFocalLoss(nn.Module):
         # https://kornia.readthedocs.io/en/latest/_modules/kornia/losses/focal.html
 
         weight = torch.pow(1 - prob, self.gamma) * label * mask + torch.pow(prob, self.gamma) * (1 - label) * mask
-
-        # NOTE: should not need the absolute here. however, getting this error:
-        # RuntimeError: Function 'PowBackward0' returned nan values in its 0th output.
-
-        # if torch.sum(prob < 0) > 0 or torch.sum( torch.abs(1-prob) < 0 ) > 0:
-        #     print('negative numbers in prob')
-        #     pdb.set_trace()
-
-        # one_minus_prob = torch.clamp(1-prob, self.eps, 1-self.eps)
-
-        # if torch.sum(torch.isinf(one_minus_prob)) > 0 or torch.sum(one_minus_prob != one_minus_prob):
-        #     print('nans or infs in 1-prob')
-        #     pdb.set_trace()
-        # # spread out into 3 lines to figure out where the gradient nan is coming from
-        # weight_if_1 = torch.pow( one_minus_prob, self.gamma) # *label*mask
-        # weight_if_1 = weight_if_1*label
-        # weight_if_1 = weight_if_1*mask
-
-        # weight_if_0 = torch.pow(prob, self.gamma)*(1-label)*mask
-        # weight = weight_if_1 + weight_if_0
 
         # https://www.kaggle.com/c/siim-isic-melanoma-classification/discussion/166833
         label = label * (1 - self.label_smoothing) + 0.5 * self.label_smoothing

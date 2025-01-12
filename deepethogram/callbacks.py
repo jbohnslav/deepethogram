@@ -1,7 +1,7 @@
-from collections import defaultdict
 import logging
 import os
 import time
+from collections import defaultdict
 
 import numpy as np
 from pytorch_lightning.callbacks import Callback
@@ -111,12 +111,6 @@ class FPSCallback(Callback):
         self.end_batch("speedtest", batch, pl_module)
 
 
-# class SpeedtestCallback(Callback):
-#     def __init__(self):
-#         super().__init__()
-#
-#     def on_validation_end(self, trainer, pl_module):
-#         trainer.test(pl_module)
 def log_metrics(pl_module, split):
     assert split in ["train", "val", "test"]
     metrics, _ = pl_module.metrics.end_epoch(split)
@@ -143,13 +137,9 @@ class MetricsCallback(Callback):
     def on_train_epoch_end(self, trainer, pl_module):
         pl_module.metrics.buffer.append("train", {"lr": utils.get_minimum_learning_rate(pl_module.optimizer)})
         _ = log_metrics(pl_module, "train")
-        # latest_key = pl_module.metrics.latest_key['train']
-        # key = 'train_{}'.format(pl_module.metrics.key_metric)
-        # pl_module.log(key, latest_key, on_epoch=True)
 
     def on_validation_epoch_end(self, trainer, pl_module):
         scalar_metrics = log_metrics(pl_module, "val")
-        latest_key = pl_module.metrics.latest_key["val"]
 
         # this logic is to correctly log only important hyperparameters and important metrics  to tensorboard's
         # hyperparameter view. Just using all the parameters in our configuration makes for a huge and ugly tensorboard
@@ -167,9 +157,6 @@ class MetricsCallback(Callback):
                 )
         print(pl_module.tune_hparams, hparam_metrics)
         pl_module.logger.log_hyperparams(pl_module.tune_hparams, hparam_metrics)
-
-        # # log the latest key metric in tensorboard as hp_metric, which will enable hparam view
-        # pl_module.log('hp_metric', latest_key, on_epoch=True)
 
     def on_test_epoch_end(self, trainer, pl_module):
         log_metrics(pl_module, "test")
@@ -248,7 +235,5 @@ class StopperCallback(Callback):
             raise ValueError("invalid stopping name: {}".format(self.stopper.name))
 
         if should_stop:
-            # log.info('Stopping criterion reached! Raising KeyboardInterrupt to quit')
             log.info("Stopping criterion reached! setting trainer.should_stop=True")
             trainer.should_stop = True
-            # raise KeyboardInterrupt

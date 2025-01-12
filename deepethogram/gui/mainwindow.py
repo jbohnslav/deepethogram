@@ -295,4 +295,4 @@ class Ui_MainWindow(object):
         self.actionAdd_multiple.setText(QtWidgets.QApplication.translate("MainWindow", "Add multiple", None, -1))
 
 
-from deepethogram.gui.custom_widgets import LabelImg, VideoPlayer
+from deepethogram.gui.custom_widgets import LabelImg, VideoPlayer  # noqa: E402

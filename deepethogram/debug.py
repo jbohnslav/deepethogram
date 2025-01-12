@@ -5,8 +5,8 @@ from typing import Union
 
 import numpy as np
 from omegaconf import OmegaConf
-from vidio import VideoReader
 from tqdm import tqdm
+from vidio import VideoReader
 
 from deepethogram import file_io, projects
 
@@ -77,7 +77,7 @@ def try_load_all_frames(datadir: Union[str, os.PathLike]):
             had_error = False
             for i in tqdm(range(len(reader)), leave=False):
                 try:
-                    frame = reader[i]
+                    _ = reader[i]
                 except Exception:
                     had_error = True
                     print("error reading frame {} from video {}".format(i, record["rgb"]))
@@ -113,7 +113,6 @@ if __name__ == "__main__":
     user_cfg = OmegaConf.load(cfg.project.config_file)
     cfg = OmegaConf.merge(cfg, user_cfg)
     cfg = projects.convert_config_paths_to_absolute(cfg)
-    # print(cfg)
 
     logging.info(OmegaConf.to_yaml(cfg))
 

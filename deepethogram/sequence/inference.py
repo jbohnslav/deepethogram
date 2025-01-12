@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-from typing import Union, Type
+from typing import Type, Union
 
 import h5py
 
@@ -13,7 +13,7 @@ from torch import nn
 from torch.utils import data
 from tqdm import tqdm
 
-from deepethogram import utils, projects
+from deepethogram import projects, utils
 from deepethogram.configuration import make_sequence_inference_cfg
 from deepethogram.data.datasets import FeatureVectorDataset, KeypointDataset
 from deepethogram.sequence.train import build_model_from_cfg
@@ -102,7 +102,7 @@ def infer(
     log.debug("file: {}".format(data_file))
     log.debug("seq length: {}".format(sequence_length))
 
-    if type(activation_function) == str:
+    if isinstance(activation_function, str):
         if activation_function == "softmax":
             activation_function = torch.nn.Softmax(dim=1)
         elif activation_function == "sigmoid":
@@ -110,7 +110,7 @@ def infer(
         else:
             raise ValueError("unknown activation function: {}".format(activation_function))
 
-    if type(device) == str:
+    if isinstance(device, str):
         device = torch.device(device)
 
     if next(model.parameters()).device != device:
@@ -187,8 +187,6 @@ def extract(
         parameter.requires_grad = False
     model.eval()
 
-    has_printed = False
-
     if final_activation == "softmax":
         activation_function = torch.nn.Softmax(dim=1)
     elif final_activation == "sigmoid":
@@ -207,17 +205,6 @@ def extract(
         logits, probabilities = infer(
             model, device, activation_function, outputfile, latent_name, None, sequence_length, is_two_stream
         )
-
-        # gen = FeatureVectorDataset(outputfile, labelfile=None, h5_key=latent_name,
-        #                             sequence_length=sequence_length,
-        #                             nonoverlapping=True, store_in_ram=False, is_two_stream=is_two_stream)
-        # n_datapoints = gen.shape[1]
-        # gen = data.DataLoader(gen, batch_size=1, shuffle=False, num_workers=0, drop_last=False)
-        # gen = iter(gen)
-
-        # log.debug('Making sequence iterator with parameters: ')
-        # log.debug('file: {}'.format(outputfile))
-        # log.debug('seq length: {}'.format(sequence_length))
 
         with h5py.File(outputfile, "r+") as f:
             if output_name in list(f.keys()):
@@ -247,7 +234,6 @@ def sequence_inference(cfg: DictConfig):
     run_files = utils.get_run_files_from_weights(weights)
     if cfg.sequence.latent_name is None:
         # find the latent name used in the weight file you loaded
-        rundir = os.path.dirname(weights)
         loaded_cfg = utils.load_yaml(run_files["config_file"])
         latent_name = loaded_cfg["sequence"]["latent_name"]
         # if this latent name is also None, use the arch of the feature extractor
@@ -282,7 +268,7 @@ def sequence_inference(cfg: DictConfig):
             "must pass list of directories from commmand line. "
             "Ex: directory_list=[path_to_dir1,path_to_dir2] or directory_list=all"
         )
-    elif type(directory_list) == str and directory_list == "all":
+    elif isinstance(directory_list, str) and directory_list == "all":
         basedir = cfg.project.data_path
         directory_list = utils.get_subfiles(basedir, "directory")
 
@@ -301,7 +287,6 @@ def sequence_inference(cfg: DictConfig):
     metrics_file = run_files["metrics_file"]
     assert os.path.isfile(metrics_file)
     best_epoch = utils.get_best_epoch_from_weightfile(weights)
-    # best_epoch = -1
     log.info("best epoch from loaded file: {}".format(best_epoch))
     with h5py.File(metrics_file, "r") as f:
         try:

@@ -1,29 +1,29 @@
-from collections import deque
 import logging
 import os
 import random
-from typing import Union, Tuple
+from collections import deque
+from typing import Tuple, Union
 
 import h5py
 import numpy as np
-from omegaconf import DictConfig
 import torch
+from omegaconf import DictConfig
 from torch.utils import data
 from vidio import VideoReader
 
 # from deepethogram.dataloaders import log
 from deepethogram import projects
 from deepethogram.data.augs import get_cpu_transforms
+from deepethogram.data.keypoint_utils import expand_features_sturman, interpolate_bad_values, load_dlcfile
 from deepethogram.data.utils import (
-    purge_unlabeled_elements_from_records,
-    get_video_metadata,
-    read_all_labels,
-    get_split_from_records,
-    remove_invalid_records_from_split_dictionary,
-    make_loss_weight,
     fix_label,
+    get_split_from_records,
+    get_video_metadata,
+    make_loss_weight,
+    purge_unlabeled_elements_from_records,
+    read_all_labels,
+    remove_invalid_records_from_split_dictionary,
 )
-from deepethogram.data.keypoint_utils import load_dlcfile, interpolate_bad_values, expand_features_sturman
 from deepethogram.file_io import read_labels
 
 log = logging.getLogger(__name__)
@@ -740,11 +740,8 @@ class FeatureVectorDataset(SingleSequenceDataset):
                 flow_shape = f[self.flow_key].shape
                 image_shape = f[self.image_key].shape
                 assert flow_shape[0] == image_shape[0]
-                # self.N = image_shape[0]
             else:
                 assert self.key in f
-                shape = f[self.key].shape
-                # self.N = shape[0]
 
     def read_features_from_disk(self, start_ind, end_ind):
         inds = slice(start_ind, end_ind)
@@ -922,7 +919,7 @@ def get_video_datasets(
     datasets = {}
     for i, split in enumerate(["train", "val", "test"]):
         rgb = [records[i]["rgb"] for i in split_dictionary[split]]
-        flow = [records[i]["flow"] for i in split_dictionary[split]]
+        # flow = [records[i]["flow"] for i in split_dictionary[split]]
 
         if split == "test" and len(rgb) == 0:
             datasets[split] = None
@@ -1072,8 +1069,6 @@ def get_sequence_datasets(
     # e.g.: you've added a video, but not labeled it yet. In that case, it will already be in your split, but it is
     # invalid for current purposes, because it has no label. Therefore, we want to remove it from the current split
     split_dictionary = remove_invalid_records_from_split_dictionary(split_dictionary, records)
-    # log.info('~~~~~ train val test split ~~~~~')
-    # pprint.pprint(split_dictionary)
 
     splits = ["train", "val", "test"]
     datasets = {}
@@ -1090,8 +1085,6 @@ def get_sequence_datasets(
         if split == "test" and len(datafiles) == 0:
             datasets[split] = None
             continue
-        # h5file, labelfile = outputs[i]
-        # print('making dataset:{}'.format(split))
 
         if supervised:
             labelfiles = [records[i]["label"] for i in split_dictionary[split]]
@@ -1176,7 +1169,6 @@ def get_datasets_from_cfg(cfg: DictConfig, model_type: str, input_images: int = 
     if model_type == "feature_extractor" or model_type == "flow_generator":
         arch = cfg[model_type].arch
         mode = "3d" if "3d" in arch.lower() else "2d"
-        # log.info('getting dataloaders: {} convolution type detected'.format(mode))
         xform = get_cpu_transforms(cfg.augs)
 
         if cfg.project.name == "kinetics":

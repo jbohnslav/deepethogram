@@ -1,14 +1,14 @@
-from collections import defaultdict
 import logging
 import os
-from typing import Type, Tuple
+from collections import defaultdict
+from typing import Tuple, Type
 
 import h5py
 import numpy as np
-from omegaconf import DictConfig, OmegaConf
 import pandas as pd
+from omegaconf import DictConfig, OmegaConf
 
-from deepethogram import projects, file_io
+from deepethogram import file_io, projects
 
 log = logging.getLogger(__name__)
 
@@ -301,14 +301,12 @@ def get_bout_length_percentile(label_list: list, percentile: float) -> dict:
             bout_length = bouts[k]["lengths"].tolist()
             bout_lengths[k].append(bout_length)
     bout_lengths = {behavior: np.concatenate(value) for behavior, value in bout_lengths.items()}
-    # print(bout_lengths)
     percentiles = {}
     for behavior, value in bout_lengths.items():
         if len(value) > 0:
             percentiles[behavior] = np.percentile(value, percentile)
         else:
             percentiles[behavior] = 1
-    # percentiles = {behavior: np.percentile(value, percentile) for behavior, value in bout_lengths.items()}
     return percentiles
 
 
@@ -337,7 +335,7 @@ def get_postprocessor_from_cfg(cfg: DictConfig, thresholds: np.ndarray) -> Type[
             label_list.append(label)
 
         percentiles = get_bout_length_percentile(label_list, cfg.postprocessor.min_bout_length)
-        # percntiles is a dict: keys are behaviors, values are percentiles
+        # percentiles is a dict: keys are behaviors, values are percentiles
         # need to round and then cast to int
         percentiles = np.round(np.array(list(percentiles.values()))).astype(int)
         return MinBoutLengthPerBehaviorPostprocessor(thresholds, percentiles)

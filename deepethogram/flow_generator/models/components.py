@@ -100,7 +100,7 @@ class CropConcat(nn.Module):
         self.dim = dim
 
     def forward(self, tensors: tuple) -> torch.Tensor:
-        assert type(tensors) == tuple
+        assert isinstance(tensors, tuple)
         hs, ws = [tensor.size(-2) for tensor in tensors], [tensor.size(-1) for tensor in tensors]
         h, w = min(hs), min(ws)
 
@@ -115,7 +115,7 @@ def conv3d(
     bias: bool = True,
     batchnorm: bool = True,
     act: bool = True,
-    padding: tuple = None,
+    padding: Union[int, tuple, None] = None,
 ):
     """3D convolution
 
@@ -147,9 +147,9 @@ def conv3d(
         nn.Sequential with conv3d, (batchnorm), (activation function)
     """
     modules = []
-    if padding is None and type(kernel_size) == int:
+    if padding is None and isinstance(kernel_size, int):
         padding = (kernel_size - 1) // 2
-    elif padding is None and type(kernel_size) == tuple:
+    elif padding is None and isinstance(kernel_size, tuple):
         padding = ((kernel_size[0] - 1) // 2, (kernel_size[1] - 1) // 2, (kernel_size[2] - 1) // 2)
     else:
         raise ValueError("Unknown padding type {} and kernel_size type: {}".format(padding, kernel_size))

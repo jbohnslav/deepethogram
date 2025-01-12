@@ -1,5 +1,6 @@
 # this is named test__zz_commandline so that it comes last, after all module-specific tests
 import subprocess
+import pytest
 
 from deepethogram import utils
 
@@ -51,6 +52,7 @@ def add_default_arguments(string, train=True):
 #     print(os.getcwd())
 
 
+@pytest.mark.gpu
 def test_flow():
     make_project_from_archive()
     string = "python -m deepethogram.flow_generator.train preset=deg_f "
@@ -72,6 +74,7 @@ def test_flow():
     assert ret.returncode == 0
 
 
+@pytest.mark.gpu
 def test_feature_extractor():
     string = "python -m deepethogram.feature_extractor.train preset=deg_f flow_generator.weights=latest "
     string = add_default_arguments(string)
@@ -106,6 +109,7 @@ def test_feature_extractor():
     assert ret.returncode == 0
 
 
+@pytest.mark.gpu
 def test_feature_extraction(softmax: bool = False):
     # the reason for this complexity is that I don't want to run inference on all directories
     string = (
@@ -128,6 +132,7 @@ def test_feature_extraction(softmax: bool = False):
     # string += 'inference.directory_list=[]'
 
 
+@pytest.mark.gpu
 def test_sequence_train():
     string = "python -m deepethogram.sequence.train "
     string = add_default_arguments(string)
@@ -145,6 +150,7 @@ def test_sequence_train():
     assert ret.returncode == 0
 
 
+@pytest.mark.gpu
 def test_softmax():
     make_project_from_archive()
     string = "python -m deepethogram.flow_generator.train preset=deg_f "

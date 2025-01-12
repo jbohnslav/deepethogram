@@ -17,10 +17,12 @@ limitations under the License.
 Changes: 2D -> 3D. changed filter sizes, number of input images, number of layers... only kept their naming
 convention and overall structure
 """
+
 import logging
 
-from .components import *
-# import warnings
+import torch.nn as nn
+
+from .components import CropConcat, conv3d, deconv3d, predict_flow_3d
 
 
 class TinyMotionNet3D(nn.Module):
@@ -32,7 +34,6 @@ class TinyMotionNet3D(nn.Module):
         else:
             self.input_channels = int(input_channels)
 
-        # self.out_channels = int((num_images-1)*2)
         self.batchnorm = batchnorm
         bias = not self.batchnorm
         logging.debug("ignoring flow div value of {}: setting to 1 instead".format(flow_div))
@@ -80,55 +81,34 @@ class TinyMotionNet3D(nn.Module):
         self.predict_flow2 = predict_flow_3d(self.channels[0], 2)
 
         self.upsampled_flow4_to_3 = nn.ConvTranspose3d(2, 2, kernel_size=(1, 4, 4), stride=(1, 2, 2), padding=(0, 1, 1))
-        # self.upsampled_flow4_to_3 = nn.ConvTranspose3d(2, 2, kernel_size=(1,4,4), stride=(1,2,2), padding=1)
         self.upsampled_flow3_to_2 = nn.ConvTranspose3d(2, 2, kernel_size=(1, 4, 4), stride=(1, 2, 2), padding=(0, 1, 1))
 
         self.concat = CropConcat(dim=1)
-        # self.interpolate = Interpolate
 
     def forward(self, x):
         # N, C, T, H, W = x.shape
         out_conv1 = self.conv1(x)  # 1 -> 1
-        # print('out_conv1:      {}'.format(out_conv1.shape))
         out_conv2 = self.conv2(out_conv1)  # 1 -> 1/2
-        # print('out_conv2:      {}'.format(out_conv2.shape))
         out_conv3 = self.conv3(out_conv2)  # 1/2 -> 1/4
-        # print('out_conv3:      {}'.format(out_conv3.shape))
         out_conv4 = self.conv4(out_conv3)  # 1/4 -> 1/8
-        # print('out_conv4:      {}'.format(out_conv4.shape))
         out_conv5 = self.conv5(out_conv4)
-        # print('out_conv5:      {}'.format(out_conv5.shape))
 
         flow4 = self.predict_flow4(out_conv5) * self.flow_div
-        # print('flow4:          {}'.format(flow4.shape))
         # see motionnet.py for explanation of multiplying by 2
         flow4_up = self.upsampled_flow4_to_3(flow4) * 2
-        # print('flow4_up:       {}'.format(flow4_up.shape))
         out_deconv3 = self.deconv3(out_conv5)
-        # print('out_deconv3:    {}'.format(out_deconv3.shape))
 
         iconv3 = self.iconv3(out_conv3)
-        # print('iconv3:         {}'.format(iconv3.shape))
         concat3 = self.concat((iconv3, out_deconv3, flow4_up))
-        # print('concat3:        {}'.format(concat3.shape))
         out_interconv3 = self.xconv3(concat3)
-
-        # print('out_interconv3: {}'.format(out_interconv3.shape))
         flow3 = self.predict_flow3(out_interconv3) * self.flow_div
-        # print('flow3:          {}'.format(flow3.shape))
         flow3_up = self.upsampled_flow3_to_2(flow3) * 2
-        # print('flow3_up:       {}'.format(flow3_up.shape))
         out_deconv2 = self.deconv2(out_interconv3)
-        # print('out_deconv2:    {}'.format(out_deconv2.shape))
 
         iconv2 = self.iconv2(out_conv2)
-        # print('iconv2:         {}'.format(iconv2.shape))
 
         concat2 = self.concat((iconv2, out_deconv2, flow3_up))
-        # print('concat2:        {}'.format(concat2.shape))
         out_interconv2 = self.xconv2(concat2)
-        # print('out_interconv2: {}'.format(out_interconv2.shape))
         flow2 = self.predict_flow2(out_interconv2) * self.flow_div
-        # print('flow2:          {}'.format(flow2.shape))
 
         return flow2, flow3, flow4

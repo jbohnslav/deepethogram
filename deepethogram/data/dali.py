@@ -1,19 +1,50 @@
+"""NVIDIA DALI pipeline and loader implementations for video processing.
+
+This module provides DALI-based data loading functionality for video datasets,
+with a focus on the Kinetics dataset format. It includes GPU-accelerated video loading
+and augmentation capabilities.
+"""
+
 import os
 
 try:
-    from nvidia.dali.pipeline import Pipeline
-    import nvidia.dali.ops as ops
-    import nvidia.dali.types as types
-    from nvidia.dali.backend import TensorListCPU
-    from nvidia.dali.plugin import pytorch
+    import nvidia.dali.ops as ops  # noqa: F401
+    import nvidia.dali.types as types  # noqa: F401
+    from nvidia.dali.backend import TensorListCPU  # noqa: F401
+    from nvidia.dali.pipeline import Pipeline  # noqa: F401
+    from nvidia.dali.plugin import pytorch  # noqa: F401
 except ImportError:
     dali = False
-    # print('DALI not loaded...')
 else:
     dali = True
 
 
 class KineticsDALIPipe(Pipeline):
+    """DALI Pipeline for processing video data in Kinetics format.
+
+    This pipeline handles video loading, augmentation, and preprocessing using NVIDIA DALI.
+    It supports both supervised and unsupervised modes, with configurable augmentations
+    including brightness, contrast, and spatial transformations.
+
+    Args:
+        directory (str): Root directory containing the video files
+        supervised (bool): Whether to return labels with the data
+        sequence_length (int): Number of frames to load per sequence
+        batch_size (int): Number of sequences per batch
+        num_workers (int): Number of parallel workers
+        gpu_id (int): ID of GPU to use
+        shuffle (bool): Whether to shuffle the data
+        crop_size (tuple): Size of output crops (H, W)
+        resize (tuple, optional): Size to resize frames to before cropping
+        brightness (float): Maximum brightness adjustment factor
+        contrast (float): Maximum contrast adjustment factor
+        mean (list): Mean values for normalization per channel
+        std (list): Standard deviation values for normalization per channel
+        conv_mode (str): Convolution mode ('2d' or '3d')
+        image_shape (tuple): Base image dimensions (H, W)
+        validate (bool): Whether this pipeline is for validation (reduces augmentation)
+    """
+
     def __init__(
         self,
         directory,
@@ -73,7 +104,6 @@ class KineticsDALIPipe(Pipeline):
         else:
             # default
             H, W = image_shape
-        # print('CONV MODE!!! {}'.format(conv_mode))
         if conv_mode == "3d":
             self.transpose = ops.Transpose(device="gpu", perm=[3, 0, 1, 2])
             self.reshape = None
@@ -106,11 +136,30 @@ class KineticsDALIPipe(Pipeline):
             return images
 
 
-#
-#
-# # https://github.com/NVIDIA/DALI/blob/cde7271a840142221273f8642952087acd919b6e
-# # /docs/examples/use_cases/video_superres/dataloading/dataloaders.py
 class DALILoader:
+    """Data loader wrapper for DALI pipeline.
+
+    Provides an iterator interface to the DALI pipeline for easy integration
+    with PyTorch training loops.
+
+    Args:
+        directory (str): Root directory containing the video files
+        supervised (bool): Whether to return labels with the data
+        sequence_length (int): Number of frames to load per sequence
+        batch_size (int): Number of sequences per batch
+        num_workers (int): Number of parallel workers
+        gpu_id (int): ID of GPU to use
+        shuffle (bool): Whether to shuffle the data
+        crop_size (tuple): Size of output crops (H, W)
+        mean (list): Mean values for normalization per channel
+        std (list): Standard deviation values for normalization per channel
+        conv_mode (str): Convolution mode ('2d' or '3d')
+        validate (bool): Whether this is for validation
+        distributed (bool): Whether to use distributed training mode
+
+        https://github.com/NVIDIA/DALI/blob/cde7271a840142221273f8642952087acd919b6e/docs/examples/use_cases/video_superres/dataloading/dataloaders.py
+    """
+
     def __init__(
         self,
         directory,
@@ -166,6 +215,25 @@ def get_dataloaders_kinetics_dali(
     std: list = [0.5, 0.5, 0.5],
     distributed: bool = False,
 ):
+    """Create DALI dataloaders for train and validation sets.
+
+    Args:
+        directory (str): Root directory containing train and val subdirectories
+        rgb_frames (int): Number of RGB frames per sequence
+        batch_size (int): Batch size
+        shuffle (bool): Whether to shuffle training data
+        num_workers (int): Number of worker processes
+        supervised (bool): Whether to return labels
+        conv_mode (str): Convolution mode ('2d' or '3d')
+        gpu_id (int): GPU device ID
+        crop_size (tuple): Output crop dimensions
+        mean (list): Normalization mean values
+        std (list): Normalization standard deviation values
+        distributed (bool): Whether to use distributed training
+
+    Returns:
+        dict: Dictionary containing train and validation dataloaders
+    """
     shuffles = {"train": shuffle, "val": True, "test": False}
     dataloaders = {}
     for split in ["train", "val"]:
@@ -188,11 +256,3 @@ def get_dataloaders_kinetics_dali(
 
     dataloaders["split"] = None
     return dataloaders
-
-
-def __len__(self):
-    return int(self.epoch_size)
-
-
-def __iter__(self):
-    return self.dali_iterator.__iter__()

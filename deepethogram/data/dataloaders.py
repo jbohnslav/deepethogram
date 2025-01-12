@@ -10,15 +10,16 @@ from torch.utils import data
 
 from deepethogram import projects
 from deepethogram.data.augs import get_cpu_transforms
-from deepethogram.data.datasets import SequenceDataset, TwoStreamDataset, VideoDataset, KineticsDataset
+from deepethogram.data.datasets import KineticsDataset, SequenceDataset, TwoStreamDataset, VideoDataset
 from deepethogram.data.utils import (
     get_split_from_records,
-    remove_invalid_records_from_split_dictionary,
     make_loss_weight,
+    remove_invalid_records_from_split_dictionary,
 )
 
 try:
-    from nvidia.dali.pipeline import Pipeline
+    from nvidia.dali.pipeline import Pipeline  # noqa: F401
+
     from .dali import get_dataloaders_kinetics_dali
 except ImportError:
     get_dataloaders_kinetics_dali = None
@@ -218,7 +219,7 @@ def get_dataloaders_kinetics(
     datasets = {}
     for split in ["train", "val", "test"]:
         # this is in the two stream case where you can't apply color transforms to an optic flow
-        if type(xform[split]) == dict:
+        if isinstance(xform[split], dict):
             spatial_transform = xform[split]["spatial"]
             color_transform = xform[split]["color"]
         else:

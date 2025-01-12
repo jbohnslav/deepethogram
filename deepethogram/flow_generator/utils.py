@@ -1,5 +1,5 @@
 import warnings
-from typing import Union, Tuple
+from typing import Tuple, Union
 
 import cv2
 import numpy as np
@@ -96,7 +96,6 @@ def flow_to_rgb_polar(flow: np.ndarray, maxval: Union[int, float] = 20) -> np.nd
     # magnitue -> saturation
     color = (mag.astype(np.float32) / maxval).clip(0, 1)
     color = (color * 255).clip(0, 255).astype(np.uint8)
-    # hsv[...,1] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
     hsv[..., 1] = color
     rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
     return rgb
@@ -126,28 +125,10 @@ def rgb_to_flow_polar(image: np.ndarray, maxval: Union[int, float] = 20):
 
     ang = hsv[..., 0]
     ang = ang * 2 * np.pi / 180
-    # x,y = cv2.polarToCart(mag, ang)
     x = mag * np.cos(ang)
     y = mag * np.sin(ang)
     flow = np.stack((x, y), axis=2)
     return flow
-
-
-# def flow_to_rgb_lrcn(flow, max_flow=10):
-#     # input: flow, can be positive or negative
-#     # ranges from -20 to 20, but only 10**-5 pixels are > 10
-#     mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-#     mag[np.isinf(mag)] = 0
-#
-#     img = np.zeros((flow.shape[0], flow.shape[1], 3), dtype=np.float32)
-#     half_range = (255 - 128) / max_flow
-#     img[:, :, 0] = flow[..., 0] * half_range + 128
-#     img[:, :, 1] = flow[..., 1] * half_range + 128
-#     # maximum magnitude is if x and y are both maxed
-#     max_magnitude = np.sqrt(max_flow ** 2 + max_flow ** 2)
-#     img[:, :, 2] = mag * 255 / max_magnitude
-#     img = img.clip(min=0, max=255).astype(np.uint8)
-#     return (img)
 
 
 class Resample2d(torch.nn.Module):
@@ -201,13 +182,12 @@ class Resample2d(torch.nn.Module):
         """
         super().__init__()
         if size is not None:
-            assert type(size) == tuple or type(size) == list
+            assert isinstance(size, tuple) or isinstance(size, list)
         self.size = size
 
         # identity matrix
         self.base_mat = torch.Tensor([[1, 0, 0], [0, 1, 0]])
         if fp16:
-            # self.base_mat = self.base_mat.half()
             pass
         self.fp16 = fp16
         self.device = device
@@ -236,7 +216,6 @@ class Resample2d(torch.nn.Module):
             H, W = self.size
         else:
             H, W = flow.size(2), flow.size(3)
-        # print(H,W)
         # images: NxCxHxW
         # flow: Bx2xHxW
         grid_size = [flow.size(0), 2, flow.size(2), flow.size(3)]
@@ -258,7 +237,6 @@ class Resample2d(torch.nn.Module):
             self.sizes.append(this_size)
             self.grids.append(this_grid)
             self.uses.append(0)
-            # print(this_grid.shape)
         else:
             grid_loc = self.sizes.index(grid_size)
             this_grid = self.grids[grid_loc]
@@ -269,7 +247,6 @@ class Resample2d(torch.nn.Module):
         # this normalizes it so that a value of 2 would move a pixel all the way across the width or height
         # horiz_only: for stereo matching, Y values are always the same
         if self.horiz_only:
-            # flow = flow[:, 0:1, :, :] / ((W - 1.0) / 2.0)
             flow = torch.cat(
                 [flow[:, 0:1, :, :] / ((W - 1.0) / 2.0), torch.zeros((flow.size(0), flow.size(1), H, W))], 1
             )
@@ -323,7 +300,6 @@ class Reconstructor:
         t0s = []
         flows_reshaped = []
         for flow in flows:
-            # upsampled_flow = F.interpolate(flow, (h,w), mode='bilinear', align_corners=False)
             if flow.ndim == 4:
                 n, c, h, w = flow.size()
                 flow = flow.view(N * num_images, 2, h, w)
@@ -390,7 +366,6 @@ def rgb_to_hsv_torch(image: torch.Tensor) -> torch.Tensor:
 
     S = torch.zeros_like(r)
     S[V > 0] = (C / V)[V > 0]
-    # hsv = torch.stack([H,S,V], dim=-3)
 
     return torch.stack([H, S, V], dim=1)
 

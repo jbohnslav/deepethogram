@@ -1,4 +1,4 @@
-""" Re-implementation of the MotionNet architecture
+"""Re-implementation of the MotionNet architecture
 
 References
 -------
@@ -26,9 +26,10 @@ non-power-of-two shaped images, and multiplication... only kept their naming con
 
 import logging
 
+import torch.nn as nn
 from torch.nn import init
 
-from .components import *
+from .components import CropConcat, conv, deconv, i_conv, predict_flow
 
 log = logging.getLogger(__name__)
 
@@ -97,8 +98,6 @@ class MotionNet(nn.Module):
                 # init_deconv_bilinear(m.weight)
         self.upsample1 = nn.Upsample(scale_factor=4, mode="bilinear")
 
-        # print('Flow div: {}'.format(self.flow_div))
-
     def forward(self, x):
         N, C, H, W = x.shape
         # 1 -> 1
@@ -133,11 +132,6 @@ class MotionNet(nn.Module):
 
         # if the image sizes are not divisible by 8, there will be rounding errors in the size
         # between the downsampling and upsampling phases
-        # if get_hw(out_conv5) != get_hw(out_deconv5):
-        #     out_conv5 = F.interpolate(out_conv5, size=get_hw(out_deconv5),
-        #                               mode='bilinear', align_corners=False)
-
-        # concat5 = torch.cat((out_conv5, out_deconv5, flow6_up), 1)
         concat5 = self.concat((out_conv5, out_deconv5, flow6_up))
         out_interconv5 = self.xconv5(concat5)
         flow5 = self.predict_flow5(out_interconv5) * self.flow_div
@@ -145,11 +139,6 @@ class MotionNet(nn.Module):
         flow5_up = self.upsampled_flow5_to_4(flow5) * 2
         out_deconv4 = self.deconv4(concat5)
 
-        # if get_hw(out_conv4) != get_hw(out_deconv4):
-        #     out_conv4 = F.interpolate(out_conv4, size=get_hw(out_deconv4),
-        #                               mode='bilinear', align_corners=False)
-
-        # concat4 = torch.cat((out_conv4, out_deconv4, flow5_up), 1)
         concat4 = self.concat((out_conv4, out_deconv4, flow5_up))
         out_interconv4 = self.xconv4(concat4)
         flow4 = self.predict_flow4(out_interconv4) * self.flow_div
@@ -158,40 +147,14 @@ class MotionNet(nn.Module):
 
         # if the image sizes are not divisible by 8, there will be rounding errors in the size
         # between the downsampling and upsampling phases
-        # if get_hw(out_conv3) != get_hw(out_deconv3):
-        #     out_conv3 = F.interpolate(out_conv3, size=get_hw(out_deconv3),
-        #                               mode='bilinear', align_corners=False)
-        # concat3 = torch.cat((out_conv3, out_deconv3, flow4_up), 1)
         concat3 = self.concat((out_conv3, out_deconv3, flow4_up))
         out_interconv3 = self.xconv3(concat3)
         flow3 = self.predict_flow3(out_interconv3) * self.flow_div
         flow3_up = self.upsampled_flow3_to_2(flow3) * 2
         out_deconv2 = self.deconv2(concat3)
 
-        # if get_hw(out_conv2) != get_hw(out_deconv2):
-        #     out_conv2 = F.interpolate(out_conv2, size=get_hw(out_deconv2),
-        #                               mode='bilinear', align_corners=False)
-        # concat2 = torch.cat((out_conv2, out_deconv2, flow3_up), 1)
         concat2 = self.concat((out_conv2, out_deconv2, flow3_up))
         out_interconv2 = self.xconv2(concat2)
         flow2 = self.predict_flow2(out_interconv2) * self.flow_div
 
-        # flow1 = F.interpolate(flow2, (H, W), mode='bilinear', align_corners=False)*2
-        # flow2*=self.flow_div
-        # flow3*=self.flow_div
-        # flow4*=self.flow_div
-        # flow5*=self.flow_div
-        # flow6*=self.flow_div
-        # print('Original shape: {}'.format((N,C,H,W)))
-        # print('flow1: {}'.format(flow1.shape))
-        # print('flow2: {}'.format(flow2.shape))
-        # print('flow3: {}'.format(flow3.shape))
-        # print('flow4: {}'.format(flow4.shape))
-        # print('flow5: {}'.format(flow5.shape))
-
-        # if self.training:
-        #     return flow1, flow2, flow3, flow4
-        # else:
-        #     return flow1,
-        # return flow2, flow3, flow4, flow5, flow6
         return flow2, flow3, flow4

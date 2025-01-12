@@ -6,14 +6,14 @@ from typing import Type, Union
 
 import h5py
 import numpy as np
-from sklearn.metrics import f1_score
 import torch
-from torch.utils.data import DataLoader
-from omegaconf import DictConfig, OmegaConf, ListConfig
+from omegaconf import DictConfig, ListConfig, OmegaConf
+from sklearn.metrics import f1_score
 from torch import nn
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from deepethogram import utils, projects
+from deepethogram import projects, utils
 from deepethogram.configuration import make_feature_extractor_inference_cfg
 from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms
 from deepethogram.data.datasets import VideoIterable
@@ -502,9 +502,9 @@ def feature_extractor_inference(cfg: DictConfig):
 
     if directory_list is None or len(directory_list) == 0:
         raise ValueError(
-            "must pass list of directories from commmand line. " "Ex: directory_list=[path_to_dir1,path_to_dir2]"
+            "must pass list of directories from commmand line. Ex: directory_list=[path_to_dir1,path_to_dir2]"
         )
-    elif type(directory_list) == str and directory_list == "all":
+    elif isinstance(directory_list, str) and directory_list == "all":
         basedir = cfg.project.data_path
         directory_list = utils.get_subfiles(basedir, "directory")
     elif isinstance(directory_list, str):
@@ -524,9 +524,9 @@ def feature_extractor_inference(cfg: DictConfig):
         record = projects.get_record_from_subdir(directory)
         assert record["rgb"] is not None
         records.append(record)
-    assert cfg.feature_extractor.n_flows + 1 == cfg.flow_generator.n_rgb, (
-        "Flow generator inputs must be one greater " "than feature extractor num flows "
-    )
+    assert (
+        cfg.feature_extractor.n_flows + 1 == cfg.flow_generator.n_rgb
+    ), "Flow generator inputs must be one greater than feature extractor num flows "
 
     input_images = cfg.feature_extractor.n_flows + 1
     mode = "3d" if "3d" in cfg.feature_extractor.arch.lower() else "2d"
@@ -552,9 +552,7 @@ def feature_extractor_inference(cfg: DictConfig):
         # we don't want to use the weights that the trained model was initialized with, but the weights after training
         # therefore, overwrite the loaded configuration with the current weights
         cfg.feature_extractor.weights = feature_extractor_weights
-        # num_classes = len(loaded_cfg.project.class_names)
 
-    # log.warning('Overwriting current project classes with loaded classes! REVERT')
     model_components = build_feature_extractor(cfg)
     _, _, _, _, model = model_components
     device = "cuda:{}".format(cfg.compute.gpu_id)
@@ -562,7 +560,6 @@ def feature_extractor_inference(cfg: DictConfig):
     metrics_file = run_files["metrics_file"]
     assert os.path.isfile(metrics_file)
     best_epoch = utils.get_best_epoch_from_weightfile(feature_extractor_weights)
-    # best_epoch = -1
     log.info("best epoch from loaded file: {}".format(best_epoch))
     with h5py.File(metrics_file, "r") as f:
         try:
@@ -579,7 +576,6 @@ def feature_extractor_inference(cfg: DictConfig):
             Did you add or remove behaviors after training this model? If so, please retrain!
         """.format(len(thresholds), len(class_names))
         raise ValueError(error_message)
-    # class_names = projects.get_classes_from_project(cfg)
     class_names = np.array(class_names)
     postprocessor = get_postprocessor_from_cfg(cfg, thresholds)
     extract(

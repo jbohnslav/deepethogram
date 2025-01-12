@@ -28,10 +28,13 @@ References
 .. [1]: Fischer et al. FlowNet: Learning optical flow with convolutional networks. ICCV 2015
         https://arxiv.org/abs/1504.06852
 """
+
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
 
-from .components import *
+from .components import conv, deconv, get_hw, predict_flow
 
 
 class FlowNetS(nn.Module):
@@ -67,15 +70,7 @@ class FlowNetS(nn.Module):
         self.upsampled_flow4_to_3 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
         self.upsampled_flow3_to_2 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
 
-        # self.upsampled_flow6_to_5 = nn.Sequential(Interpolate(scale_factor=2),
-        #     nn.Conv2d(2,2,kernel_size=3, stride=1, padding=1, bias=False))
-        # self.upsampled_flow5_to_4 = nn.Sequential(Interpolate(scale_factor=2),
-        #     nn.Conv2d(2,2,kernel_size=3, stride=1, padding=1, bias=False))
-        # self.upsampled_flow4_to_3 = nn.Sequential(Interpolate(scale_factor=2),
-        #     nn.Conv2d(2,2,kernel_size=3, stride=1, padding=1, bias=False))
-        # self.upsampled_flow3_to_2 = nn.Sequential(Interpolate(scale_factor=2),
-        #     nn.Conv2d(2,2,kernel_size=3, stride=1, padding=1, bias=False))
-
+        # initialize weights
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 if m.bias is not None:
@@ -86,7 +81,7 @@ class FlowNetS(nn.Module):
                 if m.bias is not None:
                     init.uniform_(m.bias)
                 init.xavier_uniform_(m.weight)
-                # init_deconv_bilinear(m.weight)
+
         self.upsample1 = nn.Upsample(scale_factor=4, mode="bilinear")
 
     def forward(self, x):

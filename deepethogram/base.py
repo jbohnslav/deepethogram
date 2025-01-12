@@ -1,18 +1,17 @@
-from collections import defaultdict
-from copy import deepcopy
 import logging
 import math
 import os
+from collections import defaultdict
+from copy import deepcopy
 from typing import Tuple
 
 import matplotlib.pyplot as plt
-from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
+from omegaconf import DictConfig, OmegaConf
 
 try:
-    from ray.tune.integration.pytorch_lightning import TuneReportCallback, TuneReportCheckpointCallback
-    from ray.tune import get_trial_dir
-    from ray.tune import CLIReporter
+    from ray.tune import CLIReporter, get_trial_dir  # noqa: F401
+    from ray.tune.integration.pytorch_lightning import TuneReportCallback, TuneReportCheckpointCallback  # noqa: F401
 
     ray = True
 except ImportError:
@@ -21,17 +20,17 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
-from deepethogram.data.augs import get_gpu_transforms, get_empty_gpu_transforms
+from deepethogram import utils, viz
 from deepethogram.callbacks import (
+    CheckpointCallback,
+    ExampleImagesCallback,
     FPSCallback,
     MetricsCallback,
-    ExampleImagesCallback,
-    CheckpointCallback,
     StopperCallback,
 )
-from deepethogram.metrics import Metrics, EmptyMetrics
+from deepethogram.data.augs import get_empty_gpu_transforms, get_gpu_transforms
+from deepethogram.metrics import EmptyMetrics, Metrics
 from deepethogram.schedulers import initialize_scheduler
-from deepethogram import viz, utils
 
 log = logging.getLogger(__name__)
 
@@ -65,7 +64,7 @@ class BaseLightningModule(pl.LightningModule):
         self.model = model
         try:
             self.hparams = cfg
-        except:
+        except Exception:
             # for pytorch lightning > 1.1.8
             self.hparams.update(cfg)
 
@@ -197,7 +196,7 @@ class BaseLightningModule(pl.LightningModule):
 
     def get_val_sampler(self):
         # get sample weights for validation dataset to up-sample rare classes
-        dataset = self.datasets["val"]
+        # dataset = self.datasets["val"]
         # if dataset.labels is None:
         #     # self-supervised, e.g. flow generators
         #     return
@@ -302,7 +301,6 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
 
             log.debug("orig: {}".format(lightning_module.gpu_transforms))
 
-            original_augs = cfg.augs
             new_augs = deepcopy(cfg.augs)
             new_augs.color_p = 1.0
 
@@ -420,9 +418,4 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
             log_every_n_steps=1,
         )
     torch.cuda.empty_cache()
-    # gc.collect()
-
-    # import signal
-    # signal.signal(signal.SIGTERM, signal.SIG_DFL)
-    # log.info('trainer is_slurm_managing_tasks: {}'.format(trainer.is_slurm_managing_tasks))
     return trainer

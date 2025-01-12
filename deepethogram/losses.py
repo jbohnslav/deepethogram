@@ -1,8 +1,8 @@
 import logging
 import os
 
-from omegaconf import DictConfig
 import torch
+from omegaconf import DictConfig
 from torch import nn
 
 from deepethogram import projects
@@ -102,7 +102,6 @@ class L2_SP(nn.Module):
 
         self.alpha = alpha
         self.beta = beta
-        # assert cfg.train.regularization.style == 'l2_sp'
 
         assert os.path.isfile(path_to_pretrained_weights)
         state = torch.load(path_to_pretrained_weights, map_location="cpu")
@@ -175,15 +174,6 @@ class L2_SP(nn.Module):
         if towards_pretrained != towards_pretrained or towards_0 != towards_0:
             msg = "invalid loss in L2-SP: towards pretrained: {} towards 0: {}".format(towards_pretrained, towards_0)
             raise ValueError(msg)
-        # alternate method. same result, ~50% slower
-        #         towards_pretrained, towards_0 = 0, 0
-
-        #         for key, param in model.named_parameters():
-        #             if key in self.pretrained_keys:
-        #                 pretrained_param = getattr(self, self.dots_to_underscores(key))
-        #                 towards_pretrained += (param - pretrained_param).pow(2).sum()*0.5
-        #             elif key in self.new_keys:
-        #                 towards_0 += param.pow(2).sum()*0.5
 
         return towards_pretrained * self.alpha + towards_0 * self.beta
 

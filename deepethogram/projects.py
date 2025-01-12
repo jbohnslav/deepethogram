@@ -13,10 +13,11 @@ from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
 import deepethogram
-from deepethogram.utils import get_subfiles, log
+from deepethogram.utils import get_subfiles
 from deepethogram.zscore import zscore_video
+
 from . import utils
-from .file_io import read_labels, convert_video
+from .file_io import convert_video, read_labels
 
 log = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ def initialize_project(
 
     if not os.path.isdir(project_config["project"]["path"]):
         os.makedirs(project_config["project"]["path"])
-    # os.chdir(project_config['project']['path'])
+
     data_abs = os.path.join(project_config["project"]["path"], project_config["project"]["data_path"])
 
     if not os.path.isdir(data_abs):
@@ -114,19 +115,11 @@ def add_video_to_project(project: dict, path_to_video: Union[str, os.PathLike], 
     new_path: str
         path to the video file after moving to the DEG project data directory.
     """
-    # assert (os.path.isdir(project_directory))
+
     assert os.path.exists(path_to_video), "video not found! {}".format(path_to_video)
-    if os.path.isdir(path_to_video):
-        copy_func = shutil.copytree
-    elif os.path.isfile(path_to_video):
-        copy_func = shutil.copy
-    else:
-        raise ValueError("video does not exist: {}".format(path_to_video))
 
     assert mode in ["copy", "symlink", "move"]
 
-    # project = utils.load_yaml(os.path.join(project_directory, 'project_config.yaml'))
-    # project = convert_config_paths_to_absolute(project)
     log.debug("configuration file when adding video: {}".format(project))
     datadir = os.path.join(project["project"]["path"], project["project"]["data_path"])
     assert os.path.isdir(datadir), "data path not found: {}".format(datadir)
@@ -143,7 +136,7 @@ def add_video_to_project(project: dict, path_to_video: Union[str, os.PathLike], 
     video_directory = os.path.join(datadir, vidname)
     if os.path.isdir(video_directory):
         raise ValueError(
-            "Directory {} already exists in your data dir! " "Please rename the video to a unique name".format(vidname)
+            "Directory {} already exists in your data dir! Please rename the video to a unique name".format(vidname)
         )
     os.makedirs(video_directory)
     new_path = os.path.join(video_directory, basename)
@@ -185,8 +178,6 @@ def add_label_to_project(path_to_labels: Union[str, os.PathLike], path_to_video)
         array = df.values
         is_background = np.logical_not(np.any(array == 1, axis=1)).astype(int)[:, np.newaxis]
         data = np.concatenate((is_background, array), axis=1)
-        # df2 = pd.DataFrame(data=is_background, columns=['background'])
-        # df = pd.concat([df2, df], axis=1)
         df = pd.DataFrame(data=data, columns=["background"] + list(df.columns))
 
     df.to_csv(label_dst)
@@ -204,24 +195,6 @@ def add_file_to_subdir(file: Union[str, os.PathLike], subdir: Union[str, os.Path
         shutil.copy(file, os.path.join(subdir, os.path.basename(file)))
     record = parse_subdir(subdir)
     utils.save_dict_to_yaml(record, os.path.join(subdir, "record.yaml"))
-
-
-# def change_project_directory(config_file: Union[str, os.PathLike], new_directory: Union[str, os.PathLike]):
-#     """If you move the project directory to some other location, updates the config file to have the new directories"""
-#     assert os.path.isfile(config_file)
-#     assert os.path.isdir(new_directory)
-#     # make sure that new directory is properly formatted for deepethogram
-#     datadir = os.path.join(new_directory, 'DATA')
-#     model_path = os.path.join(new_directory, 'models')
-#     assert os.path.isdir(datadir)
-#     assert os.path.isdir(model_path)
-
-#     project_config = utils.load_yaml(config_file)
-#     project_config['project']['path'] = new_directory
-#     project_config['project']['model_path'] = os.path.basename(model_path)
-#     project_config['project']['data_path'] = os.path.basename(datadir)
-#     project_config['project']['config_file'] = os.path.join(new_directory, 'project_config.yaml')
-#     utils.save_dict_to_yaml(project_config, project_config['project']['config_file'])
 
 
 def remove_video_from_project(config_file, video_file=None, record_directory=None):
@@ -277,15 +250,14 @@ def add_behavior_to_project(config_file: Union[str, os.PathLike], behavior_name:
     records = get_records_from_datadir(
         os.path.join(project_config["project"]["path"], project_config["project"]["data_path"])
     )
-    for key, record in records.items():
+    for _, record in records.items():
         labelfile = record["label"]
         if labelfile is None:
             continue
         if os.path.isfile(labelfile):
             df = pd.read_csv(labelfile, index_col=0)
             label = df.values
-            N, K = label.shape
-            # label = np.concatenate((label, np.ones((N, 1))*-1), axis=1)
+            N, _ = label.shape
             df2 = pd.DataFrame(data=np.ones((N, 1)) * -1, columns=[behavior_name])
             df = pd.concat([df, df2], axis=1)
             df.to_csv(labelfile)
@@ -321,7 +293,7 @@ def remove_behavior_from_project(config_file: Union[str, os.PathLike], behavior_
     records = get_records_from_datadir(
         os.path.join(project_config["project"]["path"], project_config["project"]["data_path"])
     )
-    for key, record in records.items():
+    for _, record in records.items():
         labelfile = record["label"]
         if labelfile is None:
             continue
@@ -352,8 +324,7 @@ def get_classes_from_project(config: Union[dict, str, os.PathLike, DictConfig]) 
     classes: list
         list of behaviors read from project_config.yaml file.
     """
-
-    if type(config) == str or type(config) == os.PathLike:
+    if isinstance(config, str) or isinstance(config, os.PathLike):
         config_file = os.path.join(config, "project_config.yaml")
         assert os.path.isfile(config_file), "Input must be a directory containing a project_config.yaml file"
         config = utils.load_yaml(config_file)
@@ -410,7 +381,6 @@ def find_rgbfiles(root: Union[str, bytes, os.PathLike]) -> list:
         list of absolute paths to RGB videos, or subdirectories containing individual images (framedirs)
     """
     files = get_subfiles(root, return_type="any")
-    endings = [os.path.splitext(i)[1] for i in files]
     valid_endings = [".avi", ".mp4", ".h5", ".mov"]
     excluded = ["flow", "label", "output", "score"]
     movies = [i for i in files if os.path.splitext(i)[1].lower() in valid_endings]
@@ -612,7 +582,7 @@ def get_record_from_subdir(subdir: Union[str, os.PathLike]) -> dict:
         if key in list(record.keys()):
             this_entry = record[key]["default"]
 
-            if type(this_entry) == list and len(this_entry) == 0:
+            if isinstance(this_entry, list) and len(this_entry) == 0:
                 this_entry = None
             else:
                 this_entry = os.path.join(subdir, this_entry)
@@ -650,7 +620,6 @@ def get_records_from_datadir(datadir: Union[str, bytes, os.PathLike]) -> dict:
     for subdir in subdirs:
         parsed_record = get_record_from_subdir(os.path.join(datadir, subdir))
         records[parsed_record["key"]] = parsed_record
-    # write_all_records(datadir)
     return records
 
 
@@ -684,7 +653,7 @@ def get_unfinalized_records(config: dict) -> list:
     """Finds the number of label files with no unlabeled frames"""
     records = get_records_from_datadir(os.path.join(config["project"]["path"], config["project"]["data_path"]))
     unfinalized = []
-    for k, v in records.items():
+    for _, v in records.items():
         if v["label"] is None or len(v["label"]) == 0:
             unfinalized.append(v)
         else:
@@ -699,7 +668,7 @@ def get_number_finalized_labels(config: dict) -> int:
     """Finds the number of label files with no unlabeled frames"""
     records = get_records_from_datadir(os.path.join(config["project"]["path"], config["project"]["data_path"]))
     number_valid_labels = 0
-    for k, v in records.items():
+    for _, v in records.items():
         for filetype, fileloc in v.items():
             if filetype == "label":
                 if fileloc is None or len(fileloc) == 0:
@@ -714,8 +683,8 @@ def get_number_finalized_labels(config: dict) -> int:
 def import_outputfile(
     project_dir: Union[str, os.PathLike],
     outputfile: Union[str, os.PathLike],
-    class_names: list = None,
-    latent_name: str = None,
+    class_names: Union[list, None] = None,
+    latent_name: Union[str, None] = None,
 ):
     """Gets the probabilities, thresholds, used HDF5 dataset key, and all dataset keys from an outputfile
 
@@ -809,7 +778,7 @@ def import_outputfile(
             # this should not happen
             thresholds = thresholds[-1, :]
         loaded_class_names = f[key]["class_names"][:]
-        if type(loaded_class_names[0]) == bytes:
+        if isinstance(loaded_class_names[0], bytes):
             loaded_class_names = [i.decode("utf-8") for i in loaded_class_names]
     log.debug("probabilities shape: {}".format(probabilities.shape))
 
@@ -855,7 +824,7 @@ def do_outputfiles_have_predictions(data_path: Union[str, os.PathLike], model_na
     assert os.path.isdir(data_path)
     records = get_records_from_datadir(data_path)
     has_predictions = []
-    for key, record in records.items():
+    for key, _ in records.items():
         file = records[key]["output"]
         if file is None:
             has_predictions.append(False)
@@ -976,7 +945,6 @@ def get_weights_from_model_path(model_path: Union[str, os.PathLike]) -> dict:
         rundirs += subdirs
     rundirs.sort()
 
-    # model_weights = defaultdict(list)
     model_weights = {"flow_generator": {}, "feature_extractor": {}, "sequence": {}}
     for rundir in rundirs:
         # for backwards compatibility
@@ -1007,16 +975,12 @@ def get_weights_from_model_path(model_path: Union[str, os.PathLike]) -> dict:
         else:
             continue
 
-        # architecture = params[model_type]['arch']
-
-        weightfile = get_weightfile_from_rundir(rundir)  # os.path.join(rundir, 'checkpoint.pt')
+        weightfile = get_weightfile_from_rundir(rundir)
         if weightfile is not None and os.path.isfile(weightfile):
             if arch in model_weights[model_type].keys():
                 model_weights[model_type][arch].append(weightfile)
             else:
                 model_weights[model_type][arch] = [weightfile]
-            # model_weights[model_type].append(weightfile)
-            # model_weights[model_type][arch].append(weightfile)
     for model in model_weights.keys():
         for arch, runlist in model_weights[model].items():
             model_weights[model][arch] = sort_runs_by_date(runlist)
@@ -1056,10 +1020,6 @@ def get_weightfile_from_cfg(cfg: DictConfig, model_type: str) -> Union[str, None
     weightfile: path to weight file
     """
 
-    # if cfg.reload.weights is not None:
-    #     assert os.path.isfile(cfg.reload.weights)
-    #     return cfg.reload.weights
-
     assert model_type in ["flow_generator", "feature_extractor", "end_to_end", "sequence"]
 
     if not os.path.isdir(cfg.project.model_path):
@@ -1088,7 +1048,6 @@ def get_weightfile_from_cfg(cfg: DictConfig, model_type: str) -> Union[str, None
             log.info("loading specified weights: {}".format(path_to_weights))
             return path_to_weights
         elif cfg.reload.latest or cfg[model_type].weights == "latest":
-            # print(trained_models)
             if len(trained_models[model_type][architecture]) == 0:
                 log.warning("Trying to load *latest* weights, but found none! Using random initialization!")
                 return
@@ -1200,7 +1159,6 @@ def load_config(path_to_config: Union[str, os.PathLike]) -> dict:
 
     project = OmegaConf.load(path_to_config)
     project = fix_config_paths(project, path_to_config)
-    # project = convert_config_paths_to_absolute(project)
     return project
 
 
@@ -1235,7 +1193,7 @@ def convert_all_videos(config_file: Union[str, os.PathLike], movie_format="hdf5"
     records = get_records_from_datadir(
         os.path.join(project_config["project"]["path"], project_config["project"]["data_path"])
     )
-    for key, record in tqdm(records.items(), desc="converting videos"):
+    for _, record in tqdm(records.items(), desc="converting videos"):
         videofile = record["rgb"]
         try:
             convert_video(videofile, movie_format=movie_format, **kwargs)
@@ -1306,9 +1264,6 @@ def get_config_from_path(project_path: Union[str, os.PathLike]):
     project_path = os.path.abspath(project_path)
     cfg_file = get_config_file_from_path(project_path)
     return load_config(cfg_file)
-    # project_cfg = OmegaConf.load(cfg_file)
-    # project_cfg = fix_config_paths(project_cfg, cfg_file)
-    # return project_cfg
 
 
 def get_project_path_from_cl(argv: list, error_if_not_found=True) -> str:
@@ -1333,7 +1288,7 @@ def get_project_path_from_cl(argv: list, error_if_not_found=True) -> str:
     """
     for arg in argv:
         if "project.config_file" in arg:
-            key, path = arg.split("=")
+            _, path = arg.split("=")
             assert os.path.isfile(path)
             # path is the path to the project directory, not the config file
             path = os.path.dirname(path)
@@ -1347,54 +1302,6 @@ def get_project_path_from_cl(argv: list, error_if_not_found=True) -> str:
         raise ValueError("project path or file not in args: {}".format(argv))
     else:
         return None
-
-
-# def make_config(project_path: Union[str, os.PathLike], config_list: list, run_type: str, model: str) -> DictConfig:
-#     """DEPRECATED
-#     TODO: replace with configuration.make_config
-#     """
-#     config_path = os.path.join(os.path.dirname(deepethogram.__file__), 'conf')
-
-#     def config_string_to_path(config_path, string):
-#         fullpath = os.path.join(config_path, *string.split('/')) + '.yaml'
-#         assert os.path.isfile(fullpath)
-#         return fullpath
-
-#     cli = OmegaConf.from_cli()
-
-#     if project_path is not None:
-#         user_cfg = get_config_file_from_path(project_path)
-
-#         # order of operations: first, defaults specified in config_list
-#         # then, if preset is specified in user config or at the command line, load those preset values
-#         # then, append the user config
-#         # then, the command line args
-#         # so if we specify a preset and manually change, say, the feature extractor architecture, we can do that
-#         if 'preset' in user_cfg:
-#             config_list += ['preset/' + user_cfg.preset]
-
-#     if 'preset' in cli:
-#         config_list += ['preset/' + cli.preset]
-
-#     config_files = [config_string_to_path(config_path, i) for i in config_list]
-
-#     cfgs = [OmegaConf.load(i) for i in config_files]
-
-#     if project_path is not None:
-#         # first defaults; then user cfg; then cli
-#         cfg = OmegaConf.merge(*cfgs, user_cfg, cli)
-#     else:
-#         cfg = OmegaConf.merge(*cfgs, cli)
-
-#     cfg.run = {'type': run_type, 'model': model}
-#     return cfg
-
-# def make_config_from_cli(argv, *args, **kwargs):
-#     """DEPRECATED
-#     TODO: replace with configuration.make_config
-#     """
-#     project_path = get_project_path_from_cl(argv)
-#     return make_config(project_path, *args, **kwargs)
 
 
 def configure_run_directory(cfg: DictConfig) -> str:

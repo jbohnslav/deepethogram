@@ -79,7 +79,6 @@ class EarlyStopping(Stopper):
 
         elif score < self.best_score:
             self.counter += 1
-            # self._logger.debug("EarlyStopping: %i / %i" % (self.counter, self.patience))
             if self.counter >= self.patience and self.epoch_counter >= self.early_stopping_begins:
                 print("EarlyStopping: Stop training")
                 should_stop = True
@@ -89,10 +88,6 @@ class EarlyStopping(Stopper):
             best = True
         if self.epoch_counter > self.num_epochs:
             should_stop = True
-
-        import pdb
-
-        pdb.set_trace()
 
         return best, should_stop
 
@@ -137,7 +132,6 @@ class LearningRateStopper(Stopper):
         """
         super().step()
         should_stop = False
-        # print('epoch counter: {} num_epochs: {}'.format(self.epoch_counter, self.num_epochs))
         if lr < self.minimum_learning_rate + self.eps or self.epoch_counter >= self.num_epochs:
             print("Reached learning rate {}, stopping...".format(lr))
             should_stop = True

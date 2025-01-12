@@ -1,24 +1,24 @@
-from functools import partial
 import logging
 import os
 import shutil
 import sys
+from functools import partial
 from typing import Union
 
 import cv2
 import numpy as np
-from omegaconf import OmegaConf, ListConfig
 import torch
+from omegaconf import ListConfig, OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from vidio import VideoWriter
 
-from deepethogram.configuration import make_feature_extractor_inference_cfg
 from deepethogram import projects, utils
+from deepethogram.configuration import make_feature_extractor_inference_cfg
 from deepethogram.data.augs import get_cpu_transforms, get_gpu_transforms
 from deepethogram.data.datasets import VideoIterable
 from deepethogram.flow_generator.train import build_model_from_cfg as build_flow_generator
-from deepethogram.flow_generator.utils import flow_to_rgb_polar, flow_to_rgb
+from deepethogram.flow_generator.utils import flow_to_rgb, flow_to_rgb_polar
 
 log = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def extract_movie(
                 # b1=[1,2,3,4,5,6,7,8,9,10,11]
                 # we will just hack it to take the first image. really, we should only run each batch once, then save all 11
                 # images in a row
-                if type(flows) == list or type(flows) == tuple:
+                if isinstance(flows, (list, tuple)):
                     flows = flows[0]
                 # only support batch size of 1
                 flow = flows[0, 8:10, ...]
@@ -144,9 +144,9 @@ def flow_generator_inference(cfg):
     # figure out which videos to run inference on
     if directory_list is None or len(directory_list) == 0:
         raise ValueError(
-            "must pass list of directories from commmand line. " "Ex: directory_list=[path_to_dir1,path_to_dir2]"
+            "must pass list of directories from commmand line. Ex: directory_list=[path_to_dir1,path_to_dir2]"
         )
-    elif type(directory_list) == str and directory_list == "all":
+    elif isinstance(directory_list, str) and directory_list == "all":
         basedir = cfg.project.data_path
         directory_list = utils.get_subfiles(basedir, "directory")
     elif isinstance(directory_list, str):
@@ -170,9 +170,9 @@ def flow_generator_inference(cfg):
     for record in records:
         rgb.append(record["rgb"])
 
-    assert cfg.feature_extractor.n_flows + 1 == cfg.flow_generator.n_rgb, (
-        "Flow generator inputs must be one greater " "than feature extractor num flows "
-    )
+    assert (
+        cfg.feature_extractor.n_flows + 1 == cfg.flow_generator.n_rgb
+    ), "Flow generator inputs must be one greater than feature extractor num flows "
     # set up gpu augmentation
     input_images = cfg.feature_extractor.n_flows + 1
     mode = "3d" if "3d" in cfg.feature_extractor.arch.lower() else "2d"

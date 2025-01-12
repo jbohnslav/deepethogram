@@ -1,7 +1,7 @@
 import os
 from typing import Union
 
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 import deepethogram
 from deepethogram import projects
@@ -33,7 +33,7 @@ def config_string_to_path(config_path: Union[str, os.PathLike], string: str) -> 
     return fullpath
 
 
-def load_config_by_name(string: str, config_path: Union[str, os.PathLike] = None) -> DictConfig:
+def load_config_by_name(string: str, config_path: Union[str, os.PathLike, None] = None) -> DictConfig:
     """Loads a default configuration by name
 
     Parameters
@@ -129,7 +129,6 @@ def make_config(
     DictConfig
         [description]
     """
-    # config_path = os.path.join(os.path.dirname(deepethogram.__file__), 'conf')
 
     user_cfg = projects.get_config_from_path(project_path)
 
@@ -153,7 +152,6 @@ def make_config(
 
     if debug:
         config_list.append("debug")
-    # config_files = [config_string_to_path(config_path, i) for i in config_list]
 
     cfgs = [load_config_by_name(i) for i in config_list]
 

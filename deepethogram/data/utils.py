@@ -246,8 +246,6 @@ def read_all_labels(labelfiles: list, fix: bool = True, multilabel: bool = True)
     labels = []
     for i, labelfile in enumerate(labelfiles):
         assert os.path.isfile(labelfile)
-        label_type = os.path.splitext(labelfile)[1][1:]
-        # labelfile, label_type = find_labelfile(video)
         label = read_labels(labelfile)
         H, W = label.shape
         # labels should be time x num_behaviors

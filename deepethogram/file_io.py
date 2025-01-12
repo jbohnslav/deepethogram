@@ -13,10 +13,8 @@ def read_labels(labelfile: Union[str, os.PathLike]) -> np.ndarray:
     labeltype = os.path.splitext(labelfile)[1][1:]
     if labeltype == "csv":
         label = read_label_csv(labelfile)
-        # return(read_label_csv(labelfile))
     elif labeltype == "h5":
         label = read_label_hdf5(labelfile)
-        # return(read_label_hdf5(labelfile))
     else:
         raise ValueError("Unknown labeltype: {}".format(labeltype))
     H, W = label.shape

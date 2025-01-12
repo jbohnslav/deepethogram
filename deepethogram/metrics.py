@@ -2,13 +2,13 @@ import logging
 import os
 import warnings
 from collections import defaultdict
-from typing import Union, Tuple
 from multiprocessing import Pool
+from typing import Tuple, Union
 
 import h5py
 import numpy as np
 import torch
-from sklearn.metrics import f1_score, roc_auc_score, confusion_matrix, auc
+from sklearn.metrics import auc, confusion_matrix, f1_score, roc_auc_score
 
 from deepethogram import utils
 from deepethogram.postprocessing import remove_low_thresholds
@@ -22,7 +22,7 @@ EPS = 1e-7
 try:
     slurm_job_id = os.environ["SLURM_JOB_ID"]
     slurm = True
-except:
+except Exception:
     slurm = False
 
 
@@ -139,7 +139,7 @@ def accuracy(predictions: np.ndarray, labels: np.ndarray):
     return np.mean(predictions == labels)
 
 
-def confusion(predictions: np.ndarray, labels: np.ndarray, K: int = None) -> np.ndarray:
+def confusion(predictions: np.ndarray, labels: np.ndarray, K: Union[int, None] = None) -> np.ndarray:
     """Computes confusion matrix. Much faster than sklearn.metrics.confusion_matrix for large numbers of predictions
 
     Parameters
@@ -168,13 +168,11 @@ def confusion(predictions: np.ndarray, labels: np.ndarray, K: int = None) -> np.
     cm = np.zeros((K, K)).astype(int)
     for i in range(K):
         for j in range(K):
-            # these_inds = labels==i
-            # cm[i, j] = np.sum((labels==i)*(predictions==j))
             cm[i, j] = np.sum(np.logical_and(labels == i, predictions == j))
     return cm
 
 
-def binary_confusion_matrix(predictions, labels) -> np.ndarray:
+def binary_confusion_matrix(predictions: np.ndarray, labels: np.ndarray) -> np.ndarray:
     # behaviors x thresholds x 2 x 2
     # cms = np.zeros((K, N, 2, 2), dtype=int)
     ndim = predictions.ndim
@@ -206,7 +204,9 @@ def binary_confusion_matrix(predictions, labels) -> np.ndarray:
     return cms
 
 
-def binary_confusion_matrix_multiple_thresholds(probabilities, labels, thresholds):
+def binary_confusion_matrix_multiple_thresholds(
+    probabilities: np.ndarray, labels: np.ndarray, thresholds: np.ndarray
+) -> np.ndarray:
     # this is the fastest I could possibly write it
     K = probabilities.shape[1]
     N = len(thresholds)
@@ -253,7 +253,6 @@ def binary_confusion_matrix_parallel(
         else:
             raise ValueError("weird shape in probs_or_preds: {}".format(probs_or_preds.shape))
         func = confusion_alias
-    # log.info('parallel start')
     if num_workers > 1:
         with Pool(num_workers) as pool:
             for res in pool.imap_unordered(func, iterator, parallel_chunk):
@@ -261,7 +260,6 @@ def binary_confusion_matrix_parallel(
     else:
         for args in iterator:
             cm += func(args)
-    # log.info('parallel end')
     return cm
 
 
@@ -363,14 +361,13 @@ def fast_auc(y_true, y_prob):
 
     nfalse = np.cumsum(1 - y_true)
     auc = np.cumsum((y_true * nfalse))[-1]
-    # print(auc)
     auc /= nfalse[-1] * (n - nfalse[-1])
     return auc
 
 
 # @profile
 def evaluate_thresholds(
-    probabilities: np.ndarray, labels: np.ndarray, thresholds: np.ndarray = None, num_workers: int = 4
+    probabilities: np.ndarray, labels: np.ndarray, thresholds: Union[np.ndarray, None] = None, num_workers: int = 4
 ) -> Tuple[dict, dict]:
     """Given probabilities and labels, compute a bunch of metrics at each possible threshold value
 
@@ -395,8 +392,6 @@ def evaluate_thresholds(
     epoch_metrics: dict
         each value is only a single float for the entire prediction / label set.
     """
-    # log.info('evaluating thresholds. P: {} lab: {} n_workers: {}'.format(probabilities.shape, labels.shape, num_workers))
-    # log.info('SLURM in metrics file: {}'.format(slurm))
     if slurm and num_workers != 1:
         warnings.warn("using multiprocessing on slurm can cause issues. setting num_workers to 1")
         num_workers = 1
@@ -404,8 +399,6 @@ def evaluate_thresholds(
     if thresholds is None:
         # using 200 means that approximated mAP, AUROC is almost exactly the same as exact
         thresholds = np.linspace(1e-4, 1, 200)
-    # log.info('num workers in evaluate thresholds: {}'.format(num_workers))
-    # log.debug('probabilities shape in metrics calc: {}'.format(probabilities.shape))
     metrics_by_threshold = {}
     if probabilities.ndim == 1:
         raise ValueError("To calc threshold, predictions must be probabilities, not classes")
@@ -414,10 +407,7 @@ def evaluate_thresholds(
         labels = index_to_onehot(labels, K)
 
     probabilities, labels = remove_invalid_values_predictions_and_labels(probabilities, labels)
-    # log.info('first metrics call')
     metrics_by_threshold = compute_metrics_by_threshold(probabilities, labels, thresholds, num_workers)
-    # log.info('first metrics call finished')
-    # log.info('finished computing binary confusion matrices')
     # optimum threshold: one that maximizes F1
     optimum_indices = np.argmax(metrics_by_threshold["f1"], axis=0)
     optimum_thresholds = thresholds[optimum_indices]
@@ -439,11 +429,7 @@ def evaluate_thresholds(
     # ALWAYS REPORT THE PERFORMANCE WITH "VALID" BACKGROUND
     predictions[:, 0] = np.logical_not(np.any(predictions[:, 1:], axis=1))
 
-    # log.info('computing metric thresholds again')
-    # re-use our confusion matrix calculation. returns N x N x K values
-    # log.info('second metircs call')
     metrics_by_class = compute_metrics_by_threshold(predictions, labels, None, num_workers)
-    # log.info('second metrics call ended')
 
     # summing over classes is the same as flattening the array. ugly syntax
     # TODO: make function that computes metrics from a stack of confusion matrices rather than this none None business
@@ -468,25 +454,7 @@ def evaluate_thresholds(
         "auroc_overall": np.nan,
         "mAP_overall": np.nan,
     }
-    # it is too much of a pain to increase the speed on roc_auc_score and mAP
-    # try:
-    #     epoch_metrics['auroc_overall'] = roc_auc_score(labels, probabilities, average='micro')
-    #     epoch_metrics['auroc_by_class'] = roc_auc_score(labels, probabilities, average=None)
-    #     # small perf improvement is not worth worrying about bugs
-    #     # epoch_metrics['auroc_overall'] = fast_auc(labels.flatten(), probabilities.flatten())
-    #     # epoch_metrics['auroc_by_class'] = fast_auc(labels, probabilities)
-    #     epoch_metrics['auroc_class_mean'] = epoch_metrics['auroc_by_class'].mean()
-    # except ValueError:
-    #     # only one class in labels...
-    #     epoch_metrics['auroc_overall'] = np.nan
-    #     epoch_metrics['auroc_class_mean'] = np.nan
-    #     epoch_metrics['auroc_by_class'] = np.array([np.nan for _ in range(K)])
-    #
-    # epoch_metrics['mAP_overall'] = average_precision_score(labels, probabilities, average='micro')
-    # epoch_metrics['mAP_by_class'] = average_precision_score(labels, probabilities, average=None)
-    # # this is a misnomer: mAP by class is just AP
-    # epoch_metrics['mAP_class_mean'] = epoch_metrics['mAP_by_class'].mean()
-    # log.info('returning metrics')
+
     return metrics_by_threshold, epoch_metrics
 
 
@@ -519,7 +487,7 @@ def compute_f1(precision: float, recall: float, beta: float = 1.0) -> float:
 
 def compute_precision_recall(cm: np.ndarray) -> Tuple[float, float]:
     """computes precision and recall from a confusion matrix"""
-    tn = cm[0, 0]
+    # tn = cm[0, 0]
     tp = cm[1, 1]
     fp = cm[0, 1]
     fn = cm[1, 0]
@@ -591,9 +559,9 @@ all_metrics = {
 
 
 def list_to_mean(values):
-    if type(values[0]) == torch.Tensor:
+    if isinstance(values[0], torch.Tensor):
         value = utils.tensor_to_np(torch.stack(values).mean())
-    elif type(values[0]) == np.ndarray:
+    elif isinstance(values[0], np.ndarray):
         if values[0].size == 1:
             value = np.stack(np.array(values)).mean()
         else:
@@ -762,7 +730,6 @@ class Metrics:
 
     def save_metrics_to_disk(self, metrics: dict, split: str) -> None:
         with h5py.File(self.fname, "r+") as f:
-            # utils.print_hdf5(f)
             if split not in f.keys():
                 # should've created top-level groups in initialize_file; this is for nesting
                 f.create_group(split)
@@ -920,7 +887,6 @@ class Classification(Metrics):
         else:
             labels = self.stack_sequence_data(data["labels"])
 
-        num_classes = probs.shape[1]
         one_hot = probs.shape[-1] == labels.shape[-1]
         if one_hot:
             rows_with_false_labels = np.any(labels == self.ignore_index, axis=1)
@@ -950,8 +916,7 @@ class Classification(Metrics):
                     if metric == "confusion":
                         warnings.simplefilter("ignore")
                         metrics[metric] = confusion(predictions, labels, K=self.num_classes)
-                        # import pdb
-                        # pdb.set_trace()
+
                     elif metric == "binary_confusion":
                         pass
                     else:

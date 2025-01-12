@@ -1,35 +1,34 @@
+# ruff: noqa: E402
 import gc
 import logging
 import os
 import sys
 import warnings
-from typing import Union, Tuple
+from typing import Tuple, Union
 
 import cv2
 
 cv2.setNumThreads(0)
-# import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig, OmegaConf
 
-from deepethogram import utils, viz
+from deepethogram import projects, utils, viz
 from deepethogram.base import BaseLightningModule, get_trainer_from_cfg
 from deepethogram.configuration import make_feature_extractor_train_cfg
 from deepethogram.data.datasets import get_datasets_from_cfg
-from deepethogram.feature_extractor.losses import ClassificationLoss, BinaryFocalLoss, CrossEntropyLoss
+from deepethogram.feature_extractor.losses import BinaryFocalLoss, ClassificationLoss, CrossEntropyLoss
 from deepethogram.feature_extractor.models.CNN import get_cnn
 from deepethogram.feature_extractor.models.hidden_two_stream import (
-    HiddenTwoStream,
     FlowOnlyClassifier,
+    HiddenTwoStream,
     build_fusion_layer,
 )
 from deepethogram.flow_generator.train import build_model_from_cfg as build_flow_generator
 from deepethogram.losses import get_regularization_loss
 from deepethogram.metrics import Classification
-from deepethogram import projects
 from deepethogram.stoppers import get_stopper
 
 # hack
@@ -43,13 +42,11 @@ warnings.filterwarnings(
     "and test dataloaders.",
 )
 
-# flow_generators = utils.get_models_from_module(flow_models, get_function=False)
 plt.switch_backend("agg")
 
 log = logging.getLogger(__name__)
 
 
-# @profile
 def feature_extractor_train(cfg: DictConfig) -> nn.Module:
     """Trains feature extractor models from a configuration.
 
@@ -63,7 +60,6 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
     nn.Module
         Trained feature extractor
     """
-    # rundir = os.getcwd()
     cfg = projects.setup_run(cfg)
 
     log.info("args: {}".format(" ".join(sys.argv)))
@@ -77,9 +73,9 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
     # we build flow generator independently because you might want to load it from a different location
     flow_generator = build_flow_generator(cfg)
     flow_weights = projects.get_weightfile_from_cfg(cfg, "flow_generator")
-    assert flow_weights is not None, (
-        "Must have a valid weightfile for flow generator. Use " "deepethogram.flow_generator.train or cfg.reload.latest"
-    )
+    assert (
+        flow_weights is not None
+    ), "Must have a valid weightfile for flow generator. Use deepethogram.flow_generator.train or cfg.reload.latest"
     log.info("loading flow generator from file {}".format(flow_weights))
 
     flow_generator = utils.load_weights(flow_generator, flow_weights)
@@ -90,7 +86,6 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
 
     model_parts = build_model_from_cfg(cfg, pos=data_info["pos"], neg=data_info["neg"])
     _, spatial_classifier, flow_classifier, fusion, model = model_parts
-    # log.info('model: {}'.format(model))
 
     num_classes = len(cfg.project.class_names)
 
@@ -116,13 +111,10 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
     # Without the curriculum we just train end to end from the start
     if cfg.feature_extractor.curriculum:
         # train spatial model, then flow model, then both end-to-end
-        # dataloaders = get_dataloaders_from_cfg(cfg, model_type='feature_extractor',
-        #                                        input_images=cfg.feature_extractor.n_rgb)
         datasets, data_info = get_datasets_from_cfg(
             cfg, model_type="feature_extractor", input_images=cfg.feature_extractor.n_rgb
         )
         stopper = get_stopper(cfg)
-
         criterion = get_criterion(cfg, spatial_classifier, data_info)
 
         lightning_module = HiddenTwoStreamLightning(spatial_classifier, cfg, datasets, metrics, criterion)
@@ -132,17 +124,11 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
         # https://pytorch-lightning.readthedocs.io/en/latest/lr_finder.html?highlight=auto%20scale%20learning%20rate
         # I tried to do this without re-creating module, but finding the learning rate increments the epoch??
         # del lightning_module
-        # log.info('epoch num: {}'.format(trainer.current_epoch))
-        # lightning_module = HiddenTwoStreamLightning(spatial_classifier, cfg, datasets, metrics, criterion)
         trainer.fit(lightning_module)
 
-        # free RAM. note: this doesn't do much
-        log.info("free ram")
         del datasets, lightning_module, trainer, stopper, data_info
         torch.cuda.empty_cache()
         gc.collect()
-
-        # return
 
         datasets, data_info = get_datasets_from_cfg(
             cfg, model_type="feature_extractor", input_images=cfg.feature_extractor.n_flows + 1
@@ -157,7 +143,6 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
         criterion = get_criterion(cfg, flow_generator_and_classifier, data_info)
         lightning_module = HiddenTwoStreamLightning(flow_generator_and_classifier, cfg, datasets, metrics, criterion)
         trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
-        # lightning_module = HiddenTwoStreamLightning(flow_generator_and_classifier, cfg, datasets, metrics, criterion)
         trainer.fit(lightning_module)
 
         del datasets, lightning_module, trainer, stopper, data_info
@@ -177,18 +162,10 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
     cfg.compute.batch_size = original_batch_size
     cfg.train.lr = original_lr
 
-    # log.warning('SETTING ANAOMALY DETECTION TO TRUE! WILL SLOW DOWN.')
-    # torch.autograd.set_detect_anomaly(True)
-
     lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
-
     trainer = get_trainer_from_cfg(cfg, lightning_module, stopper)
-    # see above for horrible syntax explanation
-    # lightning_module = HiddenTwoStreamLightning(model, cfg, datasets, metrics, criterion)
     trainer.fit(lightning_module)
-    # trainer.test(model=lightning_module)
     return model
-    # utils.save_hidden_two_stream(model, rundir, dict(cfg), stopper.epoch_counter)
 
 
 def build_model_from_cfg(
@@ -200,23 +177,18 @@ def build_model_from_cfg(
     ----------
     cfg: DictConfig
         configuration, e.g. from Hydra command line
-    return_components: bool
-        if True, returns spatial classifier and flow classifier individually
     pos: np.ndarray
         Number of positive examples in dataset. Used for initializing biases in final layer
     neg: np.ndarray
         Number of negative examples in dataset. Used for initializing biases in final layer
+    num_classes: int, optional
+        Number of classes to use. If None, uses cfg.project.class_names
 
     Returns
     -------
-    if `return_components`:
-        spatial_classifier, flow_classifier: nn.Module, nn.Module
-            cnns for classifying rgb images and optic flows
-    else:
-        hidden two stream model: nn.Module
-            hidden two stream CNN
+    tuple
+        (flow_generator, spatial_classifier, flow_classifier, fusion, model)
     """
-    # device = torch.device("cuda:" + str(cfg.compute.gpu_id) if torch.cuda.is_available() else "cpu")
     device = "cpu"
     feature_extractor_weights = projects.get_weightfile_from_cfg(cfg, "feature_extractor")
     if num_classes is None:
@@ -228,6 +200,7 @@ def build_model_from_cfg(
     reload_imagenet = feature_extractor_weights is None
     if cfg.feature_extractor.arch == "resnet3d_34":
         assert feature_extractor_weights is not None, "Must specify path to resnet3d weights!"
+
     spatial_classifier = get_cnn(
         cfg.feature_extractor.arch,
         in_channels=in_channels,
@@ -238,11 +211,11 @@ def build_model_from_cfg(
         neg=neg,
         final_bn=cfg.feature_extractor.final_bn,
     )
-    # load this specific component from the weight file
     if feature_extractor_weights is not None:
         spatial_classifier = utils.load_feature_extractor_components(
             spatial_classifier, feature_extractor_weights, "spatial", device=device
         )
+
     in_channels = cfg.feature_extractor.n_flows * 2 if "3d" not in cfg.feature_extractor.arch else 2
     flow_classifier = get_cnn(
         cfg.feature_extractor.arch,
@@ -262,9 +235,9 @@ def build_model_from_cfg(
 
     flow_generator = build_flow_generator(cfg)
     flow_weights = projects.get_weightfile_from_cfg(cfg, "flow_generator")
-    assert flow_weights is not None, (
-        "Must have a valid weightfile for flow generator. Use " "deepethogram.flow_generator.train or cfg.reload.latest"
-    )
+    assert (
+        flow_weights is not None
+    ), "Must have a valid weightfile for flow generator. Use deepethogram.flow_generator.train or cfg.reload.latest"
     flow_generator = utils.load_weights(flow_generator, flow_weights, device=device)
 
     spatial_classifier, flow_classifier, fusion = build_fusion_layer(
@@ -274,7 +247,6 @@ def build_model_from_cfg(
         fusion = utils.load_feature_extractor_components(fusion, feature_extractor_weights, "fusion", device=device)
 
     model = HiddenTwoStream(flow_generator, spatial_classifier, flow_classifier, fusion, cfg.feature_extractor.arch)
-    # log.info(model.fusion.flow_weight)
     model.set_mode("classifier")
 
     return flow_generator, spatial_classifier, flow_classifier, fusion, model
@@ -284,17 +256,17 @@ class HiddenTwoStreamLightning(BaseLightningModule):
     """Lightning Module for training Feature Extractor models"""
 
     def __init__(self, model: nn.Module, cfg: DictConfig, datasets: dict, metrics, criterion: nn.Module):
-        """constructor
+        """Constructor
 
         Parameters
         ----------
         model : nn.Module
-            nn.Module, hidden two-stream CNNs
+            Hidden two-stream CNNs
         cfg : DictConfig
             omegaconf configuration
         datasets : dict
             dictionary containing Dataset classes
-        metrics : [type]
+        metrics : Classification
             metrics object for saving and computing metrics
         criterion : nn.Module
             loss function
@@ -302,7 +274,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         super().__init__(model, cfg, datasets, metrics, viz.visualize_logger_multilabel_classification)
 
         self.has_logged_channels = False
-        # for convenience
         self.final_activation = self.hparams.feature_extractor.final_activation
         if self.final_activation == "softmax":
             self.activation = nn.Softmax(dim=1)
@@ -314,7 +285,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         self.criterion = criterion
 
     def validate_batch_size(self, batch: dict):
-        """simple check for appropriate batch sizes
+        """Simple check for appropriate batch sizes
 
         Parameters
         ----------
@@ -327,10 +298,8 @@ class HiddenTwoStreamLightning(BaseLightningModule):
             verified batch dictionary
         """
         if self.hparams.compute.dali:
-            # no idea why they wrap this, maybe they fixed it?
             batch = batch[0]
         if "images" in batch.keys():
-            # weird case of batch size = 1 somehow getting squeezed out
             if batch["images"].ndim != 5:
                 batch["images"] = batch["images"].unsqueeze(0)
         if "labels" in batch.keys():
@@ -353,17 +322,11 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         loss : torch.Tensor
             mean loss for batch for Lightning's backward + update hooks
         """
-        # use the forward function
-        # return the image tensor so we can visualize after gpu transforms
         images, outputs = self(batch, "train")
-
         probabilities = self.activation(outputs)
-
         loss, loss_dict = self.criterion(outputs, batch["labels"], self.model)
-
         self.visualize_batch(images, probabilities, batch["labels"], "train")
 
-        # save the model outputs to a buffer for various metrics
         self.metrics.buffer.append(
             "train", {"loss": loss.detach(), "probs": probabilities.detach(), "labels": batch["labels"].detach()}
         )
@@ -374,7 +337,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         return loss
 
     def validation_step(self, batch: dict, batch_idx: int):
-        """runs a single validation step
+        """Runs a single validation step
 
         Parameters
         ----------
@@ -385,7 +348,6 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         """
         images, outputs = self(batch, "val")
         probabilities = self.activation(outputs)
-
         loss, loss_dict = self.criterion(outputs, batch["labels"], self.model)
         self.visualize_batch(images, probabilities, batch["labels"], "val")
         self.metrics.buffer.append(
@@ -396,7 +358,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         self.log("val/loss", loss.detach().cpu())
 
     def test_step(self, batch: dict, batch_idx: int):
-        """runs test step
+        """Runs test step
 
         Parameters
         ----------
@@ -414,7 +376,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         self.metrics.buffer.append("test", loss_dict)
 
     def visualize_batch(self, images: torch.Tensor, probs: torch.Tensor, labels: torch.Tensor, split: str):
-        """generates example images of a given batch and saves to disk as a Matplotlib figure
+        """Generates example images of a given batch and saves to disk as a Matplotlib figure
 
         Parameters
         ----------
@@ -468,13 +430,12 @@ class HiddenTwoStreamLightning(BaseLightningModule):
             # should've been closed in viz.save_figure. this is double checking
             plt.close(fig)
             plt.close("all")
-        except:
+        except Exception:
             pass
         torch.cuda.empty_cache()
-        # self.viz_cnt[split] += 1
 
     def forward(self, batch: dict, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
-        """runs forward pass, including GPU-based image augmentations
+        """Runs forward pass, including GPU-based image augmentations
 
         Parameters
         ----------
@@ -486,7 +447,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         Returns
         -------
         Tuple[torch.Tensor, torch.Tensor]
-            [description]
+            (gpu_images, outputs)
         """
         batch = self.validate_batch_size(batch)
         # lightning handles transfer to device
@@ -513,7 +474,7 @@ class HiddenTwoStreamLightning(BaseLightningModule):
         return gpu_images, outputs
 
     def log_image_statistics(self, images: torch.Tensor):
-        """logs the min, mean, max, and std deviation of input tensors. useful for debugging
+        """Logs the min, mean, max, and std deviation of input tensors
 
         Parameters
         ----------
@@ -588,7 +549,7 @@ def get_criterion(cfg: DictConfig, model, data_info: dict, device=None):
 
     elif final_activation == "sigmoid":
         pos_weight = data_info["pos_weight"]
-        if type(pos_weight) == np.ndarray:
+        if isinstance(pos_weight, np.ndarray):
             pos_weight = torch.from_numpy(pos_weight)
             pos_weight = pos_weight.to(device) if device is not None else pos_weight
         data_criterion = BinaryFocalLoss(
@@ -598,7 +559,6 @@ def get_criterion(cfg: DictConfig, model, data_info: dict, device=None):
         raise NotImplementedError
 
     regularization_criterion = get_regularization_loss(cfg, model)
-
     criterion = ClassificationLoss(data_criterion, regularization_criterion)
     criterion = criterion.to(device) if device is not None else criterion
 
@@ -625,8 +585,10 @@ def get_metrics(
         is_kinetics (bool): if true, don't make confusion matrices
         key_metric (str): the key metric will be used for learning rate scheduling and stopping
 
-    Returns:
-        Classification metrics object
+    Returns
+    -------
+    Classification
+        metrics object
     """
     metric_list = ["accuracy", "mean_class_accuracy", "f1"]
     if not is_kinetics:
@@ -641,5 +603,4 @@ def get_metrics(
 if __name__ == "__main__":
     project_path = projects.get_project_path_from_cl(sys.argv)
     cfg = make_feature_extractor_train_cfg(project_path, use_command_line=True)
-
     feature_extractor_train(cfg)
