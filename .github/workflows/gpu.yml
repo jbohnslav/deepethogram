@@ -39,6 +39,10 @@ jobs:
         pip install pytest pytest-cov
         python setup.py develop
 
+    - name: Setup test data
+      run: |
+        python setup_tests.py
+
     - name: GPU Tests
       run: |
         pytest -v -m "gpu" tests/

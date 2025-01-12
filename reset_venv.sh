@@ -26,6 +26,10 @@ uv pip install pytest pytest-cov
 echo "Installing package in editable mode..."
 uv pip install -e .
 
+# Setup test data
+echo "Setting up test data..."
+python setup_tests.py
+
 # Run tests
 echo "Running tests..."
 pytest -v tests/

@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-latest, macos-12]
+        os: [ubuntu-20.04, windows-latest, macos-13]
 
     steps:
     - uses: actions/checkout@v3
@@ -35,7 +35,7 @@ jobs:
         choco install ffmpeg
 
     - name: Install FFMPEG (macOS)
-      if: matrix.os == 'macos-12'
+      if: matrix.os == 'macos-13'
       run: |
         brew install ffmpeg
 
@@ -54,6 +54,10 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-cov
         python setup.py develop
+
+    - name: Setup test data
+      run: |
+        python setup_tests.py
 
     - name: Run CPU tests
       run: |

@@ -38,39 +38,49 @@ def download_file(url, destination):
 
 def setup_tests():
     """Sets up the testing environment for DeepEthogram."""
-
-    # Create tests/DATA directory if it doesn't exist
-    tests_dir = Path("tests")
-    data_dir = tests_dir / "DATA"
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-    # Download the test archive
-    zip_path = data_dir / "testing_deepethogram_archive.zip"
-
     try:
-        print("Downloading test data archive...")
-        gdown.download(id="1IFz4ABXppVxyuhYik8j38k9-Fl9kYKHo", output=str(zip_path), quiet=False)
+        # Create tests/DATA directory if it doesn't exist
+        tests_dir = Path("tests")
+        data_dir = tests_dir / "DATA"
+        data_dir.mkdir(parents=True, exist_ok=True)
 
-        print("Extracting archive...")
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(data_dir)
-
-        # Verify the extraction
+        # Define paths and requirements
         archive_path = data_dir / "testing_deepethogram_archive"
+        zip_path = data_dir / "testing_deepethogram_archive.zip"
         required_items = ["DATA", "models", "project_config.yaml"]
 
-        missing_items = [item for item in required_items if not (archive_path / item).exists()]
+        # Check if test data already exists and is complete
+        if archive_path.exists():
+            missing_items = [item for item in required_items if not (archive_path / item).exists()]
+            if not missing_items:
+                print("Test data already exists and appears complete. Skipping download.")
+                return True
+            print("Test data exists but is incomplete. Re-downloading...")
 
+        # Download and extract if needed
+        if not archive_path.exists() or not all((archive_path / item).exists() for item in required_items):
+            # Download if zip doesn't exist
+            if not zip_path.exists():
+                print("Downloading test data archive...")
+                gdown.download(id="1IFz4ABXppVxyuhYik8j38k9-Fl9kYKHo", output=str(zip_path), quiet=False)
+
+            # Extract archive
+            print("Extracting archive...")
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(data_dir)
+
+            # Clean up zip file after successful extraction
+            zip_path.unlink()
+
+        # Final verification
+        missing_items = [item for item in required_items if not (archive_path / item).exists()]
         if missing_items:
             print(f"Warning: The following items are missing: {missing_items}")
             return False
 
         print("Setup completed successfully!")
         print("\nYou can now run the tests using: pytest tests/")
-        print("Note: The zz_commandline test module will take a few minutes to complete.")
-
-        # Clean up the zip file
-        zip_path.unlink()
+        print("Note: The gpu tests will take a few minutes to complete.")
         return True
 
     except Exception as e:
