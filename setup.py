@@ -31,5 +31,5 @@ setuptools.setup(
             "target-version": "py37",
         },
     },
-    setup_requires=["setuptools>=61.0.0", "ruff"],
+    setup_requires=["setuptools"],
 )
