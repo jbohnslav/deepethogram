@@ -1,50 +1,51 @@
-name: GPU Tests
-
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
-jobs:
-  gpu-test:
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Set up Python 3.7
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Install FFMPEG
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
-
-    - name: Install PySide2
-      run: |
-        python -m pip install --upgrade pip
-        pip install "pyside2==5.13.2"
-
-    - name: Install PyTorch with CUDA
-      run: |
-        pip install torch==1.11.0+cu115 torchvision==0.12.0+cu115 -f https://download.pytorch.org/whl/torch_stable.html
-
-    - name: Install package and test dependencies
-      run: |
-        python -m pip install --upgrade "pip<24.0"
-        pip install -r requirements.txt
-        pip install pytest pytest-cov
-        python setup.py develop
-
-    - name: Setup test data
-      run: |
-        python setup_tests.py
-
-    - name: GPU Tests
-      run: |
-        pytest -v -m "gpu" tests/
-      env:
-        CUDA_VISIBLE_DEVICES: 0
+# Temporarily disabled - requires GitHub Teams plan for GPU runners
+# name: GPU Tests
+#
+# on:
+#   push:
+#     branches: [ master ]
+#   pull_request:
+#     branches: [ master ]
+#
+# jobs:
+#   gpu-test:
+#     runs-on: ubuntu-20.04
+#
+#     steps:
+#     - uses: actions/checkout@v3
+#
+#     - name: Set up Python 3.7
+#       uses: actions/setup-python@v4
+#       with:
+#         python-version: '3.7'
+#
+#     - name: Install FFMPEG
+#       run: |
+#         sudo apt-get update
+#         sudo apt-get install -y ffmpeg
+#
+#     - name: Install PySide2
+#       run: |
+#         python -m pip install --upgrade pip
+#         pip install "pyside2==5.13.2"
+#
+#     - name: Install PyTorch with CUDA
+#       run: |
+#         pip install torch==1.11.0+cu115 torchvision==0.12.0+cu115 -f https://download.pytorch.org/whl/torch_stable.html
+#
+#     - name: Install package and test dependencies
+#       run: |
+#         python -m pip install --upgrade "pip<24.0"
+#         pip install -r requirements.txt
+#         pip install pytest pytest-cov
+#         python setup.py develop
+#
+#     - name: Setup test data
+#       run: |
+#         python setup_tests.py
+#
+#     - name: GPU Tests
+#       run: |
+#         pytest -v -m "gpu" tests/
+#       env:
+#         CUDA_VISIBLE_DEVICES: 0
