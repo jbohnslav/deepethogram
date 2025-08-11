@@ -38,10 +38,13 @@ RUN conda install python=3.7 -y
 RUN pip install --upgrade pip
 
 # TODO: REFACTOR CODE SO IT'S POSSIBLE TO RUN GUI WITHOUT TORCH
-RUN conda install pytorch cpuonly -c pytorch
+# Install PyTorch CPU via pip to avoid conda issues with Python 3.7
+RUN pip install torch==1.11.0+cpu torchvision==0.12.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
 
 # Install deepethogram with dev dependencies
 ADD . /app/deepethogram
 WORKDIR /app/deepethogram
+# Use Python 3.7 compatible pyproject.toml
+RUN cp pyproject_py37.toml pyproject.toml
 ENV DEG_VERSION='gui'
 RUN pip install -e ".[dev]"

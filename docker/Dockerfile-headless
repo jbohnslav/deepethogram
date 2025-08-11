@@ -39,5 +39,7 @@ RUN pip install --upgrade pip
 # Install deepethogram with dev dependencies
 ADD . /app/deepethogram
 WORKDIR /app/deepethogram
+# Use Python 3.7 compatible pyproject.toml
+RUN cp pyproject_py37.toml pyproject.toml
 ENV DEG_VERSION='headless'
 RUN pip install -e ".[dev]"
