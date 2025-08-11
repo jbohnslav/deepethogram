@@ -1,18 +1,37 @@
 # Installation
 
-## Brief version
-* Install Anaconda
-* Create a new anaconda environment: `conda create --name deg python=3.7`
-* Activate your environment: `conda activate deg`
-* Install PySide2: `conda install -c conda-forge pyside2==5.13.2`
-* Install PyTorch: [Use this link for official instructions.](https://pytorch.org/)
-* `pip install deepethogram`.
+## Quick Install with UV (Recommended for v0.3.0+)
 
-## Installing from source
+We now recommend using [UV](https://docs.astral.sh/uv/) for fast, reliable installation:
+
+1. **Install UV**:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   # or see the uv website for Windows instructions
+   ```
+
+2. **Create environment and install**:
+   ```bash
+   uv venv --python 3.8
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   uv pip install deepethogram
+   ```
+
+**Note**: DeepEthogram v0.3.0+ requires Python 3.8 and uses PySide6 (upgraded from PySide2).
+
+## Traditional Installation, NOT RECOMMENDED!
+
+### Brief version
+* Install Anaconda
+* Create a new anaconda environment: `conda create --name deg python=3.8`
+* Activate your environment: `conda activate deg`
+* Install PyTorch: [Use this link for official instructions.](https://pytorch.org/)
+* `pip install deepethogram`
+
+### Installing from source
 * `git clone https://github.com/jbohnslav/deepethogram.git`
 * `cd deepethogram`
-* `conda env create -f environment.yml`
-    * Be prepared to wait a long time!! On mechanical hard drives, this may take 5-10 minutes (or more). Interrupting here will cause installation to fail.
+* `conda create --name deg python=3.8`
 * `conda activate deg`
 * `pip install -e .`
 
@@ -26,31 +45,24 @@ you can have both installed on your machine without interference.
 * Install git for your operating system (a good idea anyway!) [Downloads page here](https://git-scm.com/download)
 * Open up the command line, such as terminal on mac or cmd.exe. **VERY IMPORTANT: On Windows, make sure you run the command prompt as an administrator! To do this, right click the shortcut to the command prompt, click `run as administrator`, then say yes to whatever pops up.**
 
-## Installing from pip
-First install the latest version of PyTorch for your system. [Use this link for official instructions.](https://pytorch.org/)
-It should be as simple as `conda install pytorch torchvision cudatoolkit=10.2 -c pytorch`.
-
-Note: if you have an RTX3000 series graphics card, such as a 3060 or 3090, please use `cudatoolkit=11.1` or higher.
-
-After installing PyTorch, simply use `pip install deepethogram`.
-
 ## Install FFMPEG
 We use FFMPEG for reading and writing `.mp4` files (with libx264 encoding). Please use [this link](https://www.ffmpeg.org/)
 to install on your system.
 
 ## Startup
-* `conda activate deg`. This activates the environment.
-* type `python -m deepethogram`, in the command line to open the GUI.
+* `source.venv/bin/python` or (old version) `conda activate deg`. This activates the environment.
+* type `deepethogram` in the command line to open the GUI.
 
-## Upgrading to Beta
-Please see [the beta docs for instructions](beta.md)
-
-## Common installation problems
+## Common installation problems (with old, conda installers)
 * You might have dependency issues with other packages you've installed. Please make a new anaconda or miniconda
 environment with `conda create --name deg python=3.8` before installation.
-* `module not found: PySide2`. Some versions of PySide2 install poorly from pip. use `pip uninstall pyside2`, then
+* `module not found: PySide2` or `module not found: PySide6`. 
+  * For v0.3.0+, we use PySide6. Try: `pip install --force-reinstall PySide6`
+  * For older versions with PySide2: Some versions of PySide2 install poorly from pip. use `pip uninstall pyside2`, then
 `conda install -c conda-forge pyside2`
-* When opening the GUI, you might get `Segmentation fault (core dumped)`. In this case; please `pip uninstall pyside2`,
+* When opening the GUI, you might get `Segmentation fault (core dumped)`. 
+  * For PySide6 (v0.3.0+): `pip install --force-reinstall PySide6`
+  * For PySide2 (older versions): In this case; please `pip uninstall pyside2`,
 `conda uninstall pyside2`. `pip install pyside2`
 * `ImportError: C:\Users\jbohn\.conda\envs\deg2\lib\site-packages\shiboken2\libshiboken does not exist`
   * something went wrong with your PySide2 installation, likely on Windows.
@@ -62,9 +74,3 @@ environment with `conda create --name deg python=3.8` before installation.
   * This is an issue where Shiboken and PySide2 are not playing nicely together. Please `pip uninstall pyside2` and `conda remove pyside2`. Don't manually install these packages; instead, let DeepEthogram install it for you via pip. Therefore, `pip uninstall deepethogram` and `pip install deepethogram`.
 *  `qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in ".../python3.8/site-packages/cv2/qt/plugins"  even though it was found. This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.`
    * This is an issue with a recent version of `opencv-python` not working well with Qt. Please do `pip install --force-reinstall opencv-python-headless==4.1.2.30`
-
-# Beta: Using UV
-
-* install astral's UV on your system: `pip install uv`
-* `uv venv --python 3.7`: make a virtual environment
-* `uv pip install -e .`

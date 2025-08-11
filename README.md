@@ -22,9 +22,19 @@ learning research into action detection:
 ## Installation
 For full installation instructions, see [this readme file](docs/installation.md).
 
-In brief:
-* [Install PyTorch](https://pytorch.org/)
-* `pip install deepethogram`
+### Quick Install (Recommended)
+We recommend using [UV](https://docs.astral.sh/uv/) for fast, reliable Python package management:
+
+1. Install UV:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+   For troubleshooting or Windows, see [other installation methods](https://docs.astral.sh/uv/getting-started/installation/)
+
+2. Install DeepEthogram:
+   ```bash
+   uv pip install deepethogram
+   ```
 
 ## Data
 **NEW!** All datasets collected and annotated by the DeepEthogram authors are now available from this DropBox link:
@@ -65,7 +75,7 @@ The major dependencies for DeepEthogram are as follows:
 * pytorch, torchvision: all the neural networks, training, and inference pipelines were written in PyTorch
 * pytorch-lightning: for nice model training base classes
 * kornia: for GPU-based image augmentations
-* pyside2: for the GUI
+* PySide6: for the GUI (upgraded from PySide2 in v0.3.0)
 * opencv: for video and image reading and writing
 * opencv_transforms: for fast image augmentation
 * scikit-learn, scipy: for binary classification metrics
