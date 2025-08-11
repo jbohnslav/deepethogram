@@ -7,8 +7,8 @@ from functools import partial
 from typing import Union
 
 import numpy as np
-from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtCore import Signal, Slot
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtCore import Signal, Slot
 
 from deepethogram.file_io import VideoReader
 
@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 
 def numpy_to_qpixmap(image: np.ndarray) -> QtGui.QPixmap:
-    if image.dtype == np.float:
+    if image.dtype == np.float64 or image.dtype == np.float32:
         image = float_to_uint8(image)
     H, W, C = int(image.shape[0]), int(image.shape[1]), int(image.shape[2])
     if C == 4:
@@ -33,7 +33,7 @@ def numpy_to_qpixmap(image: np.ndarray) -> QtGui.QPixmap:
 
 
 def float_to_uint8(image: np.ndarray) -> np.ndarray:
-    if image.dtype == np.float:
+    if image.dtype == np.float64 or image.dtype == np.float32:
         image = (image * 255).clip(min=0, max=255).astype(np.uint8)
     return image
 
@@ -650,7 +650,7 @@ class LabelButtons(QtWidgets.QWidget):
             button = self._make_button(behavior, i)
             self.buttons.append(button)
             layout.addWidget(button, 0, alignment=QtCore.Qt.AlignTop)
-        layout.setMargin(0)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         self.layout = layout
         self.setLayout(self.layout)
@@ -788,7 +788,7 @@ class LabelImg(QtWidgets.QScrollArea):
 
         self.label._add_row()
         if i < 10:
-            self.toggle_shortcuts.append(QtWidgets.QShortcut(QtGui.QKeySequence(str(i)), self))
+            self.toggle_shortcuts.append(QtGui.QShortcut(QtGui.QKeySequence(str(i)), self))
         self.toggle_shortcuts[i].activated.connect(self.buttons.buttons[i].click)
 
 
@@ -875,10 +875,10 @@ class MainWindow(QtWidgets.QMainWindow):
             fixed=False,
         )
 
-        next_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Right"), self)
+        next_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Right"), self)
         next_shortcut.activated.connect(partial(self.label.label.change_view_dx, 1))
         # next_shortcut.activated.connect(partial(self.label.change_view_dx, 1))
-        back_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Left"), self)
+        back_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Left"), self)
         back_shortcut.activated.connect(partial(self.label.label.change_view_dx, -1))
 
         self.setCentralWidget(self.label)
@@ -897,4 +897,4 @@ if __name__ == "__main__":
     testing.initialize(behaviors=["background", "a", "b", "c", "d", "e"], n_timepoints=15000, debug=True)
     testing.update()
     testing.show()
-    app.exec_()
+    app.exec()

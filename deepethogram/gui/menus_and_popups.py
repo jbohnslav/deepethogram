@@ -1,7 +1,7 @@
 import pathlib
 import warnings
 
-from PySide2 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 
 def simple_popup_question(parent, message: str):
@@ -25,7 +25,7 @@ def overwrite_or_not(parent):
     )
     overwrite = msgBox.addButton("Overwrite", QtWidgets.QMessageBox.YesRole)
     unlabeled = msgBox.addButton("Only import unlabeled", QtWidgets.QMessageBox.NoRole)
-    msgBox.exec_()
+    msgBox.exec()
     if msgBox.clickedButton() is overwrite:
         return True
     elif msgBox.clickedButton() is unlabeled:
@@ -46,7 +46,7 @@ class OverwriteOrNot(QtWidgets.QDialog):
         )
         msgBox.addButton(QtWidgets.QPushButton("Overwrite"), QtWidgets.QMessageBox.YesRole)
         msgBox.addButton(QtWidgets.QPushButton("Only import unlabeled"), QtWidgets.QMessageBox.NoRole)
-        msgBox.exec_()
+        msgBox.exec()
 
 
 class CreateProject(QtWidgets.QDialog):
@@ -148,8 +148,8 @@ if __name__ == "__main__":
     form = ShouldRunInference(
         ["M134_20141203_v001", "M134_20141203_v002", "M134_20141203_v004"] * num, [True, True, False] * num
     )
-    ret = form.exec_()
+    ret = form.exec()
     if ret:
         print(form.get_outputs())
-    # ret = app.exec_()
+    # ret = app.exec()
     # print(ret)
