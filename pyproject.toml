@@ -28,6 +28,7 @@ dependencies = [
     "PySide6>=6.6.0",
     "scikit-learn>=1.2,<1.4",
     "scipy>=1.9,<1.11",
+    "torch==2.4.1",
     "tqdm",
     "vidio",
     "pytorch_lightning==1.6.5",
@@ -45,6 +46,22 @@ dev = [
 
 [project.scripts]
 deepethogram = "deepethogram.gui.main:entry"
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform != 'linux'" },
+    { index = "pytorch-cu124", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
 
 [tool.setuptools]
 packages = ["deepethogram"]
