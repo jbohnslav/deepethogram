@@ -1,0 +1,86 @@
+name: GPU Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+
+jobs:
+  gpu-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Modal CLI
+        run: python -m pip install --upgrade modal
+
+      - name: Run GPU tests on Modal
+        env:
+          # Required repository secrets:
+          #   MODAL_TOKEN_ID
+          #   MODAL_TOKEN_SECRET
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          DEG_MODAL_GPU: T4
+        run: modal run modal_gpu_test.py --write-junit pytest-gpu.xml
+
+      - name: Upload pytest XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-gpu-xml
+          path: pytest-gpu.xml
+          if-no-files-found: ignore
+
+      - name: Summarize pytest results
+        if: always()
+        run: |
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          summary_path = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          xml_path = Path("pytest-gpu.xml")
+
+          if not xml_path.exists():
+              summary_path.write_text("GPU pytest report was not produced.\n")
+              raise SystemExit(0)
+
+          root = ET.parse(xml_path).getroot()
+          testsuite = root if root.tag == "testsuite" else root.find("testsuite")
+          if testsuite is None:
+              summary_path.write_text("Unable to parse GPU pytest report.\n")
+              raise SystemExit(0)
+
+          tests = int(testsuite.attrib.get("tests", 0))
+          failures = int(testsuite.attrib.get("failures", 0))
+          errors = int(testsuite.attrib.get("errors", 0))
+          skipped = int(testsuite.attrib.get("skipped", 0))
+          passed = tests - failures - errors - skipped
+
+          summary_path.write_text(
+              "\n".join(
+                  [
+                      "## GPU Pytest Results",
+                      "",
+                      "| Metric | Count |",
+                      "| --- | ---: |",
+                      f"| Passed | {passed} |",
+                      f"| Failed | {failures} |",
+                      f"| Errors | {errors} |",
+                      f"| Skipped | {skipped} |",
+                      f"| Total | {tests} |",
+                      "",
+                      "Full JUnit XML is attached as the `pytest-gpu-xml` workflow artifact.",
+                      "",
+                  ]
+              )
+          )
+          PY
