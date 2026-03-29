@@ -1,100 +1,88 @@
-name: Publish Python 🐍 distribution 📦 to PyPI
+name: Release on Version Bump
 
 on:
   push:
-    # Only run this workflow when a tag with the pattern 'v*' is pushed
-    tags:
-      - 'v*'
+    branches: [master]
+    paths: [pyproject.toml]
 
 jobs:
-  # Step 1: Build the Python package
-  build:
-    name: Build distribution 📦
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.7'
-
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build pytest
-          pip install -e .
-
-      - name: Run tests
-        run: pytest tests/
-
-      - name: Build package
-        run: python -m build
-
-      - name: Store the distribution packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-package-distributions
-          path: dist/
-
-  # Step 2: Publish the distribution to PyPI
-  publish-to-pypi:
-    name: Publish to PyPI
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download distribution packages
-        uses: actions/download-artifact@v4
-        with:
-          name: python-package-distributions
-          path: dist/
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.12.3
-        with:
-          # If using a secret-based token:
-          username: '__token__'
-          password: ${{ secrets.PYPI_API_TOKEN }}
-
-  # Step 3: Sign the distribution and create a GitHub release
-  github-release:
-    name: Sign the distribution 📦 with Sigstore and upload to GitHub Release
-    needs: publish-to-pypi
+  release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required to create GitHub Releases
-      id-token: write  # Required for sigstore
+      contents: write
+      id-token: write
 
     steps:
-      - name: Download distribution packages
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v4
         with:
-          name: python-package-distributions
-          path: dist/
+          fetch-depth: 0
 
-      - name: Sign the dists with Sigstore
-        uses: sigstore/gh-action-sigstore-python@v3.0.0
-        with:
-          inputs: >-
-            ./dist/*.tar.gz
-            ./dist/*.whl
+      - name: Check for version change
+        id: version
+        shell: bash
+        run: |
+          # NOTE: deepethogram currently defines its version in setup.py.
+          # This workflow assumes a future move to [project].version in pyproject.toml.
+          get_version() {
+            python3 -c "import pathlib, sys, tomllib; data = tomllib.loads(pathlib.Path(sys.argv[1]).read_text()); print(data.get('project', {}).get('version', ''))" "$1"
+          }
+
+          new="$(get_version pyproject.toml)"
+          if git show HEAD^:pyproject.toml > /tmp/prev.toml 2>/dev/null; then
+            old="$(get_version /tmp/prev.toml)"
+          else
+            old=""
+          fi
+
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+          echo "old=$old" >> "$GITHUB_OUTPUT"
+
+          if [ -z "$new" ]; then
+            echo "has_version=false" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          elif [ "$new" = "$old" ]; then
+            echo "has_version=true" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_version=true" >> "$GITHUB_OUTPUT"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if release conditions are not met
+        if: steps.version.outputs.changed != 'true'
+        shell: bash
+        run: |
+          if [ "${{ steps.version.outputs.has_version }}" != "true" ]; then
+            echo "pyproject.toml does not define [project].version yet; skipping release."
+          else
+            echo "Version unchanged; skipping release."
+          fi
+
+      - name: Set up uv
+        if: steps.version.outputs.changed == 'true'
+        uses: astral-sh/setup-uv@04224aa8caab79e9c08d41c1ef06d6394aafe6a0 # v5
+
+      - name: Build distributions
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          rm -rf dist/
+          uv build
 
       - name: Create GitHub Release
+        if: steps.version.outputs.changed == 'true'
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # $GITHUB_REF_NAME is the tag name, e.g. 'v1.0.0'
-          gh release create "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Release $GITHUB_REF_NAME" \
-            --notes "See CHANGELOG for details."
+          tag="v${{ steps.version.outputs.new }}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" dist/*.tar.gz dist/*.whl --clobber
+          else
+            gh release create "$tag" \
+              --target "${{ github.sha }}" \
+              --generate-notes \
+              dist/*.tar.gz dist/*.whl
+          fi
 
-      - name: Upload artifact signatures to GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload "$GITHUB_REF_NAME" dist/** \
-            --repo "$GITHUB_REPOSITORY"
+      - name: Publish to PyPI
+        if: steps.version.outputs.changed == 'true'
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # release/v1
