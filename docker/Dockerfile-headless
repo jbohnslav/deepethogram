@@ -1,43 +1,43 @@
-FROM --platform=linux/amd64 nvidia/cuda:11.5.2-cudnn8-devel-ubuntu20.04
+ARG DEG_PLATFORM=linux/amd64
+FROM --platform=${DEG_PLATFORM} nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
-# modified from here
-# https://github.com/anibali/docker-pytorch/blob/master/dockerfiles/1.10.0-cuda11.3-ubuntu20.04/Dockerfile
-# Install some basic utilities
-RUN apt-get update && apt-get install -y \
-    curl \
-    ca-certificates \
-    sudo \
-    git \
+ARG DEBIAN_FRONTEND=noninteractive
+ARG MINICONDA_URL=https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     bzip2 \
+    ca-certificates \
+    curl \
+    ffmpeg \
+    git \
+    libglib2.0-0 \
+    libsm6 \
     libx11-6 \
+    libxext6 \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# don't ask for location etc user input when building
-# this is for opencv, apparently
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
-
-# Create a working directory and data directory
 RUN mkdir /app
 WORKDIR /app
 
-# Set up the Conda environment
 ENV CONDA_AUTO_UPDATE_CONDA=false \
     PATH=/opt/miniconda/bin:$PATH
 
-# install miniconda
-RUN curl -sLo ~/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-py39_4.10.3-Linux-x86_64.sh  \
-    && chmod +x ~/miniconda.sh \
-    && ~/miniconda.sh -b -p /opt/miniconda \
-    && rm ~/miniconda.sh \
-    && conda update conda
+RUN curl -fsSL "${MINICONDA_URL}" -o /tmp/miniconda.sh \
+    && chmod +x /tmp/miniconda.sh \
+    && /tmp/miniconda.sh -b -p /opt/miniconda \
+    && rm /tmp/miniconda.sh \
+    && conda update -n base -c defaults conda -y
 
-# install
-RUN conda install python=3.11 -y
-RUN pip install --upgrade pip
-# RUN conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
+RUN conda install -y python=3.11 \
+    && conda clean -afy
 
-# Install deepethogram with dev dependencies
-ADD . /app/deepethogram
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir torch==2.4.1
+
+COPY . /app/deepethogram
 WORKDIR /app/deepethogram
-ENV DEG_VERSION='headless'
-RUN pip install -e ".[dev]"
+
+ENV DEG_VERSION=headless
+
+RUN pip install --no-cache-dir -e ".[dev]"
