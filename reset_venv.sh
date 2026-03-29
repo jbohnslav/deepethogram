@@ -10,18 +10,14 @@ fi
 echo "Creating new virtual environment with Python 3.11..."
 uv venv --python 3.11
 
-# Activate the virtual environment
-echo "Activating virtual environment..."
-source .venv/bin/activate
-
-# Install package in editable mode with dev dependencies
+# Install project and dev dependencies from the lockfile
 echo "Installing package and dependencies..."
-uv pip install -e ".[dev]"
+uv sync --dev
 
 # Setup test data
 echo "Setting up test data..."
-python setup_tests.py
+uv run python setup_tests.py
 
 # Run tests
 echo "Running tests..."
-pytest -v tests/
+uv run pytest -v tests/

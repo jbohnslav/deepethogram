@@ -103,7 +103,7 @@ Three Docker images have been successfully built and tested with Python 3.7:
 
 2. **deepethogram:gui** - CPU-only, GUI support (13.5GB)
    - ✅ GUI imports and runs successfully
-   - ✅ Uses pip-installed PyTorch 1.11.0+cpu to avoid conda/Python 3.7 compatibility issues
+   - ✅ Uses `uv pip install` for PyTorch 1.11.0+cpu to avoid conda/Python 3.7 compatibility issues
    - ✅ GUI window displays correctly with X11 forwarding
 
 3. **deepethogram:full** - GPU + GUI support (built from Dockerfile-full)
@@ -117,10 +117,10 @@ Three Docker images have been successfully built and tested with Python 3.7:
 #### Python 3.7 + PyTorch Compatibility Issue
 - **Problem**: Conda-installed PyTorch (1.13.1, 1.12.1, 1.11.0) with CPU-only builds fail on Python 3.7
 - **Error**: `undefined symbol: iJIT_NotifyEvent` in libtorch_cpu.so
-- **Solution**: Install PyTorch via pip instead of conda for CPU-only builds
+- **Solution**: Install PyTorch via `uv pip` instead of conda for CPU-only builds
 - **Applied to**: Dockerfile-gui now uses:
   ```dockerfile
-  RUN pip install torch==1.11.0+cpu torchvision==0.12.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+  RUN uv pip install torch==1.11.0+cpu torchvision==0.12.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
   ```
 
 #### GPU Support Verification

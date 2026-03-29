@@ -31,9 +31,14 @@ We recommend using [UV](https://docs.astral.sh/uv/) for fast, reliable Python pa
    ```
    For troubleshooting or Windows, see [other installation methods](https://docs.astral.sh/uv/getting-started/installation/)
 
-2. Install DeepEthogram:
+2. Run DeepEthogram without managing a manual environment:
    ```bash
-   uv pip install deepethogram
+   uvx --from deepethogram deepethogram
+   ```
+
+   If you want to add it to an existing uv-managed project instead, use:
+   ```bash
+   uv add deepethogram
    ```
 
 ## Data
@@ -107,13 +112,13 @@ directory, so that the path is `deepethogram/tests/DATA/testing_deepethogram_arc
 To run tests:
 ```bash
 # Run all tests except GPU tests (default)
-pytest tests/
+uv run pytest tests/
 
 # Run only GPU tests (requires NVIDIA GPU)
-pytest -m gpu
+uv run pytest -m gpu
 
 # Run all tests including GPU tests
-pytest -m ""
+uv run pytest -m ""
 ```
 
 GPU tests are skipped by default as they require significant computational resources and time to complete. These tests perform end-to-end model training and inference.
@@ -128,17 +133,17 @@ To set up the development environment:
 
 1. Install the development dependencies:
 ```bash
-pip install -r requirements.txt
+uv sync --dev
 ```
 
 2. Install pre-commit hooks:
 ```bash
-pre-commit install
+uvx pre-commit install
 ```
 
 The hooks will run automatically on every commit. You can also run them manually on all files:
 ```bash
-pre-commit run --all-files
+uvx pre-commit run --all-files
 ```
 
 ## Changelog

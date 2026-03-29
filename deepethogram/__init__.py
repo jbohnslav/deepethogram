@@ -9,7 +9,10 @@ import importlib.util
 
 spec = importlib.util.find_spec("hydra")
 if spec is not None:
-    raise ValueError("Hydra installation found. Please run pip uninstall hydra-core: {}".format(spec))
+    raise ValueError(
+        "Hydra installation found. Remove it from the current environment, for example with "
+        "`uv pip uninstall hydra-core`: {}".format(spec)
+    )
 # try:
 #     import hydra
 # except Exception as e:

@@ -4,7 +4,7 @@ try:
     import ray  # noqa: F401
     from ray import tune  # noqa: F401
 except ImportError:
-    print("To use the deepethogram.tune module, you must `pip install 'ray[tune]`")
+    print("To use the deepethogram.tune module, run `uv add 'ray[tune]'`.")
     raise
 
 
