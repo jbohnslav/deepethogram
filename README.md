@@ -20,26 +20,33 @@ learning research into action detection:
 ![deepethogram schematic](docs/images/deepethogram_schematic.png)
 
 ## Installation
-For full installation instructions, see [this readme file](docs/installation.md).
+DeepEthogram recently migrated from Miniconda/pip to [uv](https://docs.astral.sh/uv/). Current releases are uv-first,
+recommend Python 3.11, support Python `>=3.9,<3.12`, and use PySide6 for the GUI.
 
-### Quick Install (Recommended)
-We recommend using [UV](https://docs.astral.sh/uv/) for fast, reliable Python package management:
+Install uv first:
 
-1. Install UV:
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-   For troubleshooting or Windows, see [other installation methods](https://docs.astral.sh/uv/getting-started/installation/)
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# or
+brew install uv
+```
 
-2. Run DeepEthogram without managing a manual environment:
-   ```bash
-   uvx --from deepethogram deepethogram
-   ```
+For development from this repository:
 
-   If you want to add it to an existing uv-managed project instead, use:
-   ```bash
-   uv add deepethogram
-   ```
+```bash
+git clone https://github.com/jbohnslav/deepethogram.git
+cd deepethogram
+uv sync
+uv run deepethogram
+```
+
+For a user install:
+
+```bash
+uv pip install deepethogram
+```
+
+Detailed setup, troubleshooting, and legacy conda/pip instructions for older releases are in [docs/installation.md](docs/installation.md).
 
 ## Data
 **NEW!** All datasets collected and annotated by the DeepEthogram authors are now available from this DropBox link:
@@ -80,7 +87,7 @@ The major dependencies for DeepEthogram are as follows:
 * pytorch, torchvision: all the neural networks, training, and inference pipelines were written in PyTorch
 * pytorch-lightning: for nice model training base classes
 * kornia: for GPU-based image augmentations
-* PySide6: for the GUI (upgraded from PySide2 in v0.3.0)
+* PySide6: for the GUI
 * opencv: for video and image reading and writing
 * opencv_transforms: for fast image augmentation
 * scikit-learn, scipy: for binary classification metrics

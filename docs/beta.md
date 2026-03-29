@@ -25,6 +25,8 @@ logging, automatic batch sizing, and Ray Tune integration.
 ## Migration guide
 
 There are some new dependency changes; making sure that install works correctly is the hardest part about migration.
+For current releases, use the uv-first workflow from [installation.md](installation.md). If you are maintaining a version
+prior to 0.4.0, keep the legacy installation notes from that page in mind before trying to reuse an older environment.
 
 The cleanest path is to migrate into a fresh uv-managed environment instead of upgrading an older pip or conda environment in place:
 
@@ -38,7 +40,7 @@ If you need to clean up an old environment first, use the uv equivalents for the
 
 * uninstall hydra: `uv pip uninstall hydra-core`
 * uninstall DeepEthogram: `uv pip uninstall deepethogram`
-* install the current release into a uv-managed project: `uv add deepethogram`
+* install the current release for regular use: `uv pip install deepethogram`
 
 ### upgrade issues
 * `AttributeError: type object 'OmegaConf' has no attribute 'to_yaml'`

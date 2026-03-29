@@ -16,6 +16,8 @@ Luckily, [OmegaConf package](https://omegaconf.readthedocs.io/en/2.0_branch/) do
 For all DeepEthogram projects, we [expect a consistent file structure](file_structure.md). Therefore, when using the CLI, always use the flag
 `project.config_file=path/to/config/file.yaml` or `project.path=path/to/deepethogram_project`
 
+In a repository checkout, run the commands below through uv so they use the locked project environment.
+
 ## Creating a project in code
 If you don't want to use the GUI, you still need to set up your project with the [consistent file structure](file_structure.md).
 
@@ -94,16 +96,16 @@ For detailed instructions, please go to [the project README's pretrained models 
 ## Training examples
 To train the flow generator with the larger MotionNet architecture and a batch size of 16:
 
-`deepethogram.flow_generator.train project.config_file=path/to/config/file.yaml flow_generator.arch=MotionNet compute.batch_size=16`
+`uv run python -m deepethogram.flow_generator.train project.config_file=path/to/config/file.yaml flow_generator.arch=MotionNet compute.batch_size=16`
 
 To train the feature extractor with the ResNet18 base, without the curriculum training, with an initial learning rate of 1e-5:
-`deepethogram.feature_extractor.train project.config_file=path/to/config/file.yaml feature_extractor.arch=resnet18 train.lr=1e-5 feature_extractor.curriculum=false notes=no_curriculum`
+`uv run python -m deepethogram.feature_extractor.train project.config_file=path/to/config/file.yaml feature_extractor.arch=resnet18 train.lr=1e-5 feature_extractor.curriculum=false notes=no_curriculum`
 
 To train the flow generator with specific weights loaded from disk, with a specific train/test split, with the DEG_s preset (3D MotionNet):
-`python -m deepethogram.flow_generator.train project.config_file=path/to/config/file.yaml reload.weights=path/to/flow/weights.pt split.file=path/to/split.yaml preset=deg_s`
+`uv run python -m deepethogram.flow_generator.train project.config_file=path/to/config/file.yaml reload.weights=path/to/flow/weights.pt split.file=path/to/split.yaml preset=deg_s`
 
 To train the feature extractor on the secondary GPU with the latest optic flow weights, but a specific feature extractor weights:
-`python -m deepethogram.feature_extractor.train project.config_file=path/to/config/file.yaml compute.gpu_id=1 flow_generator.weights=latest feature_extractor.weights=path/to/kinetics_weights.pt`
+`uv run python -m deepethogram.feature_extractor.train project.config_file=path/to/config/file.yaml compute.gpu_id=1 flow_generator.weights=latest feature_extractor.weights=path/to/kinetics_weights.pt`
 
 # Questions?
 For any questions on how to use the command line interface for your training, please raise an issue on GitHub.

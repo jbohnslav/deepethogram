@@ -1,71 +1,90 @@
 # Installation
 
-DeepEthogram v0.3.0+ is documented as a uv-managed project. Use uv first, and only fall back to pip or conda if you are maintaining an older legacy environment.
+DeepEthogram recently migrated from Miniconda/pip to [uv](https://docs.astral.sh/uv/). Current releases should be installed and run with uv.
+For versions prior to 0.4.0, see [Legacy Installation](#legacy-installation) below.
 
 ## Requirements
 
-- Python 3.9 to 3.11
+- Recommended Python 3.11
+- Supported Python `>=3.9,<3.12`
 - FFmpeg available on your system
+- PySide6 for the GUI
 - A recent GPU-enabled PyTorch setup if you plan to train models on CUDA
-- PySide6 for the GUI (current releases no longer use PySide2)
 
 ## Quick Start with uv
 
-1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/).
+1. Install uv.
 
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
+   # or
+   brew install uv
    ```
+
+   See the [Astral uv documentation](https://docs.astral.sh/uv/) for platform-specific installation details.
 
 2. Install FFmpeg from [ffmpeg.org](https://www.ffmpeg.org/).
 
-3. Clone the repository and sync the project environment.
+3. Clone the repository and sync the development environment.
 
    ```bash
    git clone https://github.com/jbohnslav/deepethogram.git
    cd deepethogram
    uv sync
-   ```
-
-4. Start the GUI.
-
-   ```bash
    uv run deepethogram
    ```
 
-## Install from PyPI with uv
+4. If you only want to install the package as a user, use:
 
-If you only want to run the application, use an ephemeral tool environment:
+   ```bash
+   uv pip install deepethogram
+   ```
+
+## Development Setup
+
+For day-to-day development work:
 
 ```bash
-uvx --from deepethogram deepethogram
+git clone https://github.com/jbohnslav/deepethogram.git
+cd deepethogram
+uv sync
+uv run deepethogram
 ```
 
-If you are already inside another uv-managed project and want `deepethogram` as a dependency, add it with:
+Useful follow-up commands:
 
 ```bash
-uv add deepethogram
-```
-
-## Development and Tests
-
-Use the `dev` dependency group when you need test data helpers, `pytest`, or `pre-commit`:
-
-```bash
-uv sync --dev
 uv run python setup_tests.py
 uv run pytest tests/
+uv run ruff check .
+uv run ruff format .
 ```
 
-## Legacy Fallback
+CI and Docker are uv-based as well, so matching your local workflow to `uv sync` keeps the environment closest to what ships.
 
-If you are maintaining an older non-uv environment, pip still works as a fallback, but it is no longer the primary installation path:
+## Legacy Installation
+
+Current releases should use uv. Keep the older flow below only for maintaining existing environments or releases prior to 0.4.0.
+
+### Legacy pip install
 
 ```bash
 python -m pip install deepethogram
 ```
 
-If you use conda, create a clean environment first, install FFmpeg and PyTorch there, then install DeepEthogram with pip as the last step.
+### Legacy Miniconda / conda install
+
+Older DeepEthogram releases were commonly installed with Miniconda plus pip. If you are maintaining one of those releases,
+create a clean environment first, install FFmpeg and PyTorch there, and then install DeepEthogram with pip:
+
+```bash
+conda create -n deepethogram python=3.7
+conda activate deepethogram
+conda install -c conda-forge ffmpeg
+python -m pip install deepethogram
+```
+
+Legacy releases may still assume PySide2 and older Python constraints, so check the release notes for the exact version you are maintaining.
 
 ## Common Problems
 
@@ -82,7 +101,7 @@ rm -rf .venv
 uv sync
 ```
 
-If you are troubleshooting an older legacy release that still used PySide2, follow that release's historical install notes instead of the current uv workflow.
+If you are troubleshooting an older release that still used PySide2, use the legacy instructions above instead of the current uv workflow.
 
 ### OpenCV / Qt plugin issues
 
