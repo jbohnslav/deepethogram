@@ -6,9 +6,9 @@ if [ -d ".venv" ]; then
     rm -rf .venv
 fi
 
-# Create new venv with Python 3.7
-echo "Creating new virtual environment with Python 3.7..."
-uv venv --python 3.7
+# Create new venv with Python 3.11
+echo "Creating new virtual environment with Python 3.11..."
+uv venv --python 3.11
 
 # Activate the virtual environment
 echo "Activating virtual environment..."

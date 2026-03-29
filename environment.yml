@@ -4,10 +4,10 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.7
+  - python=3.11
   - pytorch
   - torchvision
   - pip
   - pip:
     - -e .
-  - conda-forge::pyside2=5.13.2
+  - conda-forge::pyside6

@@ -30,12 +30,10 @@ RUN curl -sLo ~/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-py39
     && conda update conda
 
 # install
-RUN conda install python=3.7 -y
+RUN conda install python=3.11 -y
 RUN pip install --upgrade pip
 # Install deepethogram with dev dependencies
 ADD . /app/deepethogram
 WORKDIR /app/deepethogram
-# Use Python 3.7 compatible pyproject.toml
-RUN cp pyproject_py37.toml pyproject.toml
 ENV DEG_VERSION='full'
 RUN pip install -e ".[dev]"

@@ -10,13 +10,13 @@ readme = "README.md"
 authors = [
     {name = "Jim Bohnslav", email = "jbohnslav@gmail.com"},
 ]
-requires-python = ">=3.8,<3.9"
+requires-python = ">=3.9,<3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "chardet<4.0",
+    "chardet",
     "h5py",
     "kornia>=0.5",
     "matplotlib",
@@ -24,10 +24,10 @@ dependencies = [
     "omegaconf>=2",
     "opencv-python-headless",
     "opencv-transforms",
-    "pandas<1.4",
+    "pandas>=1.5,<2.1",
     "PySide6>=6.6.0",
-    "scikit-learn<1.1",
-    "scipy<1.8",
+    "scikit-learn>=1.2,<1.4",
+    "scipy>=1.9,<1.11",
     "tqdm",
     "vidio",
     "pytorch_lightning==1.6.5",
@@ -51,7 +51,7 @@ packages = ["deepethogram"]
 
 [tool.ruff]
 # Python version compatibility
-target-version = "py38"
+target-version = "py39"
 
 # Same as Black.
 line-length = 120
