@@ -8,7 +8,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-from PySide6 import QtCore
+from PySide6 import QtCore, QtWidgets
 
 from deepethogram import configuration, projects, utils
 from deepethogram.gui import custom_widgets, main as gui_main
@@ -17,6 +17,9 @@ CLASS_NAMES = ["background", "walk", "groom"]
 FRAME_COUNT = 20
 FRAME_SIZE = (64, 48)
 FPS = 15.0
+WINDOW_TIMEOUT_MS = 10_000
+THREAD_TIMEOUT_MS = 1_000
+SETTLE_MS = 50
 
 
 def _write_tiny_video(path: Path, frame_count: int = FRAME_COUNT, offset: int = 0) -> Path:
@@ -124,15 +127,90 @@ def _add_fake_model_runs(project_dir: Path) -> dict[str, Path]:
 
 
 def _wait_for_window(qtbot, window) -> None:
-    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+    if not window.isVisible():
         window.show()
-        qtbot.waitUntil(window.isVisible)
-        qtbot.wait(50)
-    else:
-        if not window.isVisible():
-            window.show()
-        qtbot.waitExposed(window)
-        qtbot.wait(50)
+
+    qtbot.waitUntil(window.isVisible, timeout=WINDOW_TIMEOUT_MS)
+    if os.environ.get("QT_QPA_PLATFORM") != "offscreen":
+        qtbot.waitExposed(window, timeout=WINDOW_TIMEOUT_MS)
+        window.raise_()
+        window.activateWindow()
+        try:
+            qtbot.waitUntil(window.isActiveWindow, timeout=WINDOW_TIMEOUT_MS)
+        except Exception:
+            # Some CI setups are slow to hand off focus even when the widget is usable.
+            pass
+    qtbot.wait(SETTLE_MS)
+
+
+def _wait_for_loaded_project(qtbot, window) -> None:
+    qtbot.waitUntil(lambda: hasattr(window, "videofile"), timeout=WINDOW_TIMEOUT_MS)
+    qtbot.waitUntil(lambda: window.ui.labels.label is not None, timeout=WINDOW_TIMEOUT_MS)
+    qtbot.waitUntil(
+        lambda: hasattr(window.ui.videoPlayer.videoView, "current_fnum"),
+        timeout=WINDOW_TIMEOUT_MS,
+    )
+    qtbot.waitUntil(lambda: bool(window.ui.nframesLabel.text()), timeout=WINDOW_TIMEOUT_MS)
+    _wait_for_window(qtbot, window)
+
+
+def _terminate_process(process) -> None:
+    try:
+        if process.poll() is None:
+            process.terminate()
+        process.wait()
+    except Exception:
+        pass
+
+
+def _stop_listener(window) -> None:
+    listener = getattr(window, "listener", None)
+    if listener is None:
+        return
+
+    if hasattr(listener, "pipe"):
+        _terminate_process(listener.pipe)
+    if hasattr(listener, "stop"):
+        listener.stop()
+    if hasattr(listener, "should_continue"):
+        listener.should_continue = False
+    try:
+        listener.quit()
+    except Exception:
+        pass
+    try:
+        listener.wait(THREAD_TIMEOUT_MS)
+    except Exception:
+        pass
+
+
+def _cleanup_window(window) -> None:
+    for attr in ("training_pipe", "inference_pipe"):
+        process = getattr(window, attr, None)
+        if process is not None:
+            _terminate_process(process)
+            try:
+                delattr(window, attr)
+            except AttributeError:
+                pass
+
+    _stop_listener(window)
+    window.saved = True
+
+    if hasattr(window, "vid"):
+        try:
+            window.vid.close()
+        except Exception:
+            pass
+
+    for top_level in QtWidgets.QApplication.topLevelWidgets():
+        if top_level is window:
+            continue
+        if isinstance(top_level, QtWidgets.QDialog) and top_level.parent() is window:
+            top_level.close()
+
+    window.close()
+    window.deleteLater()
 
 
 @pytest.fixture
@@ -259,6 +337,7 @@ def window_factory(monkeypatch, qtbot, tmp_path):
     fake_cwd = tmp_path / "cwd" / "nested"
     fake_cwd.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(gui_main.os, "getcwd", lambda: str(fake_cwd))
+    monkeypatch.setattr(gui_main, "simple_popup_question", lambda *args, **kwargs: True)
     monkeypatch.chdir(fake_cwd)
     created_windows = []
 
@@ -279,20 +358,13 @@ def window_factory(monkeypatch, qtbot, tmp_path):
             records = projects.get_records_from_datadir(project_dir / "DATA")
             window.initialize_project(str(project_dir))
             if records:
-                qtbot.waitUntil(lambda: hasattr(window, "videofile"))
-                qtbot.waitUntil(lambda: window.ui.labels.label is not None)
+                _wait_for_loaded_project(qtbot, window)
         return window
 
     yield factory
 
     for window in created_windows:
-        try:
-            if hasattr(window, "vid"):
-                window.vid.close()
-        except Exception:
-            pass
-        window.close()
-        window.deleteLater()
+        _cleanup_window(window)
 
     QtCore.QCoreApplication.processEvents()
 
