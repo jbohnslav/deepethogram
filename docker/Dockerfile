@@ -195,13 +195,19 @@ USER ${APP_USER}
 CMD ["python", "-m", "deepethogram"]
 
 FROM builder-gui AS test-gui
-ENV DEG_VERSION=gui \
-    QT_QPA_PLATFORM=offscreen
+ENV DEG_VERSION=gui
 COPY pytest.ini setup_tests.py ./
 COPY tests ./tests
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    openbox \
+    xauth \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --locked --no-editable
-CMD ["sh", "-lc", "python setup_tests.py && pytest -v -m \"not gpu\" --ignore=tests/test_integration.py"]
+CMD ["sh", "-lc", "python setup_tests.py && xvfb-run --auto-servernum --server-args='-screen 0 1920x1200x24' sh -lc 'openbox >/tmp/openbox.log 2>&1 & pytest -v -m \"not gpu\"'"]
 
 FROM builder-headless AS test-headless
 COPY pytest.ini setup_tests.py ./

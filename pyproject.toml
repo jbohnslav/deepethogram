@@ -40,6 +40,8 @@ dev = [
     "pre-commit>=2.20.0,<3.0.0",
     "pytest",
     "pytest-cov",
+    "pytest-qt",
+    "pytest-xvfb",
     "gdown",
     "ty>=0.0.1a17",
 ]

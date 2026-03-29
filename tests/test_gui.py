@@ -5,6 +5,8 @@ import pytest
 
 DEG_VERSION = os.environ.get("DEG_VERSION", "full")
 
+pytestmark = pytest.mark.gui
+
 
 @pytest.mark.skipif(
     DEG_VERSION == "headless",
