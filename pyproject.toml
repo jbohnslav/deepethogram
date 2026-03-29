@@ -63,8 +63,8 @@ name = "pytorch-cu124"
 url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
-[tool.setuptools]
-packages = ["deepethogram"]
+[tool.setuptools.packages.find]
+include = ["deepethogram*"]
 
 [tool.ruff]
 # Python version compatibility

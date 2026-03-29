@@ -47,6 +47,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     libdbus-1-3 \
+    libdouble-conversion3 \
     libegl1 \
     libfontconfig1 \
     libgl1 \
@@ -79,6 +80,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     libdbus-1-3 \
+    libdouble-conversion3 \
     libegl1 \
     libfontconfig1 \
     libgl1 \
@@ -191,6 +193,15 @@ RUN groupadd --gid "${APP_GID}" "${APP_USER}" || true \
     && install -d -o "${APP_UID}" -g "${APP_GID}" /workspace
 USER ${APP_USER}
 CMD ["python", "-m", "deepethogram"]
+
+FROM builder-gui AS test-gui
+ENV DEG_VERSION=gui \
+    QT_QPA_PLATFORM=offscreen
+COPY pytest.ini setup_tests.py ./
+COPY tests ./tests
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    uv sync --locked --no-editable
+CMD ["sh", "-lc", "python setup_tests.py && pytest -v -m \"not gpu\" --ignore=tests/test_integration.py"]
 
 FROM builder-headless AS test-headless
 COPY pytest.ini setup_tests.py ./
