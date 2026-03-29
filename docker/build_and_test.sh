@@ -1,134 +1,124 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-set -e  # Exit on any error
+set -euo pipefail
 
-# Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 
-# Function to print section headers
 print_header() {
     echo -e "\n${BLUE}=== $1 ===${NC}\n"
 }
 
-# Function to echo command before running
 echo_run() {
-    echo -e "${YELLOW}Running: $@${NC}"
+    echo -e "${YELLOW}Running: $*${NC}"
     "$@"
 }
 
-# Function to build an image
 build_image() {
-    local type=$1
-    print_header "Building $type image"
-    echo_run docker build -t deepethogram:$type -f docker/Dockerfile-$type .
+    local target=$1
+    local platform=${2:-}
+    local args=(docker buildx build --load --target "$target" -t "deepethogram:$target" -f docker/Dockerfile)
+
+    if [[ -n "$platform" ]]; then
+        args+=(--platform "$platform")
+    fi
+
+    args+=(.)
+
+    print_header "Building $target image"
+    echo_run "${args[@]}"
 }
 
-# Function to verify GPU in container
 verify_gpu() {
-    local gpu_flag=$1
-    local type=$2
-    echo "Verifying GPU access in container..."
-    echo -e "${YELLOW}Running: docker run $gpu_flag --rm deepethogram:$type nvidia-smi${NC}"
-    if ! docker run $gpu_flag --rm deepethogram:$type nvidia-smi; then
-        echo -e "${RED}Failed to access GPU in container${NC}"
-        return 1
-    fi
-    echo -e "${YELLOW}Running: docker run $gpu_flag --rm deepethogram:$type python -c \"import torch; print('CUDA available:', torch.cuda.is_available())\"${NC}"
-    if ! docker run $gpu_flag --rm deepethogram:$type python -c "import torch; print('CUDA available:', torch.cuda.is_available())" | grep -q "CUDA available: True"; then
-        echo -e "${RED}Failed to access GPU through PyTorch${NC}"
-        return 1
-    fi
-    return 0
-}
-
-# Function to run tests in container
-test_container() {
-    local type=$1
+    local image=$1
     local gpu_flag=$2
-    local has_gpu=$3
 
-    print_header "Testing $type container"
+    print_header "Verifying GPU access for ${image}"
+    echo_run docker run ${gpu_flag:+$gpu_flag} --rm "$image" nvidia-smi
+    docker run ${gpu_flag:+$gpu_flag} --rm "$image" nvidia-smi >/dev/null
 
-    # Test basic import
-    echo "Testing Python import..."
-    echo -e "${YELLOW}Running: docker run $gpu_flag -it deepethogram:$type python -c \"import deepethogram\"${NC}"
-    docker run $gpu_flag -it deepethogram:$type python -c "import deepethogram" && \
-        echo -e "${GREEN}✓ Import test passed${NC}" || \
-        (echo -e "${RED}✗ Import test failed${NC}" && exit 1)
+    echo_run docker run ${gpu_flag:+$gpu_flag} --rm "$image" python -c "import torch; assert torch.cuda.is_available(); print('CUDA available')"
+    docker run ${gpu_flag:+$gpu_flag} --rm "$image" python -c "import torch; assert torch.cuda.is_available(); print('CUDA available')" >/dev/null
+}
 
-    # For containers that should support tests
-    if [ "$type" = "full" ] || [ "$type" = "headless" ]; then
-        echo "Running CPU tests..."
-        echo -e "${YELLOW}Running: docker run $gpu_flag -it deepethogram:$type pytest -v -m \"not gpu\" tests/${NC}"
-        docker run $gpu_flag -it deepethogram:$type pytest -v -m "not gpu" tests/ && \
-            echo -e "${GREEN}✓ CPU tests passed${NC}" || \
-            (echo -e "${RED}✗ CPU tests failed${NC}" && exit 1)
+smoke_test_runtime() {
+    local target=$1
+    local gpu_flag=$2
 
-        # Run GPU tests if GPU is available
-        if [ "$has_gpu" = true ] && [ "$type" != "gui" ]; then
-            echo "Running GPU tests..."
-            # First verify CUDA is accessible
-            echo -e "${YELLOW}Running: docker run $gpu_flag -it deepethogram:$type python -c \"import torch; assert torch.cuda.is_available(), 'CUDA not available'; print('CUDA is available')\"${NC}"
-            docker run $gpu_flag -it deepethogram:$type python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available'; print('CUDA is available')"
-            # Run the actual GPU tests
-            echo -e "${YELLOW}Running: docker run $gpu_flag -it deepethogram:$type bash -c \"export CUDA_VISIBLE_DEVICES=0 && pytest -v -m gpu tests/\"${NC}"
-            docker run $gpu_flag -it deepethogram:$type \
-                bash -c "export CUDA_VISIBLE_DEVICES=0 && pytest -v -m gpu tests/" && \
-                echo -e "${GREEN}✓ GPU tests passed${NC}" || \
-                (echo -e "${RED}✗ GPU tests failed${NC}" && exit 1)
-        fi
-    fi
+    print_header "Smoke testing $target runtime image"
+    echo_run docker run ${gpu_flag:+$gpu_flag} --rm "deepethogram:$target" python -c "import deepethogram"
+    docker run ${gpu_flag:+$gpu_flag} --rm "deepethogram:$target" python -c "import deepethogram"
 
-    # For containers that should support GUI
-    if [ "$type" = "full" ] || [ "$type" = "gui" ]; then
-        echo "Testing GUI import..."
-        echo -e "${YELLOW}Running: docker run $gpu_flag -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw -it deepethogram:$type python -c \"from deepethogram.gui import main\"${NC}"
-        docker run $gpu_flag -e DISPLAY=$DISPLAY \
-            -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-            -it deepethogram:$type python -c "from deepethogram.gui import main" && \
-            echo -e "${GREEN}✓ GUI import test passed${NC}" || \
-            (echo -e "${RED}✗ GUI import test failed${NC}" && exit 1)
+    if [[ "$target" == "gui" || "$target" == "full" ]]; then
+        echo_run docker run ${gpu_flag:+$gpu_flag} --rm "deepethogram:$target" python -c "from deepethogram.gui import main"
+        docker run ${gpu_flag:+$gpu_flag} --rm "deepethogram:$target" python -c "from deepethogram.gui import main"
     fi
 }
 
-# Main execution
+run_pytest_target() {
+    local target=$1
+    local gpu_flag=$2
+    local marker=$3
+    local image="deepethogram:$target"
+    local mount_args=()
+
+    if [[ -d tests/DATA ]]; then
+        mount_args=(-v "$PWD/tests/DATA:/app/tests/DATA:ro")
+    else
+        echo -e "${YELLOW}Skipping pytest for ${target}: tests/DATA is not present locally.${NC}"
+        return 0
+    fi
+
+    print_header "Running ${marker} tests in ${target}"
+    echo_run docker run ${gpu_flag:+$gpu_flag} --rm "${mount_args[@]}" "$image" pytest -v -m "$marker" tests/
+    docker run ${gpu_flag:+$gpu_flag} --rm "${mount_args[@]}" "$image" pytest -v -m "$marker" tests/
+}
+
 main() {
-    # Ensure we're in the project root
-    if [[ ! -f "pyproject.toml" ]]; then
-        echo -e "${RED}Error: Must run from project root directory (where pyproject.toml is located)${NC}"
+    if [[ ! -f pyproject.toml ]]; then
+        echo -e "${RED}Error: run this script from the repository root.${NC}"
         exit 1
     fi
 
-    # Check if GPU is available by testing nvidia-smi
-    local has_gpu=false
-    if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
-        GPU_FLAG="--gpus all"
-        has_gpu=true
-        echo -e "${GREEN}NVIDIA GPU detected, will use GPUs and run GPU tests${NC}"
-    else
-        GPU_FLAG=""
-        echo -e "${RED}No NVIDIA GPU detected, running without GPU${NC}"
+    if ! docker buildx version >/dev/null 2>&1; then
+        echo -e "${RED}Error: docker buildx is required.${NC}"
+        exit 1
     fi
 
-    # Build and test each image type
-    for type in "headless" "gui" "full"; do
-        build_image $type
-        # Verify GPU access after building if we have a GPU
-        if [ "$has_gpu" = true ] && [ "$type" != "gui" ]; then
-            if ! verify_gpu "$GPU_FLAG" "$type"; then
-                echo -e "${RED}GPU detected on host but not accessible in container. Please check nvidia-docker installation.${NC}"
-                exit 1
-            fi
-        fi
-        test_container $type "$GPU_FLAG" $has_gpu
-    done
+    local has_gpu=false
+    local gpu_flag=""
+    if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+        has_gpu=true
+        gpu_flag="--gpus all"
+        echo -e "${GREEN}NVIDIA GPU detected; CUDA runtime checks are enabled.${NC}"
+    else
+        echo -e "${YELLOW}No NVIDIA GPU detected; CUDA runtime checks will be skipped.${NC}"
+    fi
 
-    print_header "All builds and tests completed successfully!"
+    build_image gui
+    smoke_test_runtime gui ""
+
+    build_image headless linux/amd64
+    smoke_test_runtime headless "$gpu_flag"
+    build_image test-headless linux/amd64
+    run_pytest_target test-headless "$gpu_flag" "not gpu"
+
+    build_image full linux/amd64
+    smoke_test_runtime full "$gpu_flag"
+    build_image test-full linux/amd64
+
+    if [[ "$has_gpu" == true ]]; then
+        verify_gpu deepethogram:headless "$gpu_flag"
+        verify_gpu deepethogram:full "$gpu_flag"
+        run_pytest_target test-full "$gpu_flag" "gpu"
+    else
+        echo -e "${YELLOW}Skipping GPU verification and GPU-marked tests because no NVIDIA GPU is available.${NC}"
+    fi
+
+    print_header "All requested Docker builds completed successfully"
 }
 
-# Execute main function
-main
+main "$@"

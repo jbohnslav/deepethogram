@@ -157,3 +157,5 @@ dmypy.json
 # Downloaded paper
 paper.pdf
 paper.md
+docs/ARCHITECTURE.md
+.kd/
