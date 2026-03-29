@@ -51,7 +51,7 @@ packages = ["deepethogram"]
 
 [tool.ruff]
 # Python version compatibility
-target-version = "py39"
+target-version = "py311"
 
 # Same as Black.
 line-length = 120
