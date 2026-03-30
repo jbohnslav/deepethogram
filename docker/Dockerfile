@@ -178,7 +178,11 @@ RUN groupadd --gid "${APP_GID}" "${APP_USER}" || true \
     && useradd --create-home --home-dir "/home/${APP_USER}" --uid "${APP_UID}" --gid "${APP_GID}" "${APP_USER}" \
     && install -d -o "${APP_UID}" -g "${APP_GID}" /workspace
 USER ${APP_USER}
-CMD ["python", "-m", "deepethogram"]
+# No GUI in headless — drop into a shell. Run training/inference with e.g.:
+#   python -m deepethogram.flow_generator.train
+#   python -m deepethogram.feature_extractor.train
+#   python -m deepethogram.sequence.train
+CMD ["bash"]
 
 FROM os-base-full AS full
 ARG APP_USER=appuser
