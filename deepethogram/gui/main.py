@@ -9,9 +9,9 @@ from typing import Union
 import numpy as np
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
-from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtCore import Slot
-from PySide2.QtWidgets import QFileDialog, QInputDialog, QMainWindow
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtCore import Slot
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMainWindow
 
 from deepethogram import configuration, projects, utils
 from deepethogram.file_io import VideoReader
@@ -63,37 +63,37 @@ class MainWindow(QMainWindow):
 
         # scroll down to Standard Shorcuts to find what the keys are called:
         # https://doc.qt.io/qt-5/qkeysequence.html
-        next_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Right"), self)
+        next_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Right"), self)
         # partial functions create a new, separate function with certain default arguments
         next_shortcut.activated.connect(partial(self.move_n_frames, 1))
         next_shortcut.activated.connect(self.user_did_something)
 
-        up_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Up"), self)
+        up_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Up"), self)
         up_shortcut.activated.connect(partial(self.move_n_frames, -cfg.vertical_arrow_jump))
         up_shortcut.activated.connect(self.user_did_something)
 
-        down_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Down"), self)
+        down_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Down"), self)
         down_shortcut.activated.connect(partial(self.move_n_frames, cfg.vertical_arrow_jump))
         down_shortcut.activated.connect(self.user_did_something)
 
-        back_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Left"), self)
+        back_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Left"), self)
         back_shortcut.activated.connect(partial(self.move_n_frames, -1))
         back_shortcut.activated.connect(self.user_did_something)
 
-        jumpleft_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Left"), self)
+        jumpleft_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+Left"), self)
         jumpleft_shortcut.activated.connect(partial(self.move_n_frames, -cfg.control_arrow_jump))
         jumpleft_shortcut.activated.connect(self.user_did_something)
 
-        jumpright_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Right"), self)
+        jumpright_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+Right"), self)
         jumpright_shortcut.activated.connect(partial(self.move_n_frames, cfg.control_arrow_jump))
         jumpright_shortcut.activated.connect(self.user_did_something)
 
         self.ui.actionSave_Project.triggered.connect(self.save)
-        save_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+S"), self)
+        save_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+S"), self)
         save_shortcut.activated.connect(self.save)
-        finalize_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+F"), self)
+        finalize_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F"), self)
         finalize_shortcut.activated.connect(self.finalize)
-        open_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+O"), self)
+        open_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+O"), self)
         open_shortcut.activated.connect(self.load_project)
         self.ui.finalize_labels.clicked.connect(self.finalize)
         self.ui.exportPredictions.clicked.connect(self.export_predictions)
@@ -109,7 +109,7 @@ class MainWindow(QMainWindow):
         self.latent_name = None
         self.thresholds = None
         for i in range(10):
-            self.toggle_shortcuts.append(QtWidgets.QShortcut(QtGui.QKeySequence(str(i)), self))
+            self.toggle_shortcuts.append(QtGui.QShortcut(QtGui.QKeySequence(str(i)), self))
             tmp_func = partial(self.respond_to_keypress, i)
             self.toggle_shortcuts[i].activated.connect(tmp_func)
             self.toggle_shortcuts[i].activated.connect(self.user_did_something)
@@ -394,7 +394,7 @@ class MainWindow(QMainWindow):
             keys.append(key)
             no_outputs.append(record["output"] is None)
         form = ShouldRunInference(keys, no_outputs)
-        ret = form.exec_()
+        ret = form.exec()
         if not ret:
             return
         should_infer = form.get_outputs()
@@ -518,7 +518,7 @@ class MainWindow(QMainWindow):
             if has_latents[i]:
                 keys_with_features.append(key)
         form = ShouldRunInference(keys_with_features, no_sequence_outputs)
-        ret = form.exec_()
+        ret = form.exec()
         if not ret:
             return
         should_infer = form.get_outputs()
@@ -617,7 +617,7 @@ class MainWindow(QMainWindow):
 
     def _new_project(self):
         form = CreateProject()
-        ret = form.exec_()
+        ret = form.exec()
         if not ret:
             return
         project_name = form.project_box.text()
@@ -1183,7 +1183,7 @@ def run() -> None:
     window.resize(1024, 768)
     window.show()
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 def entry() -> None:

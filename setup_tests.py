@@ -1,6 +1,6 @@
 """This script downloads the test data archive and sets up the testing environment for DeepEthogram.
 
-For it to work, you need to `pip install gdown`
+`gdown` is included in the `dev` dependency group, so run `uv sync --dev` first.
 """
 
 import sys

@@ -1,6 +1,13 @@
 # Using the GUI
 
-To open: After [installation](installation.md), open a terminal, activate your conda environment, and type `deepethogram`.
+To open: after [installation](installation.md), start the GUI from your uv-managed environment:
+
+```bash
+uv run deepethogram
+```
+
+Current releases use PySide6. If you are maintaining an older pre-0.4.0 environment that still used PySide2, see the
+legacy installation notes in [installation.md](installation.md#legacy-installation).
 
 To start your project, see the [getting started](getting_started.md) guide. The images in this guide are from a project
 with multiple trained models, for illustration. Note: all examples are used from the [mouse reach dataset, available here](http://research.janelia.org/bransonlab/MouseReachData/).

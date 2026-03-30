@@ -20,11 +20,33 @@ learning research into action detection:
 ![deepethogram schematic](docs/images/deepethogram_schematic.png)
 
 ## Installation
-For full installation instructions, see [this readme file](docs/installation.md).
+DeepEthogram recently migrated from Miniconda/pip to [uv](https://docs.astral.sh/uv/). Current releases are uv-first,
+recommend Python 3.11, support Python `>=3.9,<3.12`, and use PySide6 for the GUI.
 
-In brief:
-* [Install PyTorch](https://pytorch.org/)
-* `pip install deepethogram`
+Install uv first:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# or
+brew install uv
+```
+
+For development from this repository:
+
+```bash
+git clone https://github.com/jbohnslav/deepethogram.git
+cd deepethogram
+uv sync
+uv run deepethogram
+```
+
+For a user install:
+
+```bash
+uv pip install deepethogram
+```
+
+Detailed setup, troubleshooting, and legacy conda/pip instructions for older releases are in [docs/installation.md](docs/installation.md).
 
 ## Data
 **NEW!** All datasets collected and annotated by the DeepEthogram authors are now available from this DropBox link:
@@ -65,7 +87,7 @@ The major dependencies for DeepEthogram are as follows:
 * pytorch, torchvision: all the neural networks, training, and inference pipelines were written in PyTorch
 * pytorch-lightning: for nice model training base classes
 * kornia: for GPU-based image augmentations
-* pyside2: for the GUI
+* PySide6: for the GUI
 * opencv: for video and image reading and writing
 * opencv_transforms: for fast image augmentation
 * scikit-learn, scipy: for binary classification metrics
@@ -97,13 +119,13 @@ directory, so that the path is `deepethogram/tests/DATA/testing_deepethogram_arc
 To run tests:
 ```bash
 # Run all tests except GPU tests (default)
-pytest tests/
+uv run pytest tests/
 
 # Run only GPU tests (requires NVIDIA GPU)
-pytest -m gpu
+uv run pytest -m gpu
 
 # Run all tests including GPU tests
-pytest -m ""
+uv run pytest -m ""
 ```
 
 GPU tests are skipped by default as they require significant computational resources and time to complete. These tests perform end-to-end model training and inference.
@@ -118,17 +140,17 @@ To set up the development environment:
 
 1. Install the development dependencies:
 ```bash
-pip install -r requirements.txt
+uv sync --dev
 ```
 
 2. Install pre-commit hooks:
 ```bash
-pre-commit install
+uvx pre-commit install
 ```
 
 The hooks will run automatically on every commit. You can also run them manually on all files:
 ```bash
-pre-commit run --all-files
+uvx pre-commit run --all-files
 ```
 
 ## Changelog

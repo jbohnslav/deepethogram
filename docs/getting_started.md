@@ -25,7 +25,7 @@ retrained when a behavior has been added or removed. After all, if you used to h
 the final layer of the neural network models will all have the wrong shape. Furthermore, previously labeled videos must be
 updated with new behaviors before they can be used for training.
 
-Open your terminal window, activate your `conda` environment, and open the GUI by typing `deepethogram`. For more information, see
+Open your terminal window in your uv-managed DeepEthogram checkout and start the GUI with `uv run deepethogram`. For more information, see
 [using the GUI](using_gui.md).
 
 Go to `file -> new project`. Select a location for the new project to be created. It is *essential* that the project

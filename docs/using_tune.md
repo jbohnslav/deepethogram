@@ -1,12 +1,12 @@
 # Hyperparameter tuning
 
 ## usage locally
-`ray start --head`
-`python -m deepethogram.tune.feature_extractor ARGS`
+`uv run ray start --head`
+`uv run python -m deepethogram.tune.feature_extractor ARGS`
 
 ## Usage on slurm cluster
 ### usage on one node
-`ray start --head --num-cpus 16 --num-gpus 2`
+`uv run ray start --head --num-cpus 16 --num-gpus 2`
 in code: `ray.init(address='auto')`
 
 ## possible errors

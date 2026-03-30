@@ -1,6 +1,6 @@
 # Testing DeepEthogram
 
-This document describes how to run and contribute to DeepEthogram's test suite.
+This document describes how to run and contribute to DeepEthogram's test suite. CI uses uv, and local test runs should do the same.
 
 ## Test Categories
 
@@ -12,17 +12,24 @@ DeepEthogram's tests are divided into two main categories:
 
 ## Running Tests
 
+Sync the development environment first:
+
+```bash
+uv sync --dev
+uv run python setup_tests.py
+```
+
 ### Basic Usage
 
 ```bash
 # Run all tests except GPU tests (default)
-pytest tests/
+uv run pytest tests/
 
 # Run only GPU tests (requires NVIDIA GPU)
-pytest -m gpu
+uv run pytest -m gpu
 
 # Run all tests including GPU tests
-pytest -m ""
+uv run pytest -m ""
 ```
 
 ### Test Data Setup

@@ -10,7 +10,7 @@ try:
     from ray.tune.schedulers import ASHAScheduler
     from ray.tune.suggest.hyperopt import HyperOptSearch
 except ImportError:
-    print("To use the deepethogram.tune module, you must `pip install 'ray[tune]`")
+    print("To use the deepethogram.tune module, run `uv add 'ray[tune]'`.")
     raise
 
 from deepethogram.configuration import make_config

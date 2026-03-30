@@ -4,19 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deepethogram"
-version = "0.3.0"
+version = "0.2.0"
 description = "Temporal action detection for biology"
 readme = "README.md"
 authors = [
     {name = "Jim Bohnslav", email = "jbohnslav@gmail.com"},
 ]
-requires-python = ">=3.9,<3.12"
+requires-python = ">=3.7,<3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "chardet",
+    "chardet<4.0",
     "h5py",
     "kornia>=0.5",
     "matplotlib",
@@ -24,53 +24,33 @@ dependencies = [
     "omegaconf>=2",
     "opencv-python-headless",
     "opencv-transforms",
-    "pandas>=1.5,<2.1",
-    "PySide6>=6.6.0",
-    "scikit-learn>=1.2,<1.4",
-    "scipy>=1.9,<1.11",
-    "torch==2.4.1",
+    "pandas<1.4",
+    "PySide2==5.13.2",
+    "scikit-learn<1.1",
+    "scipy<1.8",
     "tqdm",
     "vidio",
     "pytorch_lightning==1.6.5",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "ruff>=0.1.0",
     "pre-commit>=2.20.0,<3.0.0",
     "pytest",
     "pytest-cov",
-    "pytest-qt",
-    "pytest-xvfb",
     "gdown",
-    "ty>=0.0.1a17",
 ]
 
 [project.scripts]
 deepethogram = "deepethogram.gui.main:entry"
 
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cpu", marker = "sys_platform != 'linux'" },
-    { index = "pytorch-cu124", marker = "sys_platform == 'linux'" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
-explicit = true
-
-[tool.setuptools.packages.find]
-include = ["deepethogram*"]
+[tool.setuptools]
+packages = ["deepethogram"]
 
 [tool.ruff]
 # Python version compatibility
-target-version = "py311"
+target-version = "py37"
 
 # Same as Black.
 line-length = 120

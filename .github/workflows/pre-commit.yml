@@ -8,21 +8,25 @@ on:
 
 jobs:
   pre-commit:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
 
-    - name: Set up Python 3.7
-      uses: actions/setup-python@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.0.0
       with:
-        python-version: '3.7'
+        enable-cache: true
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.11'
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pre-commit ruff
+      run: uv sync --locked --dev
+
+    - name: Run Ruff
+      run: uv run ruff check .
 
     - name: Run pre-commit
-      run: |
-        pre-commit install
-        pre-commit run --all-files
+      run: uvx pre-commit@4.4.0 run --all-files --show-diff-on-failure --color=always
