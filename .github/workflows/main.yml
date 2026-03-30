@@ -28,11 +28,11 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install FFMPEG (Ubuntu)
+    - name: Install system dependencies (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg
+        sudo apt-get install -y ffmpeg libegl1 libopengl0 libgl1
 
     - name: Install FFMPEG (Windows)
       if: matrix.os == 'windows-latest'
