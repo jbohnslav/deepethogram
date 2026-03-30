@@ -51,4 +51,6 @@ jobs:
       run: uv run python setup_tests.py
 
     - name: Run CPU tests
+      env:
+        QT_QPA_PLATFORM: offscreen
       run: uv run pytest -v -m "not gpu" tests/
