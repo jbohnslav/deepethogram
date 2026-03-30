@@ -1,0 +1,12 @@
+# Operational state (not tracked)
+*.json
+*.jsonl
+*.log
+*.session
+**/logs/
+**/sessions/
+worktrees/
+current
+
+# Config file is tracked
+!config.json
