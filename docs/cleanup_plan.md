@@ -4,7 +4,7 @@
 
 This document outlines a comprehensive cleanup plan for the DeepEthogram repository to modernize the codebase, improve maintainability, and enhance user experience. The cleanup is organized into phases to ensure systematic improvement without breaking existing functionality.
 
-**Last Updated**: January 2025  
+**Last Updated**: January 2025
 **Current Branch**: cleanup (partially implemented)
 
 ## Progress Status
@@ -28,7 +28,7 @@ This document outlines a comprehensive cleanup plan for the DeepEthogram reposit
   - [ ] Detect Lightning version and use appropriate API calls
   - [ ] Wrap trainer instantiation with version checks
   - [ ] Fix `reload_dataloaders_every_epoch` parameter issue
-  - [ ] Fix `progress_bar_refresh_rate` parameter issue  
+  - [ ] Fix `progress_bar_refresh_rate` parameter issue
   - [ ] Fix `gpus` vs `accelerator` parameter
   - [ ] Fix FPSCallback `dataloader_idx` parameter
 - [ ] Test all training pipelines
@@ -237,7 +237,7 @@ For EACH change:
 ## Success Metrics
 
 ### Immediate Success Criteria (Phase 1)
-- [ ] Installation works on Python 3.8+ 
+- [ ] Installation works on Python 3.8+
 - [ ] Colab notebook functional
 - [ ] Training runs without Lightning errors
 - [ ] GUI dropdowns work
@@ -352,7 +352,7 @@ For EACH change:
 ### Why Stay on Python 3.7 Initially?
 - **PySide2 → PySide6 is a MAJOR migration** requiring:
   - Rewriting all Qt imports and many API calls
-  - Extensive GUI testing on all platforms  
+  - Extensive GUI testing on all platforms
   - Potentially breaking changes for users
 - **Most critical issues can be fixed WITHOUT Python upgrade**:
   - PyTorch Lightning: Use compatibility shims

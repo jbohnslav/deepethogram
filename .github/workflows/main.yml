@@ -13,21 +13,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-latest, macos-13]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v7
+      uses: astral-sh/setup-uv@8.0.0
+      with:
+        enable-cache: true
 
     - name: Set up Python 3.11
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: '3.11'
 
     - name: Install FFMPEG (Ubuntu)
-      if: matrix.os == 'ubuntu-20.04'
+      if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
@@ -35,18 +37,15 @@ jobs:
     - name: Install FFMPEG (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        choco install ffmpeg
+        choco install ffmpeg -y
 
     - name: Install FFMPEG (macOS)
-      if: matrix.os == 'macos-13'
+      if: matrix.os == 'macos-latest'
       run: |
         brew install ffmpeg
 
     - name: Install dependencies
       run: uv sync --locked --dev
-
-    - name: Install PyTorch CPU wheels
-      run: uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
     - name: Setup test data
       run: uv run python setup_tests.py

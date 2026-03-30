@@ -13,7 +13,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -60,7 +60,9 @@ jobs:
 
       - name: Set up uv
         if: steps.version.outputs.changed == 'true'
-        uses: astral-sh/setup-uv@04224aa8caab79e9c08d41c1ef06d6394aafe6a0 # v5
+        uses: astral-sh/setup-uv@8.0.0
+        with:
+          enable-cache: true
 
       - name: Build distributions
         if: steps.version.outputs.changed == 'true'
