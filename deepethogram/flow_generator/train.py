@@ -36,7 +36,6 @@ log = logging.getLogger(__name__)
 
 
 def flow_generator_train(cfg: DictConfig) -> nn.Module:
-    plt.switch_backend("agg")
     """Trains flow generator models from a configuration.
 
     Parameters
@@ -49,6 +48,7 @@ def flow_generator_train(cfg: DictConfig) -> nn.Module:
     nn.Module
         Trained flow generator
     """
+    plt.switch_backend("agg")
     cfg = projects.setup_run(cfg)
     log.info("args: {}".format(" ".join(sys.argv)))
     # only two custom overwrites of the configuration file
