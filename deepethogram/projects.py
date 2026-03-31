@@ -171,7 +171,12 @@ def add_label_to_project(path_to_labels: Union[str, os.PathLike], path_to_video)
     if os.path.isfile(label_dst):
         warnings.warn("Label already exists in destination {}, overwriting...".format(label_dst))
 
-    df = pd.read_csv(path_to_labels, index_col=0)
+    df = pd.read_csv(path_to_labels)
+    # Drop unnamed index column if present (DEG-generated CSVs have one)
+    first_col = df.columns[0]
+    if first_col == "" or str(first_col).startswith("Unnamed"):
+        df = df.drop(columns=[first_col])
+
     if "none" in list(df.columns):
         df = df.rename(columns={"none": "background"})
     if "background" not in list(df.columns):

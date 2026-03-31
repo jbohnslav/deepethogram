@@ -115,5 +115,80 @@ def test_add_external_label():
     projects.add_label_to_project(labelfile, videofile)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_add_label_deg_style_csv(tmp_path):
+    """Test add_label_to_project with DEG-generated CSV (has unnamed index column)."""
+    make_project_from_archive()
+    mousedir = os.path.join(project_path, "DATA", "mouse06")
+    videofile = os.path.join(mousedir, "mouse06.h5")
+
+    # Create a DEG-style CSV with unnamed numeric index
+    csv_path = tmp_path / "labels_with_index.csv"
+    csv_path.write_text(
+        ",background,behavior1,behavior2\n"
+        "0,1,0,0\n"
+        "1,0,1,0\n"
+        "2,0,0,1\n"
+    )
+
+    result = projects.add_label_to_project(str(csv_path), videofile)
+    df = pd.read_csv(result, index_col=0)
+    assert "background" in df.columns
+    assert "behavior1" in df.columns
+    assert "behavior2" in df.columns
+    assert df.shape[1] == 3  # background + 2 behaviors
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_add_label_external_csv_no_index(tmp_path):
+    """Test add_label_to_project with external CSV (no index column, no background).
+
+    Regression test for GitHub issue #116: the old code used index_col=0 which
+    silently ate the first data column when no index column was present.
+    """
+    make_project_from_archive()
+    mousedir = os.path.join(project_path, "DATA", "mouse06")
+    videofile = os.path.join(mousedir, "mouse06.h5")
+
+    # Create a user-provided CSV without index or background column
+    csv_path = tmp_path / "labels_no_index.csv"
+    csv_path.write_text(
+        "behavior1,behavior2\n"
+        "0,0\n"
+        "1,0\n"
+        "0,1\n"
+    )
+
+    result = projects.add_label_to_project(str(csv_path), videofile)
+    df = pd.read_csv(result, index_col=0)
+    assert "background" in df.columns, "background column should be auto-inserted"
+    assert "behavior1" in df.columns, "behavior1 should NOT be eaten by index_col"
+    assert "behavior2" in df.columns
+    assert df.shape[1] == 3  # background + behavior1 + behavior2
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_add_label_external_csv_with_background_no_index(tmp_path):
+    """Test external CSV that has background but no index column."""
+    make_project_from_archive()
+    mousedir = os.path.join(project_path, "DATA", "mouse06")
+    videofile = os.path.join(mousedir, "mouse06.h5")
+
+    csv_path = tmp_path / "labels_bg_no_index.csv"
+    csv_path.write_text(
+        "background,behavior1,behavior2\n"
+        "1,0,0\n"
+        "0,1,0\n"
+        "0,0,1\n"
+    )
+
+    result = projects.add_label_to_project(str(csv_path), videofile)
+    df = pd.read_csv(result, index_col=0)
+    assert "background" in df.columns
+    assert "behavior1" in df.columns
+    assert "behavior2" in df.columns
+    assert df.shape[1] == 3
+
+
 if __name__ == "__main__":
     test_add_external_label()
