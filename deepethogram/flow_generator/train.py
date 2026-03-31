@@ -32,12 +32,11 @@ warnings.filterwarnings(
 
 flow_generators = utils.get_models_from_module(models, get_function=False)
 
-plt.switch_backend("agg")
-
 log = logging.getLogger(__name__)
 
 
 def flow_generator_train(cfg: DictConfig) -> nn.Module:
+    plt.switch_backend("agg")
     """Trains flow generator models from a configuration.
 
     Parameters

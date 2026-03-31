@@ -42,12 +42,11 @@ warnings.filterwarnings(
     "and test dataloaders.",
 )
 
-plt.switch_backend("agg")
-
 log = logging.getLogger(__name__)
 
 
 def feature_extractor_train(cfg: DictConfig) -> nn.Module:
+    plt.switch_backend("agg")
     """Trains feature extractor models from a configuration.
 
     Parameters
