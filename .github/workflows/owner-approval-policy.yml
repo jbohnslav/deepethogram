@@ -1,0 +1,57 @@
+name: Owner Approval Policy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  owner-approval-policy:
+    name: owner-approval-policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check owner approval
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const requiredApprover = "jbohnslav";
+            const pr = context.payload.pull_request;
+
+            if (!pr) {
+              core.setFailed("This workflow only supports pull request events.");
+              return;
+            }
+
+            if (pr.user.login === requiredApprover) {
+              core.info(`PR author is ${requiredApprover}; owner approval is not required.`);
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+
+            let ownerReviewState = null;
+            for (const review of reviews) {
+              if (review.user?.login !== requiredApprover) {
+                continue;
+              }
+              if (["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(review.state)) {
+                ownerReviewState = review.state;
+              }
+            }
+
+            if (ownerReviewState === "APPROVED") {
+              core.info(`PR has an active approval from ${requiredApprover}.`);
+              return;
+            }
+
+            core.setFailed(`PRs not authored by ${requiredApprover} require approval from ${requiredApprover}.`);
