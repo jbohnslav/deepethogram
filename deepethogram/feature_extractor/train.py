@@ -42,8 +42,6 @@ warnings.filterwarnings(
     "and test dataloaders.",
 )
 
-plt.switch_backend("agg")
-
 log = logging.getLogger(__name__)
 
 
@@ -60,6 +58,7 @@ def feature_extractor_train(cfg: DictConfig) -> nn.Module:
     nn.Module
         Trained feature extractor
     """
+    plt.switch_backend("agg")
     cfg = projects.setup_run(cfg)
 
     log.info("args: {}".format(" ".join(sys.argv)))

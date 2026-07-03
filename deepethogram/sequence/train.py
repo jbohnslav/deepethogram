@@ -19,8 +19,6 @@ from deepethogram.sequence.models.tgm import TGM, TGMJ
 
 log = logging.getLogger(__name__)
 
-plt.switch_backend("agg")
-
 
 def sequence_train(cfg: DictConfig) -> nn.Module:
     """Trains sequence models from a configuration.
@@ -35,6 +33,7 @@ def sequence_train(cfg: DictConfig) -> nn.Module:
     nn.Module
         Trained sequence model
     """
+    plt.switch_backend("agg")
     cfg = projects.setup_run(cfg)
     log.info("args: {}".format(" ".join(sys.argv)))
 

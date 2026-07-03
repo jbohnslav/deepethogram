@@ -32,8 +32,6 @@ warnings.filterwarnings(
 
 flow_generators = utils.get_models_from_module(models, get_function=False)
 
-plt.switch_backend("agg")
-
 log = logging.getLogger(__name__)
 
 
@@ -50,6 +48,7 @@ def flow_generator_train(cfg: DictConfig) -> nn.Module:
     nn.Module
         Trained flow generator
     """
+    plt.switch_backend("agg")
     cfg = projects.setup_run(cfg)
     log.info("args: {}".format(" ".join(sys.argv)))
     # only two custom overwrites of the configuration file
