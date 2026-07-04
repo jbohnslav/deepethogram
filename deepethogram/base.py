@@ -8,6 +8,8 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import pytorch_lightning as pl
 from omegaconf import DictConfig, OmegaConf
+from pytorch_lightning.callbacks.progress import TQDMProgressBar
+from pytorch_lightning.tuner import Tuner
 
 try:
     from ray.tune import CLIReporter, get_trial_dir  # noqa: F401
@@ -33,6 +35,12 @@ from deepethogram.metrics import EmptyMetrics, Metrics
 from deepethogram.schedulers import initialize_scheduler
 
 log = logging.getLogger(__name__)
+
+
+def trainer_device_kwargs(cfg: DictConfig) -> dict:
+    if torch.cuda.is_available():
+        return {"accelerator": "gpu", "devices": [cfg.compute.gpu_id]}
+    return {"accelerator": "cpu", "devices": 1}
 
 
 class BaseLightningModule(pl.LightningModule):
@@ -279,7 +287,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
 
     if cfg.compute.batch_size == "auto" or cfg.train.lr == "auto":
         trainer = pl.Trainer(
-            gpus=[cfg.compute.gpu_id],
+            **trainer_device_kwargs(cfg),
             precision=16 if cfg.compute.fp16 else 32,
             limit_train_batches=1.0,
             limit_val_batches=1.0,
@@ -310,7 +318,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
             lightning_module.gpu_transforms = gpu_transforms
             log.debug("new: {}".format(lightning_module.gpu_transforms))
 
-        tuner = pl.tuner.tuning.Tuner(trainer)
+        tuner = Tuner(trainer)
         # hack for lightning to find the batch size
         cfg.batch_size = 2  # to start
 
@@ -326,7 +334,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         if cfg.compute.batch_size == "auto":
             max_trials = int(math.log2(cfg.compute.max_batch_size)) - int(math.log2(cfg.compute.min_batch_size))
             log.info("max trials: {}".format(max_trials))
-            new_batch_size = trainer.tuner.scale_batch_size(
+            new_batch_size = tuner.scale_batch_size(
                 lightning_module,
                 mode="power",
                 steps_per_trial=30,
@@ -336,7 +344,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
             cfg.compute.batch_size = new_batch_size
             log.info("auto-tuned batch size: {}".format(new_batch_size))
         if cfg.train.lr == "auto":
-            lr_finder = trainer.tuner.lr_find(lightning_module, early_stop_threshold=None, min_lr=1e-6, max_lr=10.0)
+            lr_finder = tuner.lr_find(lightning_module, early_stop_threshold=None, min_lr=1e-6, max_lr=10.0)
             # log.info(lr_finder.results)
             plt.style.use("seaborn")
             fig = lr_finder.plot(suggest=True, show=False)
@@ -381,41 +389,23 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
         tensorboard_logger = pl.loggers.tensorboard.TensorBoardLogger(os.getcwd())
         refresh_rate = 1
 
-    # tuning messes with the callbacks
-    try:
-        # will be deprecated in the future; pytorch lightning updated their kwargs for this function
-        # don't like how they keep updating the api without proper deprecation warnings, etc.
-        trainer = pl.Trainer(
-            gpus=[cfg.compute.gpu_id],
-            precision=16 if cfg.compute.fp16 else 32,
-            limit_train_batches=steps_per_epoch["train"],
-            limit_val_batches=steps_per_epoch["val"],
-            limit_test_batches=steps_per_epoch["test"],
-            logger=tensorboard_logger,
-            max_epochs=cfg.train.num_epochs,
-            num_sanity_val_steps=0,
-            callbacks=callback_list,
-            reload_dataloaders_every_epoch=True,
-            progress_bar_refresh_rate=refresh_rate,
-            profiler=profiler,
-            log_every_n_steps=1,
-        )
+    if refresh_rate > 0:
+        callback_list.append(TQDMProgressBar(refresh_rate=refresh_rate))
 
-    except TypeError:
-        trainer = pl.Trainer(
-            gpus=[cfg.compute.gpu_id],
-            precision=16 if cfg.compute.fp16 else 32,
-            limit_train_batches=steps_per_epoch["train"],
-            limit_val_batches=steps_per_epoch["val"],
-            limit_test_batches=steps_per_epoch["test"],
-            logger=tensorboard_logger,
-            max_epochs=cfg.train.num_epochs,
-            num_sanity_val_steps=0,
-            callbacks=callback_list,
-            reload_dataloaders_every_n_epochs=1,
-            progress_bar_refresh_rate=refresh_rate,
-            profiler=profiler,
-            log_every_n_steps=1,
-        )
+    trainer = pl.Trainer(
+        **trainer_device_kwargs(cfg),
+        precision=16 if cfg.compute.fp16 else 32,
+        limit_train_batches=steps_per_epoch["train"],
+        limit_val_batches=steps_per_epoch["val"],
+        limit_test_batches=steps_per_epoch["test"],
+        logger=tensorboard_logger,
+        max_epochs=cfg.train.num_epochs,
+        num_sanity_val_steps=0,
+        callbacks=callback_list,
+        reload_dataloaders_every_n_epochs=1,
+        enable_progress_bar=refresh_rate > 0,
+        profiler=profiler,
+        log_every_n_steps=1,
+    )
     torch.cuda.empty_cache()
     return trainer

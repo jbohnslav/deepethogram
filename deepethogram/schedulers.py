@@ -163,7 +163,6 @@ def initialize_scheduler(optimizer, cfg: DictConfig, mode: str = "max", reductio
             mode=mode,
             factor=reduction_factor,
             patience=cfg.train.patience,
-            verbose=True,
             min_lr=cfg.train.min_lr,
         )
         scheduler.name = "plateau"
