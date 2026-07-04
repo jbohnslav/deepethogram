@@ -16,9 +16,6 @@ class DebugCallback(Callback):
         super().__init__()
         log.info("callback initialized")
 
-    def on_init_end(self, trainer):
-        log.info("on init start")
-
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
         log.debug("on train batch start")
 
@@ -43,12 +40,6 @@ class DebugCallback(Callback):
     def on_test_epoch_end(self, trainer, pl_module):
         log.info("on test epoch end")
 
-    def on_epoch_start(self, trainer, pl_module):
-        log.info("on epoch start")
-
-    def on_epoch_end(self, trainer, pl_module):
-        log.info("on epoch end")
-
     def on_train_start(self, trainer, pl_module):
         log.info("on train start")
 
@@ -61,8 +52,9 @@ class DebugCallback(Callback):
     def on_validation_end(self, trainer, pl_module):
         log.info("on validation end")
 
-    def on_keyboard_interrupt(self, trainer, pl_module):
-        log.info("on keyboard interrupt")
+    def on_exception(self, trainer, pl_module, exception):
+        if isinstance(exception, KeyboardInterrupt):
+            log.info("on keyboard interrupt")
 
 
 class FPSCallback(Callback):
@@ -162,8 +154,9 @@ class MetricsCallback(Callback):
         log_metrics(pl_module, "test")
         # pl_module.metrics.end_epoch('speedtest')
 
-    def on_keyboard_interrupt(self, trainer, pl_module):
-        pl_module.metrics.buffer.clear()
+    def on_exception(self, trainer, pl_module, exception):
+        if isinstance(exception, KeyboardInterrupt):
+            pl_module.metrics.buffer.clear()
 
 
 class ExampleImagesCallback(Callback):
@@ -208,8 +201,9 @@ class CheckpointCallback(Callback):
     def on_train_epoch_end(self, trainer, pl_module):
         self.checkpoint(pl_module)
 
-    def on_keyboard_interrupt(self, trainer, pl_module):
-        self.checkpoint(pl_module)
+    def on_exception(self, trainer, pl_module, exception):
+        if isinstance(exception, KeyboardInterrupt):
+            self.checkpoint(pl_module)
 
 
 class StopperCallback(Callback):
