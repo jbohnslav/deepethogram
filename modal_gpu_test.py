@@ -11,7 +11,7 @@ import modal
 
 APP_NAME = "deepethogram-gpu-tests"
 VOLUME_NAME = "deepethogram-test-data"
-CUDA_IMAGE = "nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04"
+CUDA_IMAGE = "nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04"
 UV_VERSION = "0.6.14"
 DEFAULT_GPU = os.environ.get("DEG_MODAL_GPU", "T4")
 REMOTE_WORKDIR = Path("/workspace")

@@ -16,13 +16,10 @@ class DebugCallback(Callback):
         super().__init__()
         log.info("callback initialized")
 
-    def on_init_end(self, trainer):
-        log.info("on init start")
-
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
         log.debug("on train batch start")
 
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         log.debug("on train batch end")
 
     def on_train_epoch_start(self, trainer, pl_module):
@@ -43,12 +40,6 @@ class DebugCallback(Callback):
     def on_test_epoch_end(self, trainer, pl_module):
         log.info("on test epoch end")
 
-    def on_epoch_start(self, trainer, pl_module):
-        log.info("on epoch start")
-
-    def on_epoch_end(self, trainer, pl_module):
-        log.info("on epoch end")
-
     def on_train_start(self, trainer, pl_module):
         log.info("on train start")
 
@@ -61,8 +52,9 @@ class DebugCallback(Callback):
     def on_validation_end(self, trainer, pl_module):
         log.info("on validation end")
 
-    def on_keyboard_interrupt(self, trainer, pl_module):
-        log.info("on keyboard interrupt")
+    def on_exception(self, trainer, pl_module, exception):
+        if isinstance(exception, KeyboardInterrupt):
+            log.info("on keyboard interrupt")
 
 
 class FPSCallback(Callback):
@@ -92,22 +84,22 @@ class FPSCallback(Callback):
 
         pl_module.metrics.buffer.append(split, {"fps": fps})
 
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
         self.start_timer("train")
 
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         self.end_batch("train", batch, pl_module)
 
-    def on_validation_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
+    def on_validation_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx=0):
         self.start_timer("val")
 
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
         self.end_batch("val", batch, pl_module)
 
-    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
+    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx=0):
         self.start_timer("speedtest")
 
-    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
         self.end_batch("speedtest", batch, pl_module)
 
 
@@ -162,8 +154,9 @@ class MetricsCallback(Callback):
         log_metrics(pl_module, "test")
         # pl_module.metrics.end_epoch('speedtest')
 
-    def on_keyboard_interrupt(self, trainer, pl_module):
-        pl_module.metrics.buffer.clear()
+    def on_exception(self, trainer, pl_module, exception):
+        if isinstance(exception, KeyboardInterrupt):
+            pl_module.metrics.buffer.clear()
 
 
 class ExampleImagesCallback(Callback):
@@ -188,13 +181,13 @@ class ExampleImagesCallback(Callback):
     def on_test_epoch_end(self, trainer, pl_module):
         self.reset_cnt(pl_module, "test")
 
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         pl_module.viz_cnt["train"] += 1
 
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
         pl_module.viz_cnt["val"] += 1
 
-    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
         pl_module.viz_cnt["test"] += 1
 
 
@@ -208,8 +201,9 @@ class CheckpointCallback(Callback):
     def on_train_epoch_end(self, trainer, pl_module):
         self.checkpoint(pl_module)
 
-    def on_keyboard_interrupt(self, trainer, pl_module):
-        self.checkpoint(pl_module)
+    def on_exception(self, trainer, pl_module, exception):
+        if isinstance(exception, KeyboardInterrupt):
+            self.checkpoint(pl_module)
 
 
 class StopperCallback(Callback):

@@ -104,7 +104,8 @@ class L2_SP(nn.Module):
         self.beta = beta
 
         assert os.path.isfile(path_to_pretrained_weights)
-        state = torch.load(path_to_pretrained_weights, map_location="cpu")
+        # DeepEthogram checkpoints include training metadata, so they need the legacy full checkpoint loader.
+        state = torch.load(path_to_pretrained_weights, map_location="cpu", weights_only=False)
 
         pretrained_state = state["state_dict"]
 
