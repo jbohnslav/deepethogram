@@ -42,3 +42,37 @@ jobs:
           use_sticky_comment: true
           track_progress: true
           claude_args: '--allowedTools "Bash(gh pr:*),Bash(gh api:*),Bash(gh diff:*)"'
+
+      - name: Report Claude startup failure
+        if: ${{ failure() && steps.claude-review.outcome == 'failure' }}
+        env:
+          EXECUTION_FILE: ${{ steps.claude-review.outputs.execution_file }}
+          CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ACTION_TOKEN: ${{ steps.claude-review.outputs.github_token }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path(os.environ.get("EXECUTION_FILE") or
+                      str(Path(os.environ["RUNNER_TEMP"]) / "claude-execution-output.json"))
+          if not path.is_file():
+              print("Claude did not produce an execution result file.")
+              raise SystemExit(0)
+          records = json.loads(path.read_text())
+          if isinstance(records, dict):
+              records = [records]
+          for record in records:
+              if record.get("type") != "result" or not record.get("is_error"):
+                  continue
+              # Only report the terminal error, never the conversation/tool transcript.
+              message = str(record.get("result") or record.get("errors") or record.get("subtype"))
+              for key in ("CLAUDE_TOKEN", "ACTION_TOKEN", "GITHUB_TOKEN"):
+                  secret = os.environ.get(key)
+                  if secret:
+                      message = message.replace(secret, "[redacted]")
+              message = re.sub(r"(?:sk-ant-|gh[pousr]_|github_pat_)[A-Za-z0-9_-]+", "[redacted]", message)
+              print("Claude terminal error: " + message[:2000])
+          PY
