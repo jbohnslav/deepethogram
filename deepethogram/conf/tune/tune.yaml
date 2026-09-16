@@ -6,6 +6,8 @@ tune:
     - val/reg_loss
     - val/f1_class_mean_nobg
   key_metric: val/f1_class_mean_nobg
+  # Override with min/max for custom objectives; known metrics have built-in directions.
+  key_metric_mode: null
   num_trials: 128 # number of runs
   name: tune
   grace_period: 4 # number of epochs
