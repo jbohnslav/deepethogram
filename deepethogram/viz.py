@@ -15,6 +15,7 @@ from matplotlib.animation import FuncAnimation
 from mpl_toolkits.axes_grid1 import inset_locator, make_axes_locatable
 
 from deepethogram.flow_generator.utils import flow_to_rgb_polar
+from deepethogram.metrics import get_metric_mode
 from deepethogram.utils import tensor_to_np
 
 log = logging.getLogger(__name__)
@@ -731,9 +732,10 @@ def remove_nan_or_inf(value: Union[int, float]):
 def plot_confusion_from_logger(logger_file, fig, class_names=None, epoch=None):
     """Plots train and validation confusion matrices from a Metrics file"""
     with h5py.File(logger_file, "r") as f:
-        best_epoch = np.argmax(f["val/" + f.attrs["key_metric"]][:])
         if epoch is None:
-            epoch = best_epoch
+            mode = get_metric_mode(f.attrs["key_metric"], f.attrs.get("key_metric_mode"))
+            values = f["val/" + f.attrs["key_metric"]][:]
+            epoch = np.argmin(values) if mode == "min" else np.argmax(values)
         if epoch == "last":
             epoch = -1
         splits = list(f.keys())

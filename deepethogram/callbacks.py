@@ -224,6 +224,7 @@ class StopperCallback(Callback):
             return
 
         if self.stopper.name == "early":
+            self.stopper.is_error = pl_module.metrics.key_metric_mode == "min"
             _, should_stop = self.stopper(pl_module.metrics.latest_key["val"])
         elif self.stopper.name == "learning_rate":
             min_lr = pl_module.metrics[("train", "lr", -1)]
