@@ -260,3 +260,28 @@ def test_explicit_override_reaches_training_consumers(cfg, tmp_path, monkeypatch
         metrics.latest_key["val"] = score
         stopper.on_train_epoch_end(trainer, proxy)
         assert not trainer.should_stop
+
+
+@pytest.mark.parametrize("mode", ["min", "max"])
+def test_classification_factory_forwards_custom_direction(tmp_path, mode):
+    from deepethogram.feature_extractor.train import get_metrics
+
+    metrics = get_metrics(
+        tmp_path,
+        num_classes=2,
+        num_parameters=1,
+        key_metric="auxiliary_loss",
+        key_metric_mode=mode,
+    )
+    assert metrics.key_metric == "auxiliary_loss"
+    assert metrics.key_metric_mode == mode
+    with h5py.File(metrics.fname, "r") as f:
+        assert f.attrs["key_metric_mode"] == mode
+
+
+@pytest.mark.parametrize("key,expected", [("loss", "min"), ("f1_class_mean_nobg", "max")])
+def test_classification_factory_preserves_default_direction(tmp_path, key, expected):
+    from deepethogram.feature_extractor.train import get_metrics
+
+    metrics = get_metrics(tmp_path, num_classes=2, num_parameters=1, key_metric=key)
+    assert metrics.key_metric_mode == expected
