@@ -47,12 +47,14 @@ jobs:
     - name: Install dependencies
       run: uv sync --locked --dev
 
-    # About 1.2 GB of checkpoints; setup_tests.py re-verifies the cached files against the checked-in checksums.
+    # About 1.2 GB of checkpoints, identical on every OS, so all three jobs share one cache entry.
+    # setup_tests.py re-hashes restored files against the checked-in checksums without contacting the Hub.
     - name: Cache pinned Hugging Face checkpoints
       uses: actions/cache@v6
       with:
         path: tests/DATA/huggingface_checkpoints
-        key: hf-checkpoints-${{ runner.os }}-${{ hashFiles('huggingface/models.json') }}
+        key: hf-checkpoints-${{ hashFiles('huggingface/models.json') }}
+        enableCrossOsArchive: true
 
     - name: Setup video fixtures and pinned Hugging Face checkpoints
       run: uv run python setup_tests.py

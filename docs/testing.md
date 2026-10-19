@@ -37,10 +37,10 @@ uv run pytest -m ""
 `uv run python setup_tests.py` prepares everything the tests need:
 
 1. It downloads the video fixture archive from Google Drive into `tests/DATA/testing_deepethogram_archive/`, unless that folder already has `DATA`, `models` and `project_config.yaml`.
-2. It downloads the six published checkpoints from Hugging Face at the commits pinned in `huggingface/models.json`, into `tests/DATA/huggingface_checkpoints/`. It checks each `v1.0` tag resolves to its pinned commit, and verifies every file against the checksums in `huggingface/models/<model>/SHA256SUMS`.
-3. It rebuilds `tests/DATA/testing_deepethogram_archive/models/pretrained_models/` so it holds only those six runs.
+2. It downloads the six published checkpoints from Hugging Face at the commits pinned in `huggingface/models.json`, into `tests/DATA/huggingface_checkpoints/`. It checks each model's release tag resolves to its pinned commit, and verifies every file against the checksums in `huggingface/models/<model>/SHA256SUMS`.
+3. It copies those six runs into `tests/DATA/testing_deepethogram_archive/models/pretrained_models/`, removing anything else there.
 
-Re-run it after pulling changes to `huggingface/models.json`. Later runs reuse the downloads. Don't unzip the archive by hand: its bundled checkpoints are older snapshots without the release manifests, and `tests/test_pretrained_models.py` fails on them.
+Re-run it after pulling changes to `huggingface/models.json`. Once the downloads are verified, later runs reuse them without contacting Hugging Face, so setup also works offline. Don't unzip the archive by hand: its bundled checkpoints are older snapshots without the release manifests, and `tests/test_pretrained_models.py` fails on them.
 
 ## Writing Tests
 

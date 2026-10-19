@@ -15,7 +15,7 @@ from deepethogram import projects
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 RELEASE_TEXT = {
     "hyperparameters.yaml": "run:\n  model: flow_generator\nflow_generator:\n  arch: {arch}\n",
-    "model_config.json": '{{"architecture": "{arch}"}}\n',
+    "model_config.json": '{{"architecture": "{arch}", "task": "optical-flow", "flow_generator": "{arch}"}}\n',
     "LICENSE": "license\n",
 }
 
@@ -28,9 +28,11 @@ class FakeHub:
         self.tag_commits = tag_commits or {}
         self.corrupt = set(corrupt)
         self.downloads = []
+        self.tag_checks = []
 
     def model_info(self, repo_id, revision):
         model = next(model for model in self.models.values() if model["repo_id"] == repo_id)
+        self.tag_checks.append((model["slug"], revision))
         return SimpleNamespace(sha=self.tag_commits.get(model["slug"], model["commit"]))
 
     def download(self, model, destination):
@@ -61,6 +63,7 @@ def releases(tmp_path):
             "architecture": arch,
             "task": "optical-flow",
             "commit": f"{index}" * 40,
+            "tag": "v1.0",
             "run_directory": f"20010{index}_000000_{arch}",
         }
         for index, (slug, arch) in enumerate([("tinymotionnet", "TinyMotionNet"), ("motionnet", "MotionNet")], 1)
@@ -69,8 +72,11 @@ def releases(tmp_path):
     for model in models:
         model_dir = releases_dir / "models" / model["slug"]
         model_dir.mkdir(parents=True)
-        (model_dir / "SHA256SUMS").write_bytes(release_files(model)["SHA256SUMS"])
-    (releases_dir / "models.json").write_text(json.dumps({"release": "v1.0", "models": models}))
+        for filename in ("SHA256SUMS", "model_config.json"):
+            (model_dir / filename).write_bytes(release_files(model)[filename])
+    # Like the real manifest, models.json leaves the architecture fields to model_config.json.
+    entries = [{key: value for key, value in model.items() if key not in setup_tests.CONFIG_FIELDS} for model in models]
+    (releases_dir / "models.json").write_text(json.dumps({"models": entries}))
     return releases_dir, models
 
 
@@ -125,6 +131,91 @@ def test_rerun_reuses_cache_and_reinstalls(tmp_path, releases):
     assert (tmp_path / "cache" / "tinymotionnet" / "checkpoint.pt").is_file()
 
 
+def test_verified_rerun_needs_no_hub_and_no_writes(tmp_path, releases, monkeypatch):
+    """Offline runs and read-only fixture mounts work once everything is verified."""
+    releases_dir, models = releases
+    pretrained = run_setup(tmp_path, releases_dir, FakeHub(models))
+
+    class Offline:
+        def model_info(self, *args, **kwargs):
+            raise AssertionError("contacted the Hub")
+
+        def download(self, *args, **kwargs):
+            raise AssertionError("downloaded again")
+
+    def read_only(*args, **kwargs):
+        raise PermissionError("read-only file system")
+
+    monkeypatch.setattr(setup_tests, "sha256_file", read_only)
+    for name in ("rmtree", "copy2"):
+        monkeypatch.setattr(setup_tests.shutil, name, read_only)
+    monkeypatch.setattr(Path, "write_text", read_only)
+    offline = Offline()
+    setup_tests.setup_pretrained_models(
+        pretrained.parents[1],
+        releases_dir=releases_dir,
+        cache_dir=tmp_path / "cache",
+        api=offline,
+        download=offline.download,
+    )
+
+
+def test_touched_cache_is_rehashed_without_hub(tmp_path, releases):
+    """A CI cache restore changes modification times but not contents."""
+    releases_dir, models = releases
+    run_setup(tmp_path, releases_dir, FakeHub(models))
+    checkpoint = tmp_path / "cache" / "motionnet" / "checkpoint.pt"
+    checkpoint.write_bytes(checkpoint.read_bytes())
+
+    hub = FakeHub(models)
+    run_setup(tmp_path, releases_dir, hub)
+
+    assert hub.downloads == [] and hub.tag_checks == []
+
+
+def test_corrupt_cache_is_downloaded_again(tmp_path, releases):
+    releases_dir, models = releases
+    run_setup(tmp_path, releases_dir, FakeHub(models))
+    (tmp_path / "cache" / "motionnet" / "checkpoint.pt").write_bytes(b"bit rot")
+
+    hub = FakeHub(models)
+    pretrained = run_setup(tmp_path, releases_dir, hub)
+
+    assert hub.downloads == ["motionnet"]
+    assert hub.tag_checks == [("motionnet", "v1.0")]
+    setup_tests.verify_release_files(
+        pretrained / models[1]["run_directory"], setup_tests.checksum_manifest_path(models[1], releases_dir)
+    )
+
+
+def test_pinning_a_new_commit_downloads_it(tmp_path, releases):
+    releases_dir, models = releases
+    run_setup(tmp_path, releases_dir, FakeHub(models))
+    manifest_path = releases_dir / "models.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["models"][0]["commit"] = models[0]["commit"] = "9" * 40
+    manifest_path.write_text(json.dumps(manifest))
+
+    hub = FakeHub(models)
+    run_setup(tmp_path, releases_dir, hub)
+
+    assert hub.downloads == ["tinymotionnet"]
+
+
+def test_editing_the_archive_leaves_the_cache_intact(tmp_path, releases):
+    releases_dir, models = releases
+    pretrained = run_setup(tmp_path, releases_dir, FakeHub(models))
+    installed = pretrained / models[0]["run_directory"] / "hyperparameters.yaml"
+    cached = tmp_path / "cache" / models[0]["slug"] / "hyperparameters.yaml"
+    original = cached.read_bytes()
+    with installed.open("w") as stream:
+        stream.write("edited in place\n")
+
+    assert cached.read_bytes() == original
+    run_setup(tmp_path, releases_dir, FakeHub(models))
+    assert installed.read_bytes() == original
+
+
 def test_corrupt_download_fails_with_digests(tmp_path, releases):
     releases_dir, models = releases
     with pytest.raises(ValueError, match=r"Checksum mismatch .*checkpoint\.pt: expected SHA-256 [0-9a-f]{64}, got"):
@@ -136,6 +227,20 @@ def test_release_tag_must_resolve_to_pinned_commit(tmp_path, releases):
     hub = FakeHub(models, tag_commits={"motionnet": "f" * 40})
     with pytest.raises(ValueError, match="owner/motionnet@v1.0 resolves to f+, but models.json pins"):
         run_setup(tmp_path, releases_dir, hub)
+
+
+def test_each_model_checks_its_own_tag(tmp_path, releases):
+    """Updating one model's weights gives it a new tag; the others keep theirs."""
+    releases_dir, models = releases
+    manifest_path = releases_dir / "models.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["models"][1]["tag"] = "v1.1"
+    manifest_path.write_text(json.dumps(manifest))
+
+    hub = FakeHub(models)
+    run_setup(tmp_path, releases_dir, hub)
+
+    assert hub.tag_checks == [("tinymotionnet", "v1.0"), ("motionnet", "v1.1")]
 
 
 def test_setup_tests_reports_missing_manifest(tmp_path, monkeypatch, capsys):
@@ -192,6 +297,9 @@ def test_docker_test_images_include_release_manifests(stage):
     lines = dockerfile_stages()[stage]
     assert any(re.match(r"COPY\s+huggingface\s+\./huggingface/?$", line) for line in lines)
     assert any(re.match(r"COPY\s+.*\bsetup_tests\.py\b", line) for line in lines)
+    # The published-checkpoint tests fail unless setup ran first.
+    command = next(line for line in lines if line.startswith("CMD"))
+    assert re.search(r"python setup_tests\.py && .*pytest", command), command
 
 
 @requires_docker_files
@@ -208,11 +316,11 @@ RELEASES_ON_DISK = setup_tests.load_release_manifest()["models"] if setup_tests.
 
 
 @pytest.mark.parametrize("release", RELEASES_ON_DISK, ids=lambda release: release["slug"])
-def test_manifest_matches_model_config(release):
-    config_path = setup_tests.RELEASES_DIR / "models" / release["slug"] / "model_config.json"
-    config = json.loads(config_path.read_text())
-    for field in ("architecture", "task", "flow_generator"):
-        assert release[field] == config[field], f"models.json and {config_path} disagree on {field}"
+def test_checked_in_model_config_is_the_published_one(release):
+    """models.json reads architecture and task from this file, so it must match the release checksums."""
+    model_dir = setup_tests.RELEASES_DIR / "models" / release["slug"]
+    sums = dict(reversed(line.split("  ", 1)) for line in (model_dir / "SHA256SUMS").read_text().splitlines())
+    assert setup_tests.sha256_file(model_dir / "model_config.json") == sums["model_config.json"]
     assert release["task"] in ("optical-flow", "video-classification")
 
 
@@ -222,4 +330,6 @@ def test_model_card_metadata(release):
     front_matter = card.split("---")[1]
     tags = re.findall(r"^- (\S+)$", front_matter.split("tags:")[1], re.MULTILINE)
     assert len(tags) == len(set(tags)), f"duplicate tags: {tags}"
-    assert not re.search(r"\ba (?=[aeiou])", card), "use 'an' before a vowel"
+    # Words like "unified", "user" and "one" start with a consonant sound and take "a".
+    match = re.search(r"\ba (?!one\b|uni|us[eu]|eu)[aeiou]", card, re.IGNORECASE)
+    assert match is None, f"use 'an' before a vowel: {match and card[match.start() : match.start() + 20]!r}"

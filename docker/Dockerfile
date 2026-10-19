@@ -220,7 +220,7 @@ COPY huggingface ./huggingface
 COPY tests ./tests
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --locked --no-editable
-CMD ["pytest", "-v"]
+CMD ["sh", "-c", "python setup_tests.py && pytest -v"]
 
 FROM builder-full AS test-full
 COPY pytest.ini setup_tests.py ./
@@ -228,4 +228,4 @@ COPY huggingface ./huggingface
 COPY tests ./tests
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --locked --no-editable
-CMD ["pytest", "-v"]
+CMD ["sh", "-c", "python setup_tests.py && pytest -v"]

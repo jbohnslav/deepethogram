@@ -19,8 +19,13 @@ MODEL_MANIFEST = RELEASES_DIR / "models.json"
 TEST_DATA = REPOSITORY_ROOT / "tests" / "DATA"
 TEST_ARCHIVE = TEST_DATA / "testing_deepethogram_archive"
 # Downloads live outside the archive, so CI can cache them and re-extracting the archive cannot clobber them.
-CHECKPOINT_CACHE = TEST_DATA / "huggingface_checkpoints"
+# DEG_CHECKPOINT_CACHE moves them, e.g. onto the persistent volume the Modal GPU runner mounts.
+CHECKPOINT_CACHE = Path(os.environ.get("DEG_CHECKPOINT_CACHE") or TEST_DATA / "huggingface_checkpoints")
 RELEASE_FILES = ("checkpoint.pt", "hyperparameters.yaml", "model_config.json", "LICENSE", "SHA256SUMS", "README.md")
+# Fields models.json takes from each checked-in model_config.json, which is also the published copy.
+CONFIG_FIELDS = ("architecture", "task", "flow_generator")
+# Records that a cached release passed verification, so later runs need neither the Hub nor a re-hash.
+STAMP_NAME = ".verified.json"
 
 
 def load_release_manifest(path: Path | None = None) -> dict:
@@ -30,7 +35,11 @@ def load_release_manifest(path: Path | None = None) -> dict:
             f"Model release manifest not found: {path}. It ships with the repository in huggingface/; "
             "copy that directory next to setup_tests.py."
         )
-    return json.loads(path.read_text())
+    manifest = json.loads(path.read_text())
+    for model in manifest["models"]:
+        config = json.loads((path.parent / "models" / model["slug"] / "model_config.json").read_text())
+        model.update({field: config[field] for field in CONFIG_FIELDS})
+    return manifest
 
 
 def checksum_manifest_path(model: dict, releases_dir: Path | None = None) -> Path:
@@ -65,12 +74,56 @@ def verify_release_files(directory: Path, manifest_path: Path, skip_hash: tuple[
             raise ValueError(f"Checksum mismatch for {path}: expected SHA-256 {expected}, got {actual}")
 
 
-def check_release_tag(api, model: dict, tag: str) -> None:
-    """The docs tell users to download ``tag``, so it must resolve to the commit CI verifies."""
-    resolved = api.model_info(model["repo_id"], revision=tag).sha
+def file_signatures(directory: Path, manifest_text: str) -> dict:
+    """Size and modification time of each verified file; raises OSError if one is missing."""
+    filenames = ["SHA256SUMS"] + [line.split("  ", 1)[1] for line in manifest_text.splitlines()]
+    signatures = {}
+    for filename in filenames:
+        stat = (directory / filename).stat()
+        signatures[filename] = [stat.st_size, stat.st_mtime_ns]
+    return signatures
+
+
+def release_identity(model: dict, manifest_path: Path) -> dict:
+    return {"commit": model["commit"], "tag": model["tag"], "sha256sums": manifest_path.read_text()}
+
+
+def write_stamp(directory: Path, model: dict, manifest_path: Path) -> None:
+    stamp = release_identity(model, manifest_path)
+    stamp["files"] = file_signatures(directory, stamp["sha256sums"])
+    try:
+        (directory / STAMP_NAME).write_text(json.dumps(stamp, indent=2))
+    except OSError as error:
+        # A read-only cache still works; the next run re-hashes instead of trusting the stamp.
+        print(f"Could not record verification in {directory}: {error}")
+
+
+def cached_release_is_current(directory: Path, model: dict, manifest_path: Path) -> bool:
+    """True if ``directory`` holds this exact release, checked without contacting the Hub."""
+    identity = release_identity(model, manifest_path)
+    try:
+        stamp = json.loads((directory / STAMP_NAME).read_text())
+    except (OSError, ValueError):
+        return False
+    if {key: stamp.get(key) for key in identity} != identity:
+        return False
+    try:
+        if stamp.get("files") == file_signatures(directory, identity["sha256sums"]):
+            return True
+        # Files were touched since verification, e.g. restored from a CI cache: re-hash them.
+        verify_release_files(directory, manifest_path)
+    except (OSError, ValueError):
+        return False
+    write_stamp(directory, model, manifest_path)
+    return True
+
+
+def check_release_tag(api, model: dict) -> None:
+    """The docs tell users to download the model's tag, so it must resolve to the commit CI verifies."""
+    resolved = api.model_info(model["repo_id"], revision=model["tag"]).sha
     if resolved != model["commit"]:
         raise ValueError(
-            f"{model['repo_id']}@{tag} resolves to {resolved}, but models.json pins {model['commit']}. "
+            f"{model['repo_id']}@{model['tag']} resolves to {resolved}, but models.json pins {model['commit']}. "
             "Docs and CI would use different weights."
         )
 
@@ -87,15 +140,32 @@ def download_release(model: dict, destination: Path) -> None:
 
 
 def install_release(source: Path, destination: Path) -> None:
-    """Make ``destination`` contain exactly the release files, hard-linked from the download cache when possible."""
+    """Copy the release files into ``destination``.
+
+    Copies rather than hard links, so editing a file in the archive cannot change the download cache.
+    """
     destination.mkdir(parents=True)
     for filename in RELEASE_FILES:
-        if not (source / filename).is_file():
-            continue
-        try:
-            os.link(source / filename, destination / filename)
-        except OSError:
+        if (source / filename).is_file():
             shutil.copy2(source / filename, destination / filename)
+
+
+def installed_runs_match(pretrained: Path, models: list[dict], cache_dir: Path) -> bool:
+    """True if ``pretrained`` holds exactly the release runs, each file an unchanged copy of the cached one."""
+    if not pretrained.is_dir():
+        return False
+    if sorted(path.name for path in pretrained.iterdir()) != sorted(model["run_directory"] for model in models):
+        return False
+    for model in models:
+        source, run = cache_dir / model["slug"], pretrained / model["run_directory"]
+        expected = {filename for filename in RELEASE_FILES if (source / filename).is_file()}
+        if not run.is_dir() or {path.name for path in run.iterdir()} != expected:
+            return False
+        for filename in expected:
+            cached, installed = (source / filename).stat(), (run / filename).stat()
+            if (cached.st_size, cached.st_mtime_ns) != (installed.st_size, installed.st_mtime_ns):
+                return False
+    return True
 
 
 def setup_pretrained_models(
@@ -107,24 +177,37 @@ def setup_pretrained_models(
 ) -> None:
     """Install the published checkpoints, at their pinned commits, as the archive's only pretrained models.
 
-    The whole pretrained_models directory is rebuilt, so stale run folders or Lightning checkpoints from the
-    archive or earlier runs cannot shadow the pinned weights during discovery.
+    A release already verified in the cache is reused without contacting the Hub. Otherwise its tag is checked,
+    the pinned commit downloaded and every file verified. pretrained_models is rebuilt unless it already holds
+    exactly these runs, so stale run folders or Lightning checkpoints cannot shadow the pinned weights.
     """
     releases_dir = releases_dir or RELEASES_DIR
     cache_dir = cache_dir or CHECKPOINT_CACHE
-    if api is None:
-        from huggingface_hub import HfApi
-
-        api = HfApi()
 
     manifest = load_release_manifest(releases_dir / "models.json")
     for model in manifest["models"]:
-        print(f"Preparing {model['name']} from {model['repo_id']}@{model['commit']}")
-        check_release_tag(api, model, manifest["release"])
-        download(model, cache_dir / model["slug"])
-        verify_release_files(cache_dir / model["slug"], checksum_manifest_path(model, releases_dir))
+        directory = cache_dir / model["slug"]
+        manifest_path = checksum_manifest_path(model, releases_dir)
+        if cached_release_is_current(directory, model, manifest_path):
+            print(f"{model['name']}: using verified download in {directory}")
+            continue
+        print(f"Downloading {model['name']} from {model['repo_id']}@{model['commit']}")
+        if api is None:
+            from huggingface_hub import HfApi
+
+            api = HfApi()
+        check_release_tag(api, model)
+        # Start clean, so files from an outdated or corrupt download cannot survive.
+        if directory.exists():
+            shutil.rmtree(directory)
+        download(model, directory)
+        verify_release_files(directory, manifest_path)
+        write_stamp(directory, model, manifest_path)
 
     pretrained = archive_path / "models" / "pretrained_models"
+    if installed_runs_match(pretrained, manifest["models"], cache_dir):
+        print(f"{pretrained} already holds exactly the pinned releases.")
+        return
     if pretrained.exists():
         shutil.rmtree(pretrained)
     pretrained.mkdir(parents=True)
@@ -133,7 +216,7 @@ def setup_pretrained_models(
 
 
 def setup_tests() -> bool:
-    """Set up video fixtures, then always prepare the published pretrained models."""
+    """Set up video fixtures, then prepare the published pretrained models."""
     try:
         import gdown
 
