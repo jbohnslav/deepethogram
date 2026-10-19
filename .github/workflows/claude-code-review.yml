@@ -29,7 +29,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: 1
+          # Full history so the review can diff the PR against its merge base.
+          fetch-depth: 0
 
       - name: Run Claude Code Review
         id: claude-review
@@ -41,4 +42,5 @@ jobs:
           prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           use_sticky_comment: true
           track_progress: true
-          claude_args: '--allowedTools "Bash(gh pr:*),Bash(gh api:*),Bash(gh diff:*)"'
+          # Covers the code-review plugin's own allowed-tools, plus read-only git for diffs and history.
+          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(gh api:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git blame:*)"'

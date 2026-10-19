@@ -1,22 +1,27 @@
 """Check the published checkpoints installed by setup_tests.py, rather than synthetic weights."""
 
-import hashlib
 import json
-from pathlib import Path
 
 import pytest
 import torch
 
+import setup_tests
 from deepethogram import projects, utils
 from deepethogram.feature_extractor.models.hidden_two_stream import deg_f, deg_m, deg_s
 from deepethogram.flow_generator.models.MotionNet import MotionNet
 from deepethogram.flow_generator.models.TinyMotionNet import TinyMotionNet
 from deepethogram.flow_generator.models.TinyMotionNet3D import TinyMotionNet3D
-from setup_data import archive_path
 
-MODEL_RELEASES = Path(__file__).resolve().parents[1] / "huggingface"
-MODELS = json.loads((MODEL_RELEASES / "models.json").read_text())["models"]
-PRETRAINED = Path(archive_path) / "models" / "pretrained_models"
+# A missing manifest fails one test below instead of aborting collection for the whole suite.
+try:
+    RELEASES = setup_tests.load_release_manifest()["models"]
+    MANIFEST_ERROR = None
+except FileNotFoundError as error:
+    RELEASES = []
+    MANIFEST_ERROR = str(error)
+
+PRETRAINED = setup_tests.TEST_ARCHIVE / "models" / "pretrained_models"
+MODEL_TYPES = {"optical-flow": "flow_generator", "video-classification": "feature_extractor"}
 CONSTRUCTORS = {
     "tinymotionnet": TinyMotionNet,
     "motionnet": MotionNet,
@@ -35,19 +40,19 @@ def cpu_threads():
     torch.set_num_threads(previous)
 
 
-@pytest.mark.parametrize("release", MODELS, ids=lambda release: release["name"])
+def test_release_manifest_present():
+    assert MANIFEST_ERROR is None, MANIFEST_ERROR
+
+
+@pytest.mark.parametrize("release", RELEASES, ids=lambda release: release["name"])
 def test_published_checkpoint(release):
     directory = PRETRAINED / release["run_directory"]
     assert directory.is_dir(), "Run uv run python setup_tests.py before testing published checkpoints"
-    checksums = (MODEL_RELEASES / "models" / release["slug"] / "SHA256SUMS").read_text()
-    assert (directory / "SHA256SUMS").read_text() == checksums
-    for line in checksums.splitlines():
-        expected, filename = line.split("  ", 1)
-        digest = hashlib.sha256()
-        with (directory / filename).open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-        assert digest.hexdigest() == expected, f"Wrong published artifact: {release['name']}/{filename}"
+    # setup_tests.py already hashed the checkpoint; check its identity cheaply here.
+    setup_tests.verify_release_files(
+        directory, setup_tests.checksum_manifest_path(release), skip_hash=("checkpoint.pt",)
+    )
+    assert (directory / "checkpoint.pt").stat().st_size == release["checkpoint_bytes"]
 
     config = json.loads((directory / "model_config.json").read_text())
     shape = [
@@ -60,10 +65,11 @@ def test_published_checkpoint(release):
     with torch.inference_mode():
         outputs = model(torch.randn(*shape))
 
-    if release["flow_generator"]:
+    if release["task"] == "video-classification":
         assert outputs.shape == (1, 700)
         assert torch.isfinite(outputs).all()
     else:
+        assert release["task"] == "optical-flow"
         assert len(outputs) == 3
         for output, size in zip(outputs, (32, 16, 8)):
             expected_shape = (1, 2, 10, size, size) if release["slug"] == "tinymotionnet3d" else (1, 20, size, size)
@@ -71,11 +77,14 @@ def test_published_checkpoint(release):
             assert torch.isfinite(output).all()
 
 
+@pytest.mark.skipif(not RELEASES, reason="model release manifest is missing")
 def test_published_model_discovery():
     discovered = projects.get_weights_from_model_path(PRETRAINED)
-    assert set(discovered["flow_generator"]) == {"TinyMotionNet", "MotionNet", "TinyMotionNet3D"}
-    assert set(discovered["feature_extractor"]) == {"resnet18", "resnet50", "resnet3d_34"}
-    for release in MODELS:
-        model_type = "feature_extractor" if release["flow_generator"] else "flow_generator"
+    for release in RELEASES:
+        model_type = MODEL_TYPES[release["task"]]
         expected = str(PRETRAINED / release["run_directory"] / "checkpoint.pt")
         assert discovered[model_type][release["architecture"]] == [expected]
+    # Nothing besides the pinned releases may be discoverable.
+    for model_type in ("flow_generator", "feature_extractor", "sequence"):
+        expected_runs = sum(MODEL_TYPES[release["task"]] == model_type for release in RELEASES)
+        assert sum(len(runs) for runs in discovered[model_type].values()) == expected_runs

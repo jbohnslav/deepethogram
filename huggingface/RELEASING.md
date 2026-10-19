@@ -40,6 +40,7 @@ Read back Hub metadata to verify the model's task/library tags. Only then tag th
 
 The initial per-model release tag is `v1.0`. Model cards and user documentation pin it.
 When updating weights, create a new tag rather than moving an existing release tag.
+Card-only fixes (`README.md`, which is not in `SHA256SUMS`) can go straight to `main`. They don't need a new tag, and `models.json` keeps pinning the verified release commit.
 
 ## Collection and legacy archive
 
@@ -55,9 +56,13 @@ release provides the complete checkpoint from the existing test fixture archive.
 
 ## CI checkpoint contract
 
-`setup_tests.py` reads `models.json`, downloads every model at its immutable `commit`, and verifies
-all files against the checked-in per-model checksum manifests. Existing fixture folders still run
-this step. CPU CI invokes the script directly; the Modal GPU runner invokes it after copying only
-its video fixtures from the persistent test-data volume. `tests/test_pretrained_models.py` checks
-artifact identity, strict architecture matching, finite forward outputs and discovery for all models.
+`setup_tests.py` reads `models.json`. For every model it checks that the release tag resolves to the pinned
+`commit`, downloads that commit into `tests/DATA/huggingface_checkpoints/`, and verifies all files against the
+checked-in per-model checksum manifest. It then rebuilds the archive's `pretrained_models` directory with only
+these runs, so stale folders cannot shadow the pinned weights. Existing fixture folders still run this step.
+CPU CI caches the download directory, keyed on `models.json`; the Modal GPU runner copies only its video
+fixtures from the persistent test-data volume and downloads the checkpoints fresh.
+`tests/test_pretrained_models.py` checks artifact identity, strict architecture matching, finite forward outputs
+and discovery for all models. `tests/test_setup_tests.py` checks that `models.json` agrees with each
+`model_config.json` and that the Docker test images ship `huggingface/`.
 When releasing new weights, update commits/checksums together and run setup plus the CPU suite.

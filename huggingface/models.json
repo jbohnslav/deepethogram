@@ -8,7 +8,7 @@
       "repo_id": "jbohnslav/deepethogram-tinymotionnet",
       "architecture": "TinyMotionNet",
       "task": "optical-flow",
-      "flow_generator": null,
+      "flow_generator": "TinyMotionNet",
       "checkpoint_bytes": 23450307,
       "commit": "b481cbc41b96db5de248dc533e39ac6f979db33b",
       "verification": {
@@ -43,7 +43,7 @@
       "repo_id": "jbohnslav/deepethogram-motionnet",
       "architecture": "MotionNet",
       "task": "optical-flow",
-      "flow_generator": null,
+      "flow_generator": "MotionNet",
       "checkpoint_bytes": 183604611,
       "commit": "f282e2dae1dc15ce3ef45ce99f4c202b08ce7248",
       "verification": {
@@ -78,7 +78,7 @@
       "repo_id": "jbohnslav/deepethogram-tinymotionnet3d",
       "architecture": "TinyMotionNet3D",
       "task": "optical-flow",
-      "flow_generator": null,
+      "flow_generator": "TinyMotionNet3D",
       "checkpoint_bytes": 1769548,
       "commit": "e68a968956658727394d7a8e1cc3b8763b7d60b6",
       "verification": {

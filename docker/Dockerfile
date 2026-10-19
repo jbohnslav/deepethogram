@@ -201,6 +201,7 @@ CMD ["python", "-m", "deepethogram"]
 FROM builder-gui AS test-gui
 ENV DEG_VERSION=gui
 COPY pytest.ini setup_tests.py ./
+COPY huggingface ./huggingface
 COPY tests ./tests
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
@@ -215,6 +216,7 @@ CMD ["sh", "-lc", "python setup_tests.py && xvfb-run --auto-servernum --server-a
 
 FROM builder-headless AS test-headless
 COPY pytest.ini setup_tests.py ./
+COPY huggingface ./huggingface
 COPY tests ./tests
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --locked --no-editable
@@ -222,6 +224,7 @@ CMD ["pytest", "-v"]
 
 FROM builder-full AS test-full
 COPY pytest.ini setup_tests.py ./
+COPY huggingface ./huggingface
 COPY tests ./tests
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --locked --no-editable

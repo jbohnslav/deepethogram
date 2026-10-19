@@ -10,7 +10,6 @@ tags:
 - pytorch
 - optical-flow
 - tinymotionnet
-- tinymotionnet
 - kinetics700
 - animal-behavior
 - pretrained
@@ -18,7 +17,7 @@ tags:
 
 # DeepEthogram TinyMotionNet
 
-TinyMotionNet is a optical-flow generator pretrained on Kinetics700 videos for [DeepEthogram](https://github.com/jbohnslav/deepethogram).
+TinyMotionNet is an optical-flow generator pretrained on Kinetics700 videos for [DeepEthogram](https://github.com/jbohnslav/deepethogram).
 This repository contains this model's checkpoint and historical training hyperparameters.
 See the [DeepEthogram collection](https://huggingface.co/collections/jbohnslav/deepethogram-pretrained-models-6ad61e8af1ac368c56d8deec) for the other models.
 

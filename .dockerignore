@@ -6,6 +6,8 @@
 !uv.lock
 !pytest.ini
 !setup_tests.py
+!huggingface/
+!huggingface/**
 !deepethogram/
 !deepethogram/**
 !tests/
