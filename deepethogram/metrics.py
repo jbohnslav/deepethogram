@@ -646,6 +646,44 @@ class EmptyBuffer:
         pass
 
 
+def get_metric_mode(key_metric: str, mode: str = None) -> str:
+    """Resolve an objective's direction; custom metrics must specify min or max.
+
+    Accept split-prefixed names used by Ray and legacy metric files without
+    direction metadata. Avoid guessing from substrings such as "loss".
+    """
+    if mode is not None:
+        if mode not in ("min", "max"):
+            raise ValueError(f"Invalid metric mode {mode!r}; expected 'min' or 'max'")
+        return mode
+    name = key_metric.rsplit("/", 1)[-1]
+    if name in {"loss", "data_loss", "reg_loss", "SSIM", "SSIM_full", "L1", "smoothness", "sparsity", "fpr"}:
+        return "min"
+    scores = {
+        "accuracy",
+        "mean_class_accuracy",
+        "f1",
+        "f1_micro",
+        "roc_auc",
+        "precision",
+        "recall",
+        "fbeta_2",
+        "informedness",
+        "tpr",
+        "auroc",
+        "mAP",
+        "fps",
+    }
+    scores.update(
+        f"{metric}_{suffix}"
+        for metric in ("accuracy", "f1", "auroc", "mAP")
+        for suffix in ("overall", "by_class", "class_mean", "class_mean_nobg")
+    )
+    if name in scores:
+        return "max"
+    raise ValueError(f"Unknown metric {key_metric!r}; specify key_metric_mode='min' or 'max'")
+
+
 class Metrics:
     """Class for saving a list of per-epoch metrics to disk as an HDF5 file"""
 
@@ -657,6 +695,7 @@ class Metrics:
         num_parameters: int,
         splits: list = ["train", "val"],
         num_workers: int = 4,
+        key_metric_mode: str = None,
     ):
         """Metrics constructor
 
@@ -666,6 +705,8 @@ class Metrics:
             directory into which to save metrics file
         key_metric: str
             which metric is considered the "key". This can be used for determining when a model has converged, etc.
+        key_metric_mode: str, optional
+            "min" or "max"; required for custom metrics, inferred for known metrics.
         name: str
             filename will be /run_dir/{name}_metrics.h5
         num_parameters: int
@@ -677,6 +718,7 @@ class Metrics:
         self.fname = os.path.join(run_dir, "{}_metrics.h5".format(name))
         log.debug("making metrics file at {}".format(self.fname))
         self.key_metric = key_metric
+        self.key_metric_mode = get_metric_mode(key_metric, key_metric_mode)
         self.splits = splits
         self.num_parameters = num_parameters
         self.learning_rate = None
@@ -722,6 +764,7 @@ class Metrics:
         with h5py.File(self.fname, mode) as f:
             f.attrs["num_parameters"] = self.num_parameters
             f.attrs["key_metric"] = self.key_metric
+            f.attrs["key_metric_mode"] = self.key_metric_mode
             # make an HDF5 group for each split
             for split in self.splits:
                 group = f.create_group(split)
@@ -794,7 +837,7 @@ class Metrics:
 
 class EmptyMetrics(Metrics):
     def __init__(self, *args, **kwargs):
-        super().__init__(os.getcwd(), [], "loss", "empty", 0)
+        super().__init__(os.getcwd(), "loss", "empty", 0)
         self.buffer = EmptyBuffer()
         self.key_metric = "loss"
 
@@ -819,6 +862,7 @@ class Classification(Metrics):
         ignore_index: int = -1,
         evaluate_threshold: bool = False,
         num_workers: int = 4,
+        key_metric_mode: str = None,
     ):
         """Constructor for classification metrics class
 
@@ -842,7 +886,7 @@ class Classification(Metrics):
             Hack for multi-label classification problems. If True, at each epoch will compute a bunch of metrics for
             each potential threshold. See evaluate_thresholds
         """
-        super().__init__(run_dir, key_metric, "classification", num_parameters, splits, num_workers)
+        super().__init__(run_dir, key_metric, "classification", num_parameters, splits, num_workers, key_metric_mode)
 
         self.metric_funcs = all_metrics
 
@@ -928,8 +972,8 @@ class Classification(Metrics):
 class OpticalFlow(Metrics):
     """Metrics class for saving optic flow metrics to disk"""
 
-    def __init__(self, run_dir, key_metric, num_parameters, splits=["train", "val"]):
-        super().__init__(run_dir, key_metric, "opticalflow", num_parameters, splits)
+    def __init__(self, run_dir, key_metric, num_parameters, splits=["train", "val"], key_metric_mode=None):
+        super().__init__(run_dir, key_metric, "opticalflow", num_parameters, splits, key_metric_mode=key_metric_mode)
 
     def compute(self, data: dict) -> dict:
         """Computes metrics from one epoch's batch of data

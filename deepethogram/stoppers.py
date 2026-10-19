@@ -62,6 +62,7 @@ class EarlyStopping(Stopper):
             raise ValueError("Argument patience should be positive integer")
         self.patience = patience
         self.best_score = None
+        self.counter = 0
         self.is_error = is_error
         self.early_stopping_begins = early_stopping_begins
 
@@ -150,7 +151,7 @@ def get_stopper(cfg: DictConfig) -> Type[Stopper]:
     stopper: subclass of stoppers.Stopper
 
     """
-    # ASSUME WE'RE USING LOSS AS THE KEY METRIC, WHICH IS AN ERROR
+    # Default to loss for standalone use; StopperCallback sets direction from the active metrics.
     stopping_type = cfg.train.stopping_type
     log.debug("Using stopper type {}".format(stopping_type))
     if stopping_type == "early":

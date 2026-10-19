@@ -571,6 +571,7 @@ def get_metrics(
     is_kinetics: bool = False,
     key_metric="loss",
     num_workers: int = 4,
+    key_metric_mode: str = None,
 ):
     """get metrics object for classification. See deepethogram/metrics.py.
 
@@ -583,6 +584,7 @@ def get_metrics(
         num_parameters (int): number of parameters in model (will be saved)
         is_kinetics (bool): if true, don't make confusion matrices
         key_metric (str): the key metric will be used for learning rate scheduling and stopping
+        key_metric_mode (str, optional): "min" or "max"; required for custom objectives
 
     Returns
     -------
@@ -594,7 +596,13 @@ def get_metrics(
         metric_list.append("confusion")
     log.info("key metric: {}".format(key_metric))
     metrics = Classification(
-        rundir, key_metric, num_parameters, num_classes=num_classes, evaluate_threshold=True, num_workers=num_workers
+        rundir,
+        key_metric,
+        num_parameters,
+        num_classes=num_classes,
+        evaluate_threshold=True,
+        num_workers=num_workers,
+        key_metric_mode=key_metric_mode,
     )
     return metrics
 

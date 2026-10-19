@@ -86,11 +86,7 @@ class BaseLightningModule(pl.LightningModule):
         self.optimizer = None  # will be overridden in configure_optimizers
         self.hparams.weight_decay = None
 
-        if self.metrics.key_metric == "loss" or self.metrics.key_metric == "SSIM":
-            self.scheduler_mode = "min"
-        else:
-            # accuracy, F1, etc.
-            self.scheduler_mode = "max"
+        self.scheduler_mode = self.metrics.key_metric_mode
 
         # need to move this to top-level for lightning's learning rate finder
         # don't set it to auto here, so that we can automatically find batch size first
@@ -357,7 +353,7 @@ def get_trainer_from_cfg(cfg: DictConfig, lightning_module, stopper, profiler: s
             log.debug("reverted: {}".format(lightning_module.gpu_transforms))
 
     key_metric = lightning_module.metrics.key_metric
-    mode = "min" if "loss" in key_metric else "max"
+    mode = lightning_module.metrics.key_metric_mode
     monitor = f"val/{key_metric}"
     dirpath = os.path.join(cfg.run.dir, "lightning_checkpoints")
     callback_list = [

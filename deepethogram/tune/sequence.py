@@ -14,6 +14,7 @@ except ImportError:
     raise
 
 from deepethogram.configuration import make_config
+from deepethogram.metrics import get_metric_mode
 from deepethogram import sequence_train
 from deepethogram import projects
 from deepethogram.tune.utils import dict_to_dotlist, generate_tune_cfg
@@ -33,7 +34,10 @@ def tune_sequence(cfg: DictConfig):
         Checks that search method is either 'random' or 'hyperopt'
     """
 
+    mode = get_metric_mode(cfg.tune.key_metric, cfg.tune.get("key_metric_mode"))
     scheduler = ASHAScheduler(
+        metric=cfg.tune.key_metric,
+        mode=mode,
         max_t=cfg.train.num_epochs,  # epochs
         grace_period=cfg.tune.grace_period,
         reduction_factor=2,
@@ -55,7 +59,7 @@ def tune_sequence(cfg: DictConfig):
             current_best[key] = value.current_best
         # hyperopt wants this to be a list of dicts
         current_best = [current_best]
-        search = HyperOptSearch(metric=cfg.tune.key_metric, mode="max", points_to_evaluate=current_best)
+        search = HyperOptSearch(metric=cfg.tune.key_metric, mode=mode, points_to_evaluate=current_best)
     elif cfg.tune.search == "random":
         search = None
     else:
@@ -71,7 +75,7 @@ def tune_sequence(cfg: DictConfig):
         ),
         resources_per_trial=OmegaConf.to_container(cfg.tune.resources_per_trial),
         metric=cfg.tune.key_metric,
-        mode="max",
+        mode=mode,
         config=tune_experiment_cfg,
         num_samples=cfg.tune.num_trials,  # how many experiments to run
         scheduler=scheduler,
