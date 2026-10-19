@@ -1,92 +1,85 @@
-"""This script downloads the test data archive and sets up the testing environment for DeepEthogram.
+"""Prepare video fixtures and revision-pinned Hugging Face checkpoints for the tests.
 
-`gdown` is included in the `dev` dependency group, so run `uv sync --dev` first.
+Run ``uv sync --dev`` first to install gdown and huggingface_hub.
 """
 
-import sys
+import hashlib
+import json
 import zipfile
 from pathlib import Path
 
 import gdown
-import requests
+from huggingface_hub import snapshot_download
+
+REPOSITORY_ROOT = Path(__file__).resolve().parent
+MODEL_MANIFEST = REPOSITORY_ROOT / "huggingface" / "models.json"
+TEST_ARCHIVE = REPOSITORY_ROOT / "tests" / "DATA" / "testing_deepethogram_archive"
 
 
-def download_file(url, destination):
-    """Downloads a file from a URL to a destination with progress indication."""
-    response = requests.get(url, stream=True)
-    total_size = int(response.headers.get("content-length", 0))
-    block_size = 8192
+def setup_pretrained_models(archive_path: Path) -> None:
+    """Download the published checkpoints at immutable revisions and verify their hashes."""
+    manifest = json.loads(MODEL_MANIFEST.read_text())
+    for model in manifest["models"]:
+        destination = archive_path / "models" / "pretrained_models" / model["run_directory"]
+        print(f"Preparing {model['name']} from {model['repo_id']}@{model['commit']}")
+        snapshot_download(
+            repo_id=model["repo_id"],
+            revision=model["commit"],
+            local_dir=destination,
+            allow_patterns=[
+                "checkpoint.pt",
+                "hyperparameters.yaml",
+                "model_config.json",
+                "LICENSE",
+                "SHA256SUMS",
+                "README.md",
+            ],
+        )
+        checksums = (MODEL_MANIFEST.parent / "models" / model["slug"] / "SHA256SUMS").read_text()
+        if (destination / "SHA256SUMS").read_text() != checksums:
+            raise ValueError(f"Published checksum manifest differs from the checked-in release: {model['repo_id']}")
+        for line in checksums.splitlines():
+            expected, filename = line.split("  ", 1)
+            digest = hashlib.sha256()
+            with (destination / filename).open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            actual = digest.hexdigest()
+            if actual != expected:
+                raise ValueError(f"Checksum mismatch for {model['name']}/{filename}")
 
-    if total_size == 0:
-        print("Warning: Content length not provided by server")
 
-    print(f"Downloading to: {destination}")
-
-    with open(destination, "wb") as f:
-        downloaded = 0
-        for data in response.iter_content(block_size):
-            downloaded += len(data)
-            f.write(data)
-
-            # Print progress
-            if total_size > 0:
-                progress = int(50 * downloaded / total_size)
-                sys.stdout.write(f"\r[{'=' * progress}{' ' * (50 - progress)}] {downloaded}/{total_size} bytes")
-                sys.stdout.flush()
-    print("\nDownload completed!")
-
-
-def setup_tests():
-    """Sets up the testing environment for DeepEthogram."""
+def setup_tests() -> bool:
+    """Set up video fixtures, then always prepare the published pretrained models."""
     try:
-        # Create tests/DATA directory if it doesn't exist
-        tests_dir = Path("tests")
-        data_dir = tests_dir / "DATA"
+        data_dir = TEST_ARCHIVE.parent
         data_dir.mkdir(parents=True, exist_ok=True)
-
-        # Define paths and requirements
-        archive_path = data_dir / "testing_deepethogram_archive"
         zip_path = data_dir / "testing_deepethogram_archive.zip"
         required_items = ["DATA", "models", "project_config.yaml"]
 
-        # Check if test data already exists and is complete
-        if archive_path.exists():
-            missing_items = [item for item in required_items if not (archive_path / item).exists()]
-            if not missing_items:
-                print("Test data already exists and appears complete. Skipping download.")
-                return True
-            print("Test data exists but is incomplete. Re-downloading...")
-
-        # Download and extract if needed
-        if not archive_path.exists() or not all((archive_path / item).exists() for item in required_items):
-            # Download if zip doesn't exist
+        if all((TEST_ARCHIVE / item).exists() for item in required_items):
+            print("Video fixtures already exist. Skipping archive download.")
+        else:
             if not zip_path.exists():
-                print("Downloading test data archive...")
+                print("Downloading test video archive...")
                 gdown.download(id="1IFz4ABXppVxyuhYik8j38k9-Fl9kYKHo", output=str(zip_path), quiet=False)
-
-            # Extract archive
-            print("Extracting archive...")
+            print("Extracting test archive...")
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(data_dir)
-
-            # Clean up zip file after successful extraction
             zip_path.unlink()
 
-        # Final verification
-        missing_items = [item for item in required_items if not (archive_path / item).exists()]
+        missing_items = [item for item in required_items if not (TEST_ARCHIVE / item).exists()]
         if missing_items:
-            print(f"Warning: The following items are missing: {missing_items}")
-            return False
+            raise FileNotFoundError(f"Test archive is missing: {missing_items}")
 
-        print("Setup completed successfully!")
-        print("\nYou can now run the tests using: pytest tests/")
-        print("Note: The gpu tests will take a few minutes to complete.")
+        # An existing video fixture directory must not bypass checkpoint updates.
+        setup_pretrained_models(TEST_ARCHIVE)
+        print("Test fixtures and published checkpoints are ready. Run: uv run pytest tests/")
         return True
-
-    except Exception as e:
-        print(f"Error during setup: {str(e)}")
+    except Exception as error:
+        print(f"Error during setup: {error}")
         return False
 
 
 if __name__ == "__main__":
-    setup_tests()
+    raise SystemExit(0 if setup_tests() else 1)

@@ -53,10 +53,21 @@ and save them to disk. This might take a few moments (or minutes for very long v
 and inference.
 
 ## Download models
-Rather than start from scratch, we will start with model weights pretrained on the Kinetics700 dataset. Go to
-To download the pretrained weights, please use [this Google Drive link](https://drive.google.com/file/d/1ntIZVbOG1UAiFVlsAAuKEBEVCVevyets/view?usp=sharing).
-Unzip the files in your `project/models` directory. The path should be
-`your_project/models/pretrained/{models 1:6}`.
+
+Choose DEG-f or DEG-m from the [pretrained model setup guide](pretrained_models.md).
+Each model is published separately on Hugging Face. For the DEG-f preset, download
+[TinyMotionNet](https://huggingface.co/jbohnslav/deepethogram-tinymotionnet) and
+[DEG-f](https://huggingface.co/jbohnslav/deepethogram-deg-f) using the
+[Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli):
+
+```bash
+hf download jbohnslav/deepethogram-tinymotionnet --revision v1.0 --local-dir /path/to/project/models/pretrained_models/200221_115158_TinyMotionNet
+hf download jbohnslav/deepethogram-deg-f --revision v1.0 --local-dir /path/to/project/models/pretrained_models/200415_125824_hidden_two_stream_kinetics_degf
+```
+
+Keep `checkpoint.pt` and `hyperparameters.yaml` at the root of each downloaded run folder.
+Run `shasum -a 256 -c SHA256SUMS` inside each run folder to verify it.
+DEG-m and DEG-s use their corresponding flow-generator/feature-extractor pairs; see the setup guide.
 
 ## Start training the flow generator
 These models (see paper) estimate local motion from video frames. They are trained in a self-supervised manner, so they

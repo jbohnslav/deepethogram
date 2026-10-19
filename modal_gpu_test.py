@@ -69,6 +69,7 @@ image = (
     )
     .add_local_file("pytest.ini", remote_path=str(REMOTE_WORKDIR / "pytest.ini"))
     .add_local_file("setup_tests.py", remote_path=str(REMOTE_WORKDIR / "setup_tests.py"))
+    .add_local_dir("huggingface", remote_path=str(REMOTE_WORKDIR / "huggingface"))
 )
 
 
@@ -91,7 +92,14 @@ def _prepare_test_data_copy() -> None:
 
     # setup_data.py rewrites paths inside project_config.yaml during import,
     # so the archive must live on writable local storage for the test run.
-    shutil.copytree(VOLUME_ARCHIVE_PATH, REMOTE_ARCHIVE_DIR)
+    # Checkpoints come from the published releases, not the volume's older snapshots.
+    shutil.copytree(
+        VOLUME_ARCHIVE_PATH,
+        REMOTE_ARCHIVE_DIR,
+        ignore=lambda directory, names: (
+            {"pretrained_models"} if Path(directory) == VOLUME_ARCHIVE_PATH / "models" else set()
+        ),
+    )
 
 
 def _run_and_stream(command: list[str]) -> tuple[int, str]:
@@ -131,6 +139,9 @@ def run_gpu_pytest(
     extra_pytest_args: str = "",
 ) -> dict[str, str | int]:
     _prepare_test_data_copy()
+    returncode, output = _run_and_stream([str(VENV_BIN_DIR / "python"), "setup_tests.py"])
+    if returncode != 0:
+        raise RuntimeError(f"Test fixture/checkpoint setup failed:\n{output}")
     REMOTE_JUNIT_PATH.unlink(missing_ok=True)
 
     command = [

@@ -47,7 +47,7 @@ jobs:
     - name: Install dependencies
       run: uv sync --locked --dev
 
-    - name: Setup test data
+    - name: Setup video fixtures and pinned Hugging Face checkpoints
       run: uv run python setup_tests.py
 
     - name: Run CPU tests
