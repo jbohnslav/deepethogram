@@ -34,12 +34,13 @@ uv run pytest -m ""
 
 ### Test Data Setup
 
-Before running tests:
+`uv run python setup_tests.py` prepares everything the tests need:
 
-1. Download [`testing_deepethogram_archive.zip`](https://drive.google.com/file/d/1IFz4ABXppVxyuhYik8j38k9-Fl9kYKHo/view?usp=sharing)
-2. Create a directory called `DATA` in the tests directory
-3. Unzip the archive and move its contents to `deepethogram/tests/DATA/testing_deepethogram_archive/`
-4. Verify the path structure: `deepethogram/tests/DATA/testing_deepethogram_archive/{DATA,models,project_config.yaml}`
+1. It downloads the video fixture archive from Google Drive into `tests/DATA/testing_deepethogram_archive/`, unless that folder already has `DATA`, `models` and `project_config.yaml`.
+2. It downloads the six published checkpoints from Hugging Face at the commits pinned in `huggingface/models.json`, into `tests/DATA/huggingface_checkpoints/`. It checks each model's release tag resolves to its pinned commit, and verifies every file against the checksums in `huggingface/models/<model>/SHA256SUMS`.
+3. It copies those six runs into `tests/DATA/testing_deepethogram_archive/models/pretrained_models/`, removing anything else there.
+
+Re-run it after pulling changes to `huggingface/models.json`. Once the downloads are verified, later runs reuse them without contacting Hugging Face, so setup also works offline. Don't unzip the archive by hand: its bundled checkpoints are older snapshots without the release manifests, and `tests/test_pretrained_models.py` fails on them.
 
 ## Writing Tests
 

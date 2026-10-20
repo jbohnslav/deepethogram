@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run GPU tests on Modal
+      - name: Run GPU tests on Modal with pinned Hugging Face checkpoints
         env:
           # Required repository secrets:
           #   MODAL_TOKEN_ID

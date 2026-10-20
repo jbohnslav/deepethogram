@@ -5,6 +5,7 @@ deepethogram/models/*
 tests/DATA/testing_deepethogram
 tests/DATA/testing_deepethogram_archive
 tests/DATA/testing_deepethogram_archive.zip
+tests/DATA/huggingface_checkpoints
 gui_logs/
 .vscode/
 # line profiling

@@ -1,0 +1,3 @@
+# Release files must keep the exact bytes published to Hugging Face, which SHA256SUMS covers.
+# Without this, Windows checkouts convert them to CRLF and the checksums stop matching.
+huggingface/** -text

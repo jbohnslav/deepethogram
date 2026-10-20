@@ -1,0 +1,165 @@
+{
+  "collection": "https://huggingface.co/collections/jbohnslav/deepethogram-pretrained-models-6ad61e8af1ac368c56d8deec",
+  "models": [
+    {
+      "slug": "tinymotionnet",
+      "name": "TinyMotionNet",
+      "repo_id": "jbohnslav/deepethogram-tinymotionnet",
+      "checkpoint_bytes": 23450307,
+      "commit": "b481cbc41b96db5de248dc533e39ac6f979db33b",
+      "tag": "v1.0",
+      "verification": {
+        "checksums_passed": 4,
+        "card_example": "strict load and finite CPU forward passed",
+        "output_shapes": [
+          [
+            1,
+            20,
+            32,
+            32
+          ],
+          [
+            1,
+            20,
+            16,
+            16
+          ],
+          [
+            1,
+            20,
+            8,
+            8
+          ]
+        ]
+      },
+      "run_directory": "200221_115158_TinyMotionNet"
+    },
+    {
+      "slug": "motionnet",
+      "name": "MotionNet",
+      "repo_id": "jbohnslav/deepethogram-motionnet",
+      "checkpoint_bytes": 183604611,
+      "commit": "f282e2dae1dc15ce3ef45ce99f4c202b08ce7248",
+      "tag": "v1.0",
+      "verification": {
+        "checksums_passed": 4,
+        "card_example": "strict load and finite CPU forward passed",
+        "output_shapes": [
+          [
+            1,
+            20,
+            32,
+            32
+          ],
+          [
+            1,
+            20,
+            16,
+            16
+          ],
+          [
+            1,
+            20,
+            8,
+            8
+          ]
+        ]
+      },
+      "run_directory": "200310_174416_MotionNet_kinetics"
+    },
+    {
+      "slug": "tinymotionnet3d",
+      "name": "TinyMotionNet3D",
+      "repo_id": "jbohnslav/deepethogram-tinymotionnet3d",
+      "checkpoint_bytes": 1769548,
+      "commit": "e68a968956658727394d7a8e1cc3b8763b7d60b6",
+      "tag": "v1.0",
+      "verification": {
+        "checksums_passed": 4,
+        "card_example": "strict load and finite CPU forward passed",
+        "output_shapes": [
+          [
+            1,
+            2,
+            10,
+            32,
+            32
+          ],
+          [
+            1,
+            2,
+            10,
+            16,
+            16
+          ],
+          [
+            1,
+            2,
+            10,
+            8,
+            8
+          ]
+        ]
+      },
+      "run_directory": "200313_125331_TinyMotionNet3D_kinetics"
+    },
+    {
+      "slug": "deg-f",
+      "name": "DEG-f",
+      "repo_id": "jbohnslav/deepethogram-deg-f",
+      "checkpoint_bytes": 100453714,
+      "commit": "96c98a45421ace0a70bc287740e7167e4078b1c3",
+      "tag": "v1.0",
+      "verification": {
+        "checksums_passed": 4,
+        "card_example": "strict load and finite CPU forward passed",
+        "output_shapes": [
+          [
+            1,
+            700
+          ]
+        ]
+      },
+      "run_directory": "200415_125824_hidden_two_stream_kinetics_degf"
+    },
+    {
+      "slug": "deg-m",
+      "name": "DEG-m",
+      "repo_id": "jbohnslav/deepethogram-deg-m",
+      "checkpoint_bytes": 383713235,
+      "commit": "582a5f28cdd931d3923d9ac065cbbe5a9f122fb1",
+      "tag": "v1.0",
+      "verification": {
+        "checksums_passed": 4,
+        "card_example": "strict load and finite CPU forward passed",
+        "output_shapes": [
+          [
+            1,
+            700
+          ]
+        ]
+      },
+      "run_directory": "200410_142156_hidden_two_stream_kinetics_degm"
+    },
+    {
+      "slug": "deg-s",
+      "name": "DEG-s",
+      "repo_id": "jbohnslav/deepethogram-deg-s",
+      "run_directory": "200409_101808_hidden_two_stream_kinetics_degs",
+      "checkpoint_bytes": 512895194,
+      "commit": "1cd361321b7670e45f7d9ad385bc9cc4f0deb003",
+      "tag": "v1.0",
+      "verification": {
+        "checksums_passed": 4,
+        "card_example": "strict load and finite CPU forward passed",
+        "output_shapes": [
+          [
+            1,
+            700
+          ]
+        ]
+      }
+    }
+  ],
+  "uploaded_on": "2026-10-19"
+}

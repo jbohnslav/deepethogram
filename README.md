@@ -67,10 +67,33 @@ We now support docker! Docker is a way to run `deepethogram` in completely repro
 with other system dependencies. [See docs/Docker for more information](docs/docker.md)
 
 ## Pretrained models
-Rather than start from scratch, we will start with model weights pretrained on the Kinetics700 dataset. Go to
-To download the pretrained weights, please use [this Google Drive link](https://drive.google.com/file/d/1ntIZVbOG1UAiFVlsAAuKEBEVCVevyets/view?usp=sharing).
-Unzip the files in your `project/models` directory. Make sure that you don't add an extra directory when unzipping! The path should be
-`your_project/models/pretrained_models/{models 1:6}`, not `your_project/models/pretrained_models/pretrained_models/{models1:6}`.
+
+Download individual models from the [DeepEthogram Hugging Face collection](https://huggingface.co/collections/jbohnslav/deepethogram-pretrained-models-6ad61e8af1ac368c56d8deec).
+Each model has its own weights, model card, configuration, license, and checksum manifest.
+
+| Model | Role | Typical use |
+| --- | --- | --- |
+| [TinyMotionNet](https://huggingface.co/jbohnslav/deepethogram-tinymotionnet) | Optical-flow generator | DEG-f flow initialization |
+| [MotionNet](https://huggingface.co/jbohnslav/deepethogram-motionnet) | Optical-flow generator | DEG-m flow initialization |
+| [TinyMotionNet3D](https://huggingface.co/jbohnslav/deepethogram-tinymotionnet3d) | Optical-flow generator | 3D optical flow |
+| [DEG-f](https://huggingface.co/jbohnslav/deepethogram-deg-f) | Feature extractor | Fast behavior feature-extractor initialization |
+| [DEG-m](https://huggingface.co/jbohnslav/deepethogram-deg-m) | Feature extractor | Medium behavior feature-extractor initialization |
+| [DEG-s](https://huggingface.co/jbohnslav/deepethogram-deg-s) | Feature extractor | Slow behavior feature-extractor initialization |
+
+For DEG-f, install the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli)
+and download its flow generator and feature extractor into your existing project's model directory:
+
+```bash
+hf download jbohnslav/deepethogram-tinymotionnet --revision v1.0 --local-dir /path/to/project/models/pretrained_models/200221_115158_TinyMotionNet
+hf download jbohnslav/deepethogram-deg-f --revision v1.0 --local-dir /path/to/project/models/pretrained_models/200415_125824_hidden_two_stream_kinetics_degf
+```
+
+Run `shasum -a 256 -c SHA256SUMS` inside each downloaded run directory to verify its files.
+See [pretrained model setup](docs/pretrained_models.md) for DEG-m, individual downloads, and loading details.
+These weights initialize training on your own data; they do not classify your behavior labels without fine-tuning.
+
+The [legacy bundle](https://huggingface.co/jbohnslav/deepethogram-pretrained) retains the original six-folder archive,
+including the incomplete DEG-s feature extractor. It is available for historical compatibility.
 
 ## Licensing
 Copyright (c) 2020 - President and Fellows of Harvard College. All rights reserved.
@@ -112,9 +135,18 @@ Some older ones might also be fine, like a `1080` or even `1070 Ti`/ `1070`.
 ## testing
 Test coverage is still low, but in the future we will be expanding our unit tests.
 
-First, download a copy of [`testing_deepethogram_archive.zip`](https://drive.google.com/file/d/1IFz4ABXppVxyuhYik8j38k9-Fl9kYKHo/view?usp=sharing)
-Make a directory in tests called `DATA`. Unzip this and move it to the `deepethogram/tests/DATA`
-directory, so that the path is `deepethogram/tests/DATA/testing_deepethogram_archive/{DATA,models,project_config.yaml}`.
+Prepare the video fixtures and the same Hugging Face checkpoints documented above:
+
+```bash
+uv sync --locked --dev
+uv run python setup_tests.py
+```
+
+Video fixtures still come from the existing test archive. All six pretrained models are downloaded
+from the individual Hugging Face repos at the exact commits in [`huggingface/models.json`](huggingface/models.json)
+and verified against checked-in checksums, even when the video fixtures already exist.
+CPU CI and the Modal GPU test runner use this setup. The CPU suite checks checkpoint identity,
+strict parameter loading, forward-pass outputs, and project discovery for all six releases.
 
 To run tests:
 ```bash

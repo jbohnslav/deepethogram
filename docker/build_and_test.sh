@@ -38,10 +38,7 @@ verify_gpu() {
 
     print_header "Verifying GPU access for ${image}"
     echo_run docker run ${gpu_flag:+$gpu_flag} --rm "$image" nvidia-smi
-    docker run ${gpu_flag:+$gpu_flag} --rm "$image" nvidia-smi >/dev/null
-
     echo_run docker run ${gpu_flag:+$gpu_flag} --rm "$image" python -c "import torch; assert torch.cuda.is_available(); print('CUDA available')"
-    docker run ${gpu_flag:+$gpu_flag} --rm "$image" python -c "import torch; assert torch.cuda.is_available(); print('CUDA available')" >/dev/null
 }
 
 smoke_test_runtime() {
@@ -50,11 +47,9 @@ smoke_test_runtime() {
 
     print_header "Smoke testing $target runtime image"
     echo_run docker run ${gpu_flag:+$gpu_flag} --rm "deepethogram:$target" python -c "import deepethogram"
-    docker run ${gpu_flag:+$gpu_flag} --rm "deepethogram:$target" python -c "import deepethogram"
 
     if [[ "$target" == "gui" || "$target" == "full" ]]; then
         echo_run docker run ${gpu_flag:+$gpu_flag} --rm "deepethogram:$target" python -c "from deepethogram.gui import main"
-        docker run ${gpu_flag:+$gpu_flag} --rm "deepethogram:$target" python -c "from deepethogram.gui import main"
     fi
 }
 
@@ -63,18 +58,26 @@ run_pytest_target() {
     local gpu_flag=$2
     local marker=$3
     local image="deepethogram:$target"
-    local mount_args=()
+    local data="$PWD/tests/DATA"
 
-    if [[ -d tests/DATA ]]; then
-        mount_args=(-v "$PWD/tests/DATA:/app/tests/DATA:ro")
-    else
-        echo -e "${YELLOW}Skipping pytest for ${target}: tests/DATA is not present locally.${NC}"
+    if [[ ! -d "$data/testing_deepethogram_archive" ]]; then
+        echo -e "${YELLOW}Skipping pytest for ${target}: run 'uv run python setup_tests.py' first.${NC}"
         return 0
     fi
 
+    # The tests write into tests/DATA: they rewrite the archive's project_config.yaml and copy it into a
+    # project. So the archive is mounted read-only elsewhere and copied into the container. Verified checkpoint
+    # downloads are only read, so they are mounted in place and setup_tests.py reuses them without the Hub.
+    local mount_args=(-v "$data/testing_deepethogram_archive:/fixtures/testing_deepethogram_archive:ro")
+    if [[ -d "$data/huggingface_checkpoints" ]]; then
+        mount_args+=(-v "$data/huggingface_checkpoints:/app/tests/DATA/huggingface_checkpoints:ro")
+    fi
+    local command="mkdir -p tests/DATA && cp -a /fixtures/testing_deepethogram_archive tests/DATA/"
+    command+=" && python setup_tests.py && pytest -v -m '$marker' tests/"
+
     print_header "Running ${marker} tests in ${target}"
-    echo_run docker run ${gpu_flag:+$gpu_flag} --rm "${mount_args[@]}" "$image" pytest -v -m "$marker" tests/
-    docker run ${gpu_flag:+$gpu_flag} --rm "${mount_args[@]}" "$image" pytest -v -m "$marker" tests/
+    echo_run docker run ${gpu_flag:+$gpu_flag} --rm -e QT_QPA_PLATFORM=offscreen "${mount_args[@]}" "$image" \
+        sh -c "$command"
 }
 
 main() {

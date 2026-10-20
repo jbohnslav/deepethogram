@@ -1,0 +1,18 @@
+{
+  "format_version": 1,
+  "library_name": "deepethogram",
+  "model_name": "TinyMotionNet",
+  "architecture": "TinyMotionNet",
+  "task": "optical-flow",
+  "checkpoint": "checkpoint.pt",
+  "flow_generator": "TinyMotionNet",
+  "num_rgb_frames": 11,
+  "input_shape": [
+    "N",
+    33,
+    "H",
+    "W"
+  ],
+  "num_classes": null,
+  "deepethogram_source_revision": "1541eec6958f90673b79c402e10b434c8cb7c868"
+}

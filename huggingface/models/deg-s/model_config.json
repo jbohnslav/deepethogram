@@ -1,0 +1,19 @@
+{
+  "format_version": 1,
+  "library_name": "deepethogram",
+  "model_name": "DEG-s",
+  "architecture": "resnet3d_34",
+  "task": "video-classification",
+  "checkpoint": "checkpoint.pt",
+  "flow_generator": "TinyMotionNet3D",
+  "num_rgb_frames": 11,
+  "input_shape": [
+    "N",
+    3,
+    11,
+    "H",
+    "W"
+  ],
+  "num_classes": 700,
+  "deepethogram_source_revision": "1541eec6958f90673b79c402e10b434c8cb7c868"
+}

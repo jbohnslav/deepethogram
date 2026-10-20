@@ -11,6 +11,7 @@ import modal
 
 APP_NAME = "deepethogram-gpu-tests"
 VOLUME_NAME = "deepethogram-test-data"
+CHECKPOINT_VOLUME_NAME = "deepethogram-hf-checkpoints"
 CUDA_IMAGE = "nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04"
 UV_VERSION = "0.6.14"
 DEFAULT_GPU = os.environ.get("DEG_MODAL_GPU", "T4")
@@ -20,11 +21,14 @@ REMOTE_TEST_DATA_DIR = REMOTE_TESTS_DIR / "DATA"
 REMOTE_ARCHIVE_DIR = REMOTE_TEST_DATA_DIR / "testing_deepethogram_archive"
 VOLUME_MOUNT_PATH = Path("/data")
 VOLUME_ARCHIVE_PATH = VOLUME_MOUNT_PATH / "testing_deepethogram_archive"
+CHECKPOINT_MOUNT_PATH = Path("/hf-checkpoints")
 REMOTE_JUNIT_PATH = Path("/tmp/pytest-gpu.xml")
 VENV_BIN_DIR = Path("/opt/venv/bin")
 
 app = modal.App(APP_NAME)
 test_data_volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=False)
+# Writable, so verified checkpoint downloads persist between GPU runs instead of being fetched every time.
+checkpoint_volume = modal.Volume.from_name(CHECKPOINT_VOLUME_NAME, create_if_missing=True)
 
 image = (
     modal.Image.from_registry(CUDA_IMAGE, add_python="3.11")
@@ -45,6 +49,7 @@ image = (
             "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "PYTHONPATH": "/workspace:/workspace/tests",
             "DEG_VERSION": "headless",
+            "DEG_CHECKPOINT_CACHE": str(CHECKPOINT_MOUNT_PATH),
         }
     )
     .pip_install(f"uv=={UV_VERSION}")
@@ -69,6 +74,7 @@ image = (
     )
     .add_local_file("pytest.ini", remote_path=str(REMOTE_WORKDIR / "pytest.ini"))
     .add_local_file("setup_tests.py", remote_path=str(REMOTE_WORKDIR / "setup_tests.py"))
+    .add_local_dir("huggingface", remote_path=str(REMOTE_WORKDIR / "huggingface"))
 )
 
 
@@ -91,7 +97,14 @@ def _prepare_test_data_copy() -> None:
 
     # setup_data.py rewrites paths inside project_config.yaml during import,
     # so the archive must live on writable local storage for the test run.
-    shutil.copytree(VOLUME_ARCHIVE_PATH, REMOTE_ARCHIVE_DIR)
+    # Checkpoints come from the published releases, not the volume's older snapshots.
+    shutil.copytree(
+        VOLUME_ARCHIVE_PATH,
+        REMOTE_ARCHIVE_DIR,
+        ignore=lambda directory, names: (
+            {"pretrained_models"} if Path(directory) == VOLUME_ARCHIVE_PATH / "models" else set()
+        ),
+    )
 
 
 def _run_and_stream(command: list[str]) -> tuple[int, str]:
@@ -124,13 +137,20 @@ def _run_and_stream(command: list[str]) -> tuple[int, str]:
     image=image,
     gpu=DEFAULT_GPU,
     timeout=3 * 60 * 60,
-    volumes={str(VOLUME_MOUNT_PATH): test_data_volume.read_only()},
+    volumes={
+        str(VOLUME_MOUNT_PATH): test_data_volume.read_only(),
+        str(CHECKPOINT_MOUNT_PATH): checkpoint_volume,
+    },
 )
 def run_gpu_pytest(
     pytest_target: str = "tests/test_integration.py",
     extra_pytest_args: str = "",
 ) -> dict[str, str | int]:
     _prepare_test_data_copy()
+    returncode, output = _run_and_stream([str(VENV_BIN_DIR / "python"), "setup_tests.py"])
+    if returncode != 0:
+        raise RuntimeError(f"Test fixture/checkpoint setup failed:\n{output}")
+    checkpoint_volume.commit()
     REMOTE_JUNIT_PATH.unlink(missing_ok=True)
 
     command = [
